@@ -258,11 +258,13 @@ apply BCs to intermediate fields before chaining operators.
   (`Centred(2)` reads only the two cells beside a face), and the fluxes on dry
   faces (`mask.wet(at="U")` / `mask.wet(at="V")` false) are zeroed before the divergence, as in
   `diffuse`.
-- Where land may hold `NaN` (e.g. `Mask2D.from_center`), zero the dry
-  inputs with `jnp.where` before any stencil reads them **and** mask the
-  outputs with `jnp.where`: multiplying by a
+- Land may hold anything, `NaN` too (e.g. `Mask2D.from_center`): zero the dry
+  inputs with `without_dry` (`operators/_utils.py`) before any stencil reads
+  them **and** mask the
+  outputs with `where`: multiplying by a
   float mask keeps `NaN * 0 = NaN`, and masking only the output still
-  leaves a `NaN` gradient at the dry points.
+  leaves a `NaN` gradient at the dry points. The ghost ring is the caller's
+  and stays. `tests/test_dry_inputs.py` holds every operation to it.
 - Branch on an optional mask with `if mask is not None:`, never `if mask:`
   (a JAX array raises).
 
@@ -355,6 +357,7 @@ docstring before changing what it checks.
 | `tests/test_moves.py` | `difference` and `interpolate` are exact on the coordinates for every move and C-grid |
 | `tests/test_located.py` | Every canonical function declares the points of its operands and result (`@located`), its `CField` path gives the array path's data exactly, and an operand on another point raises |
 | `tests/test_calculus.py` | The vector calculus: exact on linear fields, discrete identities (∇·∇⊥ψ = 0, ∇×∇f = 0, summation by parts) |
+| `tests/test_dry_inputs.py` | No operation with a mask reads a dry value: the result and the gradient do not change with what land holds, and without land nothing changes |
 | `tests/test_batch_dims.py` | Every 2-D entry point annotated `*batch Ny Nx` equals a loop over the batch members, masked and unmasked, eager and under `jit` |
 | `tests/test_dtype_behavior.py` | float32 and float64 agree; outputs are finite on extreme inputs |
 | `tests/test_open_walls.py`, conservation tests in `test_advection.py`, `test_jacobian.py`, `test_momentum.py`, `test_diagnostics.py` | Mass / energy / enstrophy conservation of the flux-form and Arakawa schemes, including `wall="open"` |

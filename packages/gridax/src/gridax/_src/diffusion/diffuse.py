@@ -62,7 +62,7 @@ def diffuse(
         The diffusivity: a number, or a field at T.
     mask : Mask2D or Mask3D, optional
         The wet cells: no flux crosses a dry face, and the tendency is zero on
-        dry cells. Dry values are read, and must be finite.
+        dry cells. Dry values are not read.
     wall : {"closed", "open"}, default "closed"
         ``"closed"``: no flux through the edge faces, and no ghost cell is
         read. ``"open"``: the edge faces take their flux from the ghost ring
@@ -226,9 +226,18 @@ def _fluxes(
         else (slice(2, -1), slice(1, -2))
     )
     c = slice(1, -1)
+    dx = h[..., c, after] - h[..., c, before]
+    dy = h[..., after, c] - h[..., before, c]
+    if mu is not None:
+        # nothing through a dry face, whatever land holds: the differences are
+        # linear, so a zero here keeps a NaN out of the gradient too
+        xp = array_namespace(dx)
+        wet_x, wet_y = mu[..., c, before], mv[..., before, c]
+        dx, dy = xp.where(wet_x, dx, 0.0), xp.where(wet_y, dy, 0.0)
+        if np.ndim(kx):
+            kx, ky = xp.where(wet_x, kx, 0.0), xp.where(wet_y, ky, 0.0)
     # κ[j, i+1/2] (h[j, i+1] - h[j, i]), κ[j+1/2, i] (h[j+1, i] - h[j, i])
-    fx = kx * (h[..., c, after] - h[..., c, before])
-    fy = ky * (h[..., after, c] - h[..., before, c])
+    fx, fy = kx * dx, ky * dy
     if isinstance(grid, SphericalCGrid2D | SphericalCGrid3D):
         cos_u = _metric_like(grid._cos_lat("U"), h)[1:-1, 1:-2]
         fx = _safe_div_cos(fx, cos_u, _metric_like(grid.R * grid.dlon, h))
@@ -236,10 +245,6 @@ def _fluxes(
     else:
         fx, fy = fx / _spacing(grid, "x", h), fy / _spacing(grid, "y", h)
     fx, fy = fx.astype(h.dtype), fy.astype(h.dtype)
-    if mu is not None:
-        fx = fx * mu[..., c, before]
-    if mv is not None:
-        fy = fy * mv[..., before, c]
     return fx, fy
 
 
@@ -350,10 +355,6 @@ def _closed(wall: str) -> None:
 @biharmonic.register(SphericalCGrid2D)
 @biharmonic.register(SphericalCGrid3D)
 def _biharmonic(grid: Any, f: Any, *, kappa4: Any, mask: Any) -> Any:
-    xp = array_namespace(f)
-    if mask is not None:
-        # land may hold NaN: zero it before any stencil reads it
-        f = xp.where(mask.wet(), f, 0.0)
     # the second pass reads the first at four offsets: keep it as one buffer
     # rather than letting XLA recompute it per offset
     once = _materialize(_tendency(grid, f, 1.0, mask, "closed"))

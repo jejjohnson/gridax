@@ -38,7 +38,12 @@ from gridax._src.grid import (
 from gridax._src.grid.points import POINT_AXES, Stagger, point_stagger
 from gridax._src.mask.utils import shifted
 from gridax._src.operators._ghost import interior
-from gridax._src.operators._utils import _metric_like, _safe_div_cos, _spacing
+from gridax._src.operators._utils import (
+    _metric_like,
+    _safe_div_cos,
+    _spacing,
+    without_dry,
+)
 from gridax._src.operators.triples import (
     PAIRS,
     TRIPLES,
@@ -220,7 +225,8 @@ def _masked(out: Any, mask: Any, dst: str) -> Any:
     """``out``, zero on the dry points of ``dst``."""
     if mask is None:
         return out
-    return out * _wet(mask, dst)
+    wet = _wet(mask, dst)
+    return array_namespace(out, wet).where(wet, out, 0.0)
 
 
 def _wet(mask: Any, point: str) -> Any:
@@ -346,6 +352,8 @@ def _staggered(
     along_axes = [axis for axis, _ in moves]
     scheme, edges, dry = policies(scheme, bc, edges="bias", dry="narrow")
     two = is_two_point(scheme)
+    if mask is not None and dry != "none":
+        f = without_dry(f, mask, src, len(axes))
     if mask is None or (two and dry == "narrow"):
         dry = "none"
     irregular = isinstance(grid, _STRETCHED)

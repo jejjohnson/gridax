@@ -42,6 +42,8 @@ from gridax._src.operators._utils import (
     _spacing,
     _spherical_d2_lon,
     _spherical_laplacian_merid,
+    readable,
+    without_dry,
 )
 from gridax._src.operators.moves import _masked, difference
 from gridax._src.operators.stencils import (
@@ -156,7 +158,8 @@ def laplacian(
         The point of a plain array, ``"T"`` by default. A `CField` has its
         own.
     mask : Mask1D, Mask2D or Mask3D, optional
-        Zeroes the dry points of ``at``; on a collocated grid as in
+        Zeroes the dry points of ``at``. No gradient crosses a coast of T points;
+        the dry points of another kind are zero. On a collocated grid as in
         :func:`divergence`.
 
     Returns
@@ -271,11 +274,18 @@ def _levels(grid: Any, f: Any) -> Any:
     return f[..., 1:-1, :, :] if len(grid.axes) == 3 else f
 
 
+def _velocity(grid: Any, u: Any, v: Any, mask: Any) -> tuple[Any, Any]:
+    """The velocity, zero on the dry faces: nothing flows through a coast."""
+    rank = len(grid.axes)
+    return without_dry(u, mask, "U", rank), without_dry(v, mask, "V", rank)
+
+
 @divergence.register(CartesianCGrid2D)
 @divergence.register(CartesianCGrid3D)
 def _divergence_cartesian(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
     xp = array_namespace(u, v)
     dx, dy = _spacing(grid, "x", u), _spacing(grid, "y", v)
+    u, v = _velocity(grid, u, v, mask)
     like = xp.zeros(u.shape, dtype=xp.result_type(u, v))
     u, v = _levels(grid, u), _levels(grid, v)
     # div[j, i] = (u[j, i+1/2] - u[j, i-1/2]) / dx + (v[j+1/2, i] - v[j-1/2, i]) / dy
@@ -287,6 +297,7 @@ def _divergence_cartesian(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
 @curl.register(CartesianCGrid3D)
 def _curl_cartesian(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
     dx, dy = _spacing(grid, "x", v, at="X"), _spacing(grid, "y", u, at="X")
+    u, v = _velocity(grid, u, v, mask)
     like = u
     u, v = _levels(grid, u), _levels(grid, v)
     # ζ[j+1/2, i+1/2] = (v[j+1/2, i+1] - v[j+1/2, i]) / dx
@@ -295,11 +306,34 @@ def _curl_cartesian(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
     return _masked(out, mask, "X")
 
 
+def _scalar(grid: Any, f: Any, at: str, mask: Any) -> Any:
+    """The neighbours a Laplacian reads, with no gradient across a coast.
+
+    A dry neighbour of a T point takes the value of the point, so the flux
+    through their face is zero, as in `diffuse`. A dry point of another kind is
+    zero: a velocity on the coast.
+    """
+    nb = _neighbours(_levels(grid, without_dry(f, mask, at, len(grid.axes))))
+    if mask is None or at != "T":
+        return nb
+    xp = array_namespace(f)
+    wet = _neighbours(_levels(grid, readable(mask.wet(), len(grid.axes))))
+    beside = {k: getattr(nb, k) for k in "ewns"}
+    return nb._replace(
+        **{k: xp.where(getattr(wet, k), x, nb.c) for k, x in beside.items()}
+    )
+
+
 @laplacian.register(CartesianCGrid1D)
 def _laplacian_cartesian_1d(grid: Any, f: Any, *, at: Any, mask: Any) -> Any:
     at = "T" if at is None else point_name(at)
+    f = without_dry(f, mask, at, 1)
     # Each offset is sliced once (see `_Neighbours2D` for why)
     c, e, w = f[..., 1:-1], f[..., 2:], f[..., :-2]  # f[i], f[i+1], f[i-1]
+    if mask is not None and at == "T":
+        # no gradient across a coast
+        xp, wet = array_namespace(f), readable(mask.wet(), 1)
+        e, w = xp.where(wet[2:], e, c), xp.where(wet[:-2], w, c)
     # ∇²f[i] = (f[i+1] - 2 f[i] + f[i-1]) / dx²
     out = interior(((e - c) - (c - w)) / _spacing(grid, "x", f, at=at) ** 2, f)
     return _masked(out, mask, at)
@@ -312,7 +346,7 @@ def _laplacian_cartesian(grid: Any, f: Any, *, at: Any, mask: Any) -> Any:
     dx, dy = _spacing(grid, "x", f, at=at), _spacing(grid, "y", f, at=at)
     # ∇²f[j, i] = (f[j, i+1] - 2 f[j, i] + f[j, i-1]) / dx²
     #           + (f[j+1, i] - 2 f[j, i] + f[j-1, i]) / dy²
-    nb = _neighbours(_levels(grid, f))  # c, e, w, n, s views  [Ny-2, Nx-2]
+    nb = _scalar(grid, f, at, mask)  # c, e, w, n, s views  [Ny-2, Nx-2]
     d2x = ((nb.e - nb.c) - (nb.c - nb.w)) / dx**2
     d2y = ((nb.n - nb.c) - (nb.c - nb.s)) / dy**2
     return _masked(interior(d2x + d2y, f), mask, at)
@@ -348,12 +382,13 @@ def _grad_perp_staggered(grid: Any, psi: Any, *, at: Any, mask: Any) -> Any:
         return u, difference(psi, grid, axis="x", src="X", dst="V", mask=mask)
     if at != "T":
         raise ValueError(f"grad_perp takes a streamfunction at X or T, not {at}")
-    p = _levels(grid, psi)
+    p = _levels(grid, without_dry(psi, mask, "T", len(grid.axes)))
     # u[j, i+1/2] = -(ψ[j+1,i] + ψ[j+1,i+1] - ψ[j-1,i] - ψ[j-1,i+1]) / (4 dy)
     u = -(p[..., 2:, 1:-1] + p[..., 2:, 2:] - p[..., :-2, 1:-1] - p[..., :-2, 2:])
-    u = u / (4.0 * _spacing(grid, "y", psi, at="U"))
+    u = _near_coasts(grid, p, u, "U", mask) / (4.0 * _spacing(grid, "y", psi, at="U"))
     # v[j+1/2, i] = (ψ[j,i+1] + ψ[j+1,i+1] - ψ[j,i-1] - ψ[j+1,i-1]) / (4 dx)
     v = p[..., 1:-1, 2:] + p[..., 2:, 2:] - p[..., 1:-1, :-2] - p[..., 2:, :-2]
+    v = _near_coasts(grid, p, v, "V", mask)
     if isinstance(grid, SphericalCGrid2D | SphericalCGrid3D):
         cos = _metric_like(grid._cos_lat("V"), psi)[1:-1, 1:-1]
         v = _safe_div_cos(v, cos, _metric_like(4.0 * grid.R * grid.dlon, psi))
@@ -365,10 +400,36 @@ def _grad_perp_staggered(grid: Any, psi: Any, *, at: Any, mask: Any) -> Any:
     )
 
 
+def _near_coasts(grid: Any, p: Any, plain: Any, dst: str, mask: Any) -> Any:
+    """``4 (ψ_X - ψ_X)`` with ψ_X the mean of the wet cells of a corner.
+
+    ``plain`` where the six cells are wet, which is the same there. A corner has
+    one value, so the velocity stays non-divergent.
+    """
+    if mask is None:
+        return plain
+    xp = array_namespace(p)
+    wet = _levels(grid, readable(mask.wet(), len(grid.axes)))
+
+    def corners(x: Any) -> Any:
+        return x[..., :-1, :-1] + x[..., 1:, :-1] + x[..., :-1, 1:] + x[..., 1:, 1:]
+
+    count = corners(xp.asarray(wet, dtype=p.dtype))
+    psi = corners(xp.where(wet, p, 0.0)) / xp.where(count > 0, count, 1.0)
+    if dst == "U":
+        value = -4.0 * (psi[..., 1:, 1:] - psi[..., :-1, 1:])
+        full = (count[..., 1:, 1:] == 4) & (count[..., :-1, 1:] == 4)
+    else:
+        value = 4.0 * (psi[..., 1:, 1:] - psi[..., 1:, :-1])
+        full = (count[..., 1:, 1:] == 4) & (count[..., 1:, :-1] == 4)
+    return xp.where(full, plain, value)
+
+
 @divergence.register(StretchedCGrid2D)
 @divergence.register(StretchedCGrid3D)
 def _divergence_stretched(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
     # the flux form: (u[i+1/2] - u[i-1/2]) / Δx[i] + (v[j+1/2] - v[j-1/2]) / Δy[j]
+    u, v = _velocity(grid, u, v, mask)
     du = difference(u, grid, axis="x", src="U", dst="T")
     out = du + difference(v, grid, axis="y", src="V", dst="T")
     return _masked(out, mask, "T")
@@ -377,6 +438,7 @@ def _divergence_stretched(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
 @curl.register(StretchedCGrid2D)
 @curl.register(StretchedCGrid3D)
 def _curl_stretched(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
+    u, v = _velocity(grid, u, v, mask)
     dv = difference(v, grid, axis="x", src="V", dst="X")
     out = dv - difference(u, grid, axis="y", src="U", dst="X")
     return _masked(out, mask, "X")
@@ -390,6 +452,7 @@ def _laplacian_stretched(grid: Any, f: Any, *, at: Any, mask: Any) -> Any:
     if at != "T":
         raise NotImplementedError(f"laplacian at {at} of a stretched grid")
     xp = array_namespace(f)
+    f = without_dry(f, mask, "T", len(grid.axes))
     terms = []
     for axis in grid.axes:
         if axis == "z":
@@ -400,6 +463,9 @@ def _laplacian_stretched(grid: Any, f: Any, *, at: Any, mask: Any) -> Any:
         faces = _metric_like(grid._gaps(axis, {"x": "U", "y": "V"}[axis]), f)
         cells = _metric_like(grid._gaps(axis, "T"), f)
         slope = (lines[..., 1:] - lines[..., :-1]) / faces[:-1]
+        if mask is not None:
+            wet = xp.moveaxis(readable(mask.wet(), len(grid.axes)), position, -1)
+            slope = xp.where(wet[..., 1:] & wet[..., :-1], slope, 0.0)
         second = (slope[..., 1:] - slope[..., :-1]) / cells[1:-1]
         second = xp.moveaxis(second, -1, position)
         kept = (slice(1, -1) if a != axis else slice(None) for a in grid.axes)
@@ -411,6 +477,7 @@ def _laplacian_stretched(grid: Any, f: Any, *, at: Any, mask: Any) -> Any:
 @divergence.register(SphericalCGrid2D)
 @divergence.register(SphericalCGrid3D)
 def _divergence_spherical(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
+    u, v = _velocity(grid, u, v, mask)
     like = u
     cos_V = _metric_like(grid._cos_lat("V"), v)
     cos_T = _metric_like(grid._cos_lat("T"), u)[1:-1, 1:-1]
@@ -429,6 +496,7 @@ def _divergence_spherical(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
 @curl.register(SphericalCGrid2D)
 @curl.register(SphericalCGrid3D)
 def _curl_spherical(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
+    u, v = _velocity(grid, u, v, mask)
     like = u
     cos_U = _metric_like(grid._cos_lat("U"), u)
     cos_X = _metric_like(grid._cos_lat("X"), u)[1:-1, 1:-1]
@@ -449,7 +517,7 @@ def _curl_spherical(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
 def _laplacian_spherical(grid: Any, f: Any, *, at: Any, mask: Any) -> Any:
     at = "T" if at is None else point_name(at)
     cos = _metric_like(grid._cos_lat(at), f)
-    nb = _neighbours(_levels(grid, f))  # c, e, w, n, s views  [Ny-2, Nx-2]
+    nb = _scalar(grid, f, at, mask)  # c, e, w, n, s views  [Ny-2, Nx-2]
     if at in ("T", "U", "W"):
         # the faces along y are the V rows: j (north) and j-1 (south)
         faces = _metric_like(grid._cos_lat("V"), f)

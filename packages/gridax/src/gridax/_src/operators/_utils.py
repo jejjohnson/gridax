@@ -131,6 +131,26 @@ def _spherical_laplacian_merid(
     return _safe_div_cos(d_cos_dh, cos_T, _metric_like(R**2, cos_T))
 
 
+def without_dry(f: Any, mask: Any, at: str, rank: int) -> Any:
+    """``f`` with zeros on its dry points, so no stencil reads land.
+
+    The ghost ring is the caller's (its boundary conditions) and stays. A corner
+    is dry if all its cells are: the corners on a coast hold boundary values.
+    """
+    if mask is None:
+        return f
+    xp = array_namespace(f, mask.wet())
+    return xp.where(readable(mask.wet(at=at), rank), f, 0.0)
+
+
+def readable(wet: Any, rank: int) -> Any:
+    """The wet points and the ghost ring, on the last ``rank`` axes."""
+    xp = array_namespace(wet)
+    wet = xp.asarray(wet, dtype=bool)
+    inner = (..., *(slice(1, -1),) * rank)
+    return set_at(xp.ones_like(wet), inner, wet[inner])
+
+
 def _where(
     wet: Array | None, field: Float[Array, "... Ny Nx"]
 ) -> Float[Array, "... Ny Nx"]:

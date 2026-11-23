@@ -32,6 +32,8 @@ from gridax._src.operators._utils import (
     _sanitize,
     _spacing,
     _where,
+    readable,
+    without_dry,
 )
 from gridax._src.operators.calculus import _levels, curl
 from gridax._src.operators.moves import interpolate
@@ -630,20 +632,52 @@ def _geostrophic_velocity(
     c = slice(1, -1)
     f_on_u = 0.5 * (f[..., c, 1:-1] + f[..., c, 2:])
     f_on_v = 0.5 * (f[..., 1:-1, c] + f[..., 2:, c])
+    h = without_dry(h, mask, "T", 2)
     if mask is not None:
         # a dry face does not divide by zero, forwards or backwards
         f_on_u = xp.where(mask.wet(at="U")[c, c], f_on_u, 1.0)
         f_on_v = xp.where(mask.wet(at="V")[c, c], f_on_v, 1.0)
     # u[j, i+1/2] = -g / (f R) (h[j+1,i] + h[j+1,i+1] - h[j-1,i] - h[j-1,i+1]) / (4 dφ)
     dlat_h = h[..., 2:, c] + h[..., 2:, 2:] - h[..., :-2, c] - h[..., :-2, 2:]
+    dlon_h = h[..., c, 2:] + h[..., 2:, 2:] - h[..., c, :-2] - h[..., 2:, :-2]
+    if mask is not None:
+        dlat_h, dlon_h = _wet_slopes(h, mask, dlat_h, dlon_h)
     u = interior(-gravity / (f_on_u * R) * (dlat_h / (4.0 * dlat)), h)
     # v[j+1/2, i] = g / (f R cos φ) (h[j,i+1] + h[j+1,i+1] - h[j,i-1] - h[j+1,i-1]) / (4 dλ)
-    dlon_h = h[..., c, 2:] + h[..., 2:, 2:] - h[..., c, :-2] - h[..., 2:, :-2]
     cos = _metric_like(grid._cos_lat("V"), h)[c, c]
     v = interior(_safe_div_cos(gravity * (dlon_h / (4.0 * dlon)), cos, f_on_v * R), h)
     if mask is None:
         return u, v
     return xp.where(mask.wet(at="U"), u, 0.0), xp.where(mask.wet(at="V"), v, 0.0)
+
+
+def _wet_slopes(h: Any, mask: Any, dlat_h: Any, dlon_h: Any) -> tuple[Any, Any]:
+    """Four times the mean of the wet differences around each face.
+
+    ``dlat_h`` and ``dlon_h``, the sums of all four, where they are all wet.
+    """
+    xp = array_namespace(h)
+    wet = readable(mask.wet(), 2)
+
+    def mean(axis: int, plain: Any) -> Any:
+        a, b = xp.moveaxis(h, axis, -2), xp.moveaxis(wet, axis, -2)
+        step = a[..., 1:, :] - a[..., :-1, :]  # [N-1, M]
+        ok = b[..., 1:, :] & b[..., :-1, :]
+        step = xp.where(ok, step, 0.0)
+        ok = xp.asarray(ok, dtype=step.dtype)
+
+        def around(x: Any) -> Any:
+            # the two faces on either side of the point, in two columns
+            pair = x[..., 1:, :] + x[..., :-1, :]
+            return pair[..., 1:-1] + pair[..., 2:]
+
+        count = around(ok)
+        value = 4.0 * around(step) / xp.where(count > 0, count, 1.0)
+        return xp.where(
+            xp.moveaxis(count, -2, axis) == 4, plain, xp.moveaxis(value, -2, axis)
+        )
+
+    return mean(-2, dlat_h), mean(-1, dlon_h)
 
 
 @vertical_velocity.register(CartesianCGrid3D)
