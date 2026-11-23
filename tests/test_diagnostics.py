@@ -1,6 +1,6 @@
 """Tests for diagnostic operators: strain, enstrophy, energy, Okubo-Weiss, QG PV, vertical velocity."""
 
-from gridax import CartesianCGrid2D, CartesianCGrid3D, Mask3D
+from gridax import CartesianCGrid2D, CartesianCGrid3D, Mask3D, area_sum
 from gridax._src.operators.diagnostics import (
     available_potential_energy,
     bernoulli_potential,
@@ -14,8 +14,6 @@ from gridax._src.operators.diagnostics import (
     strain_magnitude_squared,
     stretching_term,
     tensor_strain,
-    total_energy,
-    total_enstrophy,
     vertical_velocity,
 )
 from gridax._src.operators.difference import Difference2D
@@ -45,18 +43,18 @@ class TestKineticEnergy:
     def test_output_shape(self, grid2d):
         u = jnp.ones((grid2d.Ny, grid2d.Nx))
         v = jnp.ones((grid2d.Ny, grid2d.Nx))
-        assert kinetic_energy(u, v).shape == (grid2d.Ny, grid2d.Nx)
+        assert kinetic_energy(u, v, grid2d).shape == (grid2d.Ny, grid2d.Nx)
 
     def test_zero_velocity(self, grid2d):
         u = jnp.zeros((grid2d.Ny, grid2d.Nx))
         v = jnp.zeros((grid2d.Ny, grid2d.Nx))
-        result = kinetic_energy(u, v)
+        result = kinetic_energy(u, v, grid2d)
         np.testing.assert_allclose(result, 0.0, atol=1e-10)
 
     def test_ghost_ring_zero(self, grid2d):
         u = jnp.ones((grid2d.Ny, grid2d.Nx))
         v = jnp.ones((grid2d.Ny, grid2d.Nx))
-        result = kinetic_energy(u, v)
+        result = kinetic_energy(u, v, grid2d)
         np.testing.assert_allclose(result[0, :], 0.0, atol=1e-10)
         np.testing.assert_allclose(result[-1, :], 0.0, atol=1e-10)
         np.testing.assert_allclose(result[:, 0], 0.0, atol=1e-10)
@@ -66,7 +64,7 @@ class TestKineticEnergy:
         c = 3.0
         u = c * jnp.ones((grid2d.Ny, grid2d.Nx))
         v = c * jnp.ones((grid2d.Ny, grid2d.Nx))
-        result = kinetic_energy(u, v)
+        result = kinetic_energy(u, v, grid2d)
         # KE = 0.5 * (u^2 + v^2) = 0.5 * (9 + 9) = 9
         np.testing.assert_allclose(result[1:-1, 1:-1], c**2, rtol=1e-5)
 
@@ -101,13 +99,13 @@ class TestShearStrain:
     def test_output_shape(self, grid2d):
         u = jnp.ones((grid2d.Ny, grid2d.Nx))
         v = jnp.ones((grid2d.Ny, grid2d.Nx))
-        result = shear_strain(u, v, grid2d.spacing("x"), grid2d.spacing("y"))
+        result = shear_strain(u, v, grid2d)
         assert result.shape == (grid2d.Ny, grid2d.Nx)
 
     def test_uniform_field_zero(self, grid2d):
         u = jnp.ones((grid2d.Ny, grid2d.Nx))
         v = jnp.ones((grid2d.Ny, grid2d.Nx))
-        result = shear_strain(u, v, grid2d.spacing("x"), grid2d.spacing("y"))
+        result = shear_strain(u, v, grid2d)
         np.testing.assert_allclose(result[1:-1, 1:-1], 0.0, atol=1e-10)
 
     def test_linear_fields(self, grid2d):
@@ -117,7 +115,7 @@ class TestShearStrain:
         y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         u = jnp.broadcast_to(a * y[:, None], (grid2d.Ny, grid2d.Nx))
         v = jnp.broadcast_to(b * x, (grid2d.Ny, grid2d.Nx))
-        result = shear_strain(u, v, grid2d.spacing("x"), grid2d.spacing("y"))
+        result = shear_strain(u, v, grid2d)
         np.testing.assert_allclose(result[1:-1, 1:-1], a + b, rtol=1e-5)
 
     def test_ghost_ring_zero(self, grid2d):
@@ -125,7 +123,7 @@ class TestShearStrain:
         y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         u = jnp.broadcast_to(y[:, None], (grid2d.Ny, grid2d.Nx))
         v = jnp.broadcast_to(x, (grid2d.Ny, grid2d.Nx))
-        result = shear_strain(u, v, grid2d.spacing("x"), grid2d.spacing("y"))
+        result = shear_strain(u, v, grid2d)
         np.testing.assert_allclose(result[0, :], 0.0, atol=1e-10)
         np.testing.assert_allclose(result[-1, :], 0.0, atol=1e-10)
         np.testing.assert_allclose(result[:, 0], 0.0, atol=1e-10)
@@ -136,13 +134,13 @@ class TestTensorStrain:
     def test_output_shape(self, grid2d):
         u = jnp.ones((grid2d.Ny, grid2d.Nx))
         v = jnp.ones((grid2d.Ny, grid2d.Nx))
-        result = tensor_strain(u, v, grid2d.spacing("x"), grid2d.spacing("y"))
+        result = tensor_strain(u, v, grid2d)
         assert result.shape == (grid2d.Ny, grid2d.Nx)
 
     def test_uniform_field_zero(self, grid2d):
         u = jnp.ones((grid2d.Ny, grid2d.Nx))
         v = jnp.ones((grid2d.Ny, grid2d.Nx))
-        result = tensor_strain(u, v, grid2d.spacing("x"), grid2d.spacing("y"))
+        result = tensor_strain(u, v, grid2d)
         np.testing.assert_allclose(result[1:-1, 1:-1], 0.0, atol=1e-10)
 
     def test_linear_fields(self, grid2d):
@@ -152,7 +150,7 @@ class TestTensorStrain:
         y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         u = jnp.broadcast_to(a * x, (grid2d.Ny, grid2d.Nx))
         v = jnp.broadcast_to(b * y[:, None], (grid2d.Ny, grid2d.Nx))
-        result = tensor_strain(u, v, grid2d.spacing("x"), grid2d.spacing("y"))
+        result = tensor_strain(u, v, grid2d)
         np.testing.assert_allclose(result[1:-1, 1:-1], a - b, rtol=1e-5)
 
 
@@ -442,7 +440,7 @@ class TestTotalEnergy:
     def test_known_value(self, grid2d):
         ke = jnp.ones((grid2d.Ny, grid2d.Nx))
         ape = jnp.ones((grid2d.Ny, grid2d.Nx))
-        result = total_energy(ke, ape, grid2d.spacing("x"), grid2d.spacing("y"))
+        result = area_sum(ke + ape, grid2d)
         # Interior is 8x8, each cell = 2 * dx * dy = 2 * 0.125 * 0.125
         n_interior = 8 * 8
         expected = 2.0 * n_interior * grid2d.spacing("x") * grid2d.spacing("y")
@@ -450,14 +448,14 @@ class TestTotalEnergy:
 
     def test_zero_fields(self, grid2d):
         z = jnp.zeros((grid2d.Ny, grid2d.Nx))
-        result = total_energy(z, z, grid2d.spacing("x"), grid2d.spacing("y"))
+        result = area_sum(z + z, grid2d)
         np.testing.assert_allclose(result, 0.0, atol=1e-10)
 
 
 class TestTotalEnstrophy:
     def test_known_value(self, grid2d):
         ens = 3.0 * jnp.ones((grid2d.Ny, grid2d.Nx))
-        result = total_enstrophy(ens, grid2d.spacing("x"), grid2d.spacing("y"))
+        result = area_sum(ens, grid2d)
         n_interior = 8 * 8
         expected = 3.0 * n_interior * grid2d.spacing("x") * grid2d.spacing("y")
         np.testing.assert_allclose(result, expected, rtol=1e-5)
@@ -711,15 +709,15 @@ class TestMaskSupport:
         u = 3.0 * jnp.ones((grid2d.Ny, grid2d.Nx))
         v = 3.0 * jnp.ones((grid2d.Ny, grid2d.Nx))
         mask = jnp.zeros((grid2d.Ny, grid2d.Nx))
-        result = kinetic_energy(u, v) * mask
+        result = kinetic_energy(u, v, grid2d) * mask
         np.testing.assert_allclose(result, 0.0, atol=1e-10)
 
     def test_kinetic_energy_all_ones_mask_noop(self, grid2d):
         u = 3.0 * jnp.ones((grid2d.Ny, grid2d.Nx))
         v = 3.0 * jnp.ones((grid2d.Ny, grid2d.Nx))
         mask = jnp.ones((grid2d.Ny, grid2d.Nx))
-        result_nomask = kinetic_energy(u, v)
-        result_mask = kinetic_energy(u, v) * mask
+        result_nomask = kinetic_energy(u, v, grid2d)
+        result_mask = kinetic_energy(u, v, grid2d) * mask
         np.testing.assert_allclose(result_mask, result_nomask, atol=1e-10)
 
     def test_enstrophy_masked_at_call_site(self):
@@ -745,8 +743,8 @@ class TestJITCompatibility:
     def test_kinetic_energy_jit(self, grid2d):
         u = jnp.ones((grid2d.Ny, grid2d.Nx))
         v = jnp.ones((grid2d.Ny, grid2d.Nx))
-        result_eager = kinetic_energy(u, v)
-        result_jit = jax.jit(kinetic_energy)(u, v)
+        result_eager = kinetic_energy(u, v, grid2d)
+        result_jit = jax.jit(kinetic_energy)(u, v, grid2d)
         np.testing.assert_allclose(result_jit, result_eager, atol=1e-10)
 
     def test_relative_vorticity_jit(self, grid2d):
@@ -813,8 +811,10 @@ class TestConservation:
         q = jnp.zeros((Ny, Nx), dtype=jnp.float64)
         psi = psi.at[1:-1, 1:-1].set(jax.random.normal(k1, (N, N), dtype=jnp.float64))
         q = q.at[1:-1, 1:-1].set(jax.random.normal(k2, (N, N), dtype=jnp.float64))
-        # Arakawa Jacobian: output shape is (Ny-2, Nx-2) = (N, N)
-        J = arakawa_jacobian(psi, q, dx, dy)
+        # Arakawa Jacobian, on the interior (N, N)
+        J = arakawa_jacobian(psi, q, CartesianCGrid2D.from_interior(N, N, 1.0, 1.0))[
+            1:-1, 1:-1
+        ]
         # Enstrophy conservation: sum(q_interior * J) ~ 0
         # J has shape (N, N), matching q[1:-1, 1:-1]
         q_int = q[1:-1, 1:-1]
@@ -833,7 +833,9 @@ class TestConservation:
         q = jnp.zeros((Ny, Nx), dtype=jnp.float64)
         psi = psi.at[1:-1, 1:-1].set(jax.random.normal(k1, (N, N), dtype=jnp.float64))
         q = q.at[1:-1, 1:-1].set(jax.random.normal(k2, (N, N), dtype=jnp.float64))
-        J = arakawa_jacobian(psi, q, dx, dy)
+        J = arakawa_jacobian(psi, q, CartesianCGrid2D.from_interior(N, N, 1.0, 1.0))[
+            1:-1, 1:-1
+        ]
         psi_int = psi[1:-1, 1:-1]
         energy_tendency = jnp.sum(psi_int * J) * dx * dy
         np.testing.assert_allclose(energy_tendency, 0.0, atol=1e-10)

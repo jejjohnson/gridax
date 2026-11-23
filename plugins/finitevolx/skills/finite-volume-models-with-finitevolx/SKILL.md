@@ -39,8 +39,8 @@ Poisson solver or an RK loop, look it up:
 | Raw shifted differences / averages | `fvx.diff_x_fwd_2d`, `fvx.diff_y_bwd_2d`, `fvx.avg_xfwd_yfwd_2d`, … (+ `_1d` / `_3d`); pad back with `fvx.interior(values, like)` |
 | Gradients, divergence, curl, Laplacian | `fvx.Difference1D/2D/3D` (`diff_x_T_to_U`, `divergence`, `curl`, `laplacian`, `grad_perp`), `fvx.Divergence2D`, `fvx.Vorticity2D`; on the sphere `fvx.SphericalDifference2D`, `fvx.SphericalDivergence2D`, `fvx.SphericalLaplacian2D`, `fvx.SphericalVorticity2D` |
 | Moving fields between T / U / V / X points | `fvx.Interpolation1D/2D/3D` (`T_to_U`, `U_to_T`, `T_to_X`, …) |
-| Tracer advection | `fvx.Advection1D/2D/3D(grid, mask)(q, u, v, method="weno5")` (`upwind1/2/3`, `weno3/5/7/9`, `wenoz5`, `minmod`, `van_leer`, `superbee`, `mc`); `fvx.SphericalAdvection2D` |
-| Diffusion, momentum advection, Coriolis | `fvx.Diffusion2D/3D`, `fvx.BiharmonicDiffusion2D/3D`, `fvx.MomentumAdvection2D/3D`, `fvx.Coriolis2D/3D` |
+| Tracer advection | `fvx.Advection1D/2D/3D(grid, mask)(q, u, v, scheme=WENO(5))`, or `fvx.advect(q, u, v, grid, scheme=..., mask=...)`, with a scheme of `gridax.schemes`: `Upwind(k)`, `Centred(k)`, `WENO(k)`, `TVD(limiter)`; `fvx.SphericalAdvection2D` |
+| Diffusion, momentum advection, Coriolis | `fvx.diffuse`, `fvx.biharmonic`, `fvx.coriolis` (the grid positional, `mask=`), or `fvx.Diffusion2D/3D`, `fvx.BiharmonicDiffusion2D/3D`, `fvx.MomentumAdvection2D/3D`, `fvx.Coriolis2D/3D` |
 | Land and coasts | `fvx.Mask2D.from_mask(wet)` → `mask.wet(at="T" / "U" / "V" / "X")`; pass `mask=` to an operator |
 | Ghost cells | `fvx.fill_ghosts(u, grid, fvx.BC(x=fvx.Dirichlet(0.0), y=fvx.Neumann()), stagger="U")`, `fvx.enforce_periodic`, `fvx.zero_gradient_boundaries`, `fvx.no_slip_boundaries`, `fvx.wall_boundaries` |
 | Diagnostics | `fvx.Energetics2D`, `fvx.Strain2D`, `fvx.QGPotentialVorticity2D`, `fvx.ArakawaJacobian2D`; `fvx.kinetic_energy`, `fvx.okubo_weiss`, `fvx.arakawa_jacobian`, … |
@@ -94,6 +94,7 @@ import jax.numpy as jnp
 import numpy as np
 
 import gridax as fvx
+from gridax.schemes import WENO
 import gridax.solvers as gs
 from integrix.march import rk3_ssp_step
 
@@ -125,7 +126,7 @@ adv = fvx.Advection2D(grid=grid)
 
 def rhs(q):
     q = fvx.enforce_periodic(q)  # fill the ghost ring before every stencil
-    return adv(q, u, v, method="weno5", wall="open")  # -∇·(q u) at T-points
+    return adv(q, u, v, scheme=WENO(5), wall="open")  # -∇·(q u) at T-points
 
 
 q0 = jnp.exp(-((X - 0.3) ** 2 + (Y - 0.5) ** 2) / 0.005)  # [Ny, Nx]
@@ -141,7 +142,7 @@ wet = np.ones((grid.Ny, grid.Nx), dtype=bool)
 wet[0, :] = wet[-1, :] = wet[:, 0] = wet[:, -1] = False
 wet[28:38, 28:38] = False
 mask = fvx.Mask2D.from_mask(wet)
-dq = fvx.Advection2D(grid=grid, mask=mask)(q0, u, v, method="weno5")
+dq = fvx.Advection2D(grid=grid, mask=mask)(q0, u, v, scheme=WENO(5))
 land_max = jnp.max(jnp.abs(jnp.where(mask.wet(), 0.0, dq)))
 ```
 
@@ -157,7 +158,7 @@ tendency is exactly zero on every land cell.
 |---|---|
 | `(h[1:-1, 2:] - h[1:-1, 1:-1]) / dx` into a zeroed array | `fvx.Difference2D(grid=grid).diff_x_T_to_U(h)` or `fvx.interior(fvx.diff_x_fwd_2d(h) / dx, h)` |
 | `0.5 * (u[:, 1:] + u[:, :-1])` to move u to cell centres | `fvx.Interpolation2D(grid=grid).U_to_T(u)` |
-| An upwind / WENO face reconstruction and flux divergence | `fvx.Advection2D(grid=grid)(q, u, v, method="weno5")` |
+| An upwind / WENO face reconstruction and flux divergence | `fvx.Advection2D(grid=grid)(q, u, v, scheme=WENO(5))` |
 | `q[:, 0] = q[:, -2]` (periodic ghosts) and friends | `fvx.enforce_periodic(q)`, `fvx.fill_ghosts(q, grid, fvx.BC(x=fvx.Periodic(), y=fvx.Periodic()))` |
 | A wet-face mask `wet[:, :-1] & wet[:, 1:]` | `fvx.Mask2D.from_mask(wet).u` |
 | `scipy.fft.dstn` Poisson solver | `gs.solve_helmholtz_dst` (or `sesmax_core.gfd.streamfunction_from_vorticity` for the full-array one-call form) |

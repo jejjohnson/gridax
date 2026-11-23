@@ -41,6 +41,7 @@ import sys
 import time
 
 import gridax as fvx
+from gridax.schemes import TVD, WENO, Upwind
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -71,8 +72,10 @@ def _op(obj, attr: str | None = None, *extra, **kwargs) -> Callable:
 
 
 def _okubo_weiss_fn(u, v):
-    ss = fvx.shear_strain(u, v, 1.0, 1.0)
-    sn = fvx.tensor_strain(u, v, 1.0, 1.0)
+    ny, nx = u.shape
+    grid = fvx.CartesianCGrid2D.from_interior(nx - 2, ny - 2, nx - 2.0, ny - 2.0)
+    ss = fvx.shear_strain(u, v, grid)
+    sn = fvx.tensor_strain(u, v, grid)
     om = fvx.interior(fvx.diff_x_fwd_2d(v) - fvx.diff_y_fwd_2d(u), u)
     return fvx.okubo_weiss(sn, ss, om)
 
@@ -141,12 +144,21 @@ def _cases(n: int, nz: int) -> list[Case]:
         Case("MomentumAdvection2D[energy]", _op(ma, None, "energy"), 2, s2, 2),
         Case("MomentumAdvection2D[enstrophy]", _op(ma, None, "enstrophy"), 2, s2, 2),
     ]
-    for m in ["upwind1", "upwind3", "weno3", "weno5", "wenoz5", "weno7", "van_leer"]:
-        C.append(Case(f"Advection2D[{m}]", _op(ad2, None, method=m), 3, s2))
+    schemes = {
+        "upwind1": Upwind(1),
+        "upwind3": Upwind(3),
+        "weno3": WENO(3),
+        "weno5": WENO(5),
+        "wenoz5": WENO(5, "z"),
+        "weno7": WENO(7),
+        "van_leer": TVD("van_leer"),
+    }
+    for m, scheme in schemes.items():
+        C.append(Case(f"Advection2D[{m}]", _op(ad2, None, scheme=scheme), 3, s2))
     C.append(
         Case(
             "Advection2D[weno5, open]",
-            _op(ad2, None, method="weno5", wall="open"),
+            _op(ad2, None, scheme=WENO(5), wall="open"),
             3,
             s2,
         )
@@ -155,16 +167,16 @@ def _cases(n: int, nz: int) -> list[Case]:
     wet = np.ones(s2, dtype=bool)
     wet[n // 3 : n // 2, n // 3 : n // 2] = False
     ad2m = fvx.Advection2D(g2, mask=fvx.Mask2D.from_mask(wet))
-    C.append(Case("Advection2D[weno5, masked]", _op(ad2m, None, method="weno5"), 3, s2))
+    C.append(Case("Advection2D[weno5, masked]", _op(ad2m, None, scheme=WENO(5)), 3, s2))
     C.append(
         Case(
             "Advection1D[weno5]",
-            _op(fvx.Advection1D(g1), None, method="weno5"),
+            _op(fvx.Advection1D(g1), None, scheme=WENO(5)),
             2,
             s1,
         )
     )
-    C.append(Case("Advection3D[weno5]", _op(ad3, None, method="weno5"), 3, s3))
+    C.append(Case("Advection3D[weno5]", _op(ad3, None, scheme=WENO(5)), 3, s3))
 
     sd = fvx.SphericalDifference2D(gs)
     C += [
@@ -196,7 +208,7 @@ def _cases(n: int, nz: int) -> list[Case]:
         ),
         Case(
             "SphericalAdvection2D[weno5]",
-            _op(fvx.SphericalAdvection2D(gs), None, method="weno5"),
+            _op(fvx.SphericalAdvection2D(gs), None, scheme=WENO(5)),
             3,
             s2,
         ),
@@ -207,8 +219,8 @@ def _cases(n: int, nz: int) -> list[Case]:
             s2,
             2,
         ),
-        Case("arakawa_jacobian", _op(fvx.arakawa_jacobian, None, 1.0, 1.0), 2, s2),
-        Case("kinetic_energy", fvx.kinetic_energy, 2, s2),
+        Case("arakawa_jacobian", _op(fvx.arakawa_jacobian, None, g2), 2, s2),
+        Case("kinetic_energy", _op(fvx.kinetic_energy, None, g2), 2, s2),
         Case("okubo_weiss[fn]", _okubo_weiss_fn, 2, s2),
         Case(
             "masked_laplacian",

@@ -14,10 +14,13 @@ or any other backend, in one derivative stack of four layers (``docs/stencils.md
   exactly, for point values or cell averages, collocated or staggered.
 - Layer 1, raw stencils: the named C-grid stencils (``diff_x_fwd_2d``, …) and
   ``staggered_difference`` / ``staggered_average`` in :mod:`gridax.stencils`;
-  the ``linear_*`` and ``weno_*`` reconstructions.
-- Layer 2, canonical functions, one per operation: the collocated
-  calculus of :mod:`gridax.analysis`, the C-grid diagnostics, and
-  :func:`gridax.advection.reconstruct` (which also takes a mask).
+  the ``linear_*`` and ``weno_*`` reconstructions of
+  :mod:`gridax.advection.kernels`, which the schemes of :mod:`gridax.schemes`
+  are built on.
+- Layer 2, canonical functions, one per operation, with the grid positional
+  and the mask a keyword: ``difference``, ``divergence``, ``advect``,
+  ``diffuse``, ``coriolis``, ``kinetic_energy``, …; on bare collocated arrays
+  :mod:`gridax.analysis`.
 - Layer 3, bindings that hold a grid and a mask: ``Difference2D``,
   ``Advection2D``, ``Diffusion2D``, … (the C-grid operators, advection,
   diffusion and boundary conditions live here, in gridax).
@@ -31,6 +34,7 @@ operators :mod:`gridax.pipekit` (the ``pipekit`` extra); ``import gridax``
 imports neither.
 """
 
+from gridax._src.advection.advect import advect
 from gridax._src.advection.advection import (
     Advection1D,
     Advection2D,
@@ -50,22 +54,7 @@ from gridax._src.advection.limiters import (
     superbee,
     van_leer,
 )
-from gridax._src.advection.linear import (
-    linear_2pts,
-    linear_3pts_left,
-    linear_3pts_right,
-    linear_4pts,
-    linear_5pts_left,
-    linear_5pts_right,
-    linear_6pts,
-)
 from gridax._src.advection.reconstruct import reconstruct
-from gridax._src.advection.reconstruct_fn import (
-    plusminus,
-    upwind_1pt,
-    upwind_3pt,
-    upwind_5pt,
-)
 from gridax._src.advection.reconstruction import (
     Reconstruction1D,
     Reconstruction2D,
@@ -74,20 +63,6 @@ from gridax._src.advection.reconstruction import (
 from gridax._src.advection.spherical_advection import (
     SphericalAdvection2D,
     SphericalAdvection3D,
-)
-from gridax._src.advection.weno import (
-    weno_3pts,
-    weno_3pts_improved,
-    weno_3pts_improved_right,
-    weno_3pts_right,
-    weno_5pts,
-    weno_5pts_improved,
-    weno_5pts_improved_right,
-    weno_5pts_right,
-    weno_7pts,
-    weno_7pts_right,
-    weno_9pts,
-    weno_9pts_right,
 )
 from gridax._src.boundary.atoms import (
     Dirichlet,
@@ -112,12 +87,12 @@ from gridax._src.boundary.boundary import (
     zero_gradient_boundaries,
 )
 from gridax._src.boundary.fill import BC, fill_ghosts
+from gridax._src.diffusion.diffuse import biharmonic, diffuse
 from gridax._src.diffusion.diffusion import (
     BiharmonicDiffusion2D,
     BiharmonicDiffusion3D,
     Diffusion2D,
     Diffusion3D,
-    diffusion_2d,
 )
 from gridax._src.diffusion.momentum import (
     MomentumAdvection2D,
@@ -183,6 +158,7 @@ from gridax._src.operators.calculus import (
 from gridax._src.operators.coriolis import (
     Coriolis2D,
     Coriolis3D,
+    coriolis,
 )
 from gridax._src.operators.diagnostic_operators import (
     Energetics2D,
@@ -207,8 +183,6 @@ from gridax._src.operators.diagnostics import (
     sw_potential_vorticity,
     sw_potential_vorticity_multilayer,
     tensor_strain,
-    total_energy,
-    total_enstrophy,
     vertical_velocity,
 )
 from gridax._src.operators.difference import (
@@ -329,6 +303,17 @@ __all__ = [
     "grad_perp",
     "gradient",
     "laplacian",
+    # Canonical transport and rotation
+    "advect",
+    "reconstruct",
+    "diffuse",
+    "biharmonic",
+    "coriolis",
+    "arakawa_jacobian",
+    # Canonical diagnostics
+    "kinetic_energy",
+    "shear_strain",
+    "tensor_strain",
     # Located fields (element-wise functions in gridax.fields)
     "CField",
     "combine",
@@ -392,33 +377,6 @@ __all__ = [
     "minmod",
     "superbee",
     "van_leer",
-    # Linear reconstruction stencils
-    "linear_2pts",
-    "linear_3pts_left",
-    "linear_3pts_right",
-    "linear_4pts",
-    "linear_5pts_left",
-    "linear_5pts_right",
-    "linear_6pts",
-    # WENO reconstruction stencils
-    "weno_3pts",
-    "weno_3pts_improved",
-    "weno_3pts_improved_right",
-    "weno_3pts_right",
-    "weno_5pts",
-    "weno_5pts_improved",
-    "weno_5pts_improved_right",
-    "weno_5pts_right",
-    "weno_7pts",
-    "weno_7pts_right",
-    "weno_9pts",
-    "weno_9pts_right",
-    # Functional reconstruction
-    "plusminus",
-    "reconstruct",
-    "upwind_1pt",
-    "upwind_3pt",
-    "upwind_5pt",
     # Upwind face flux
     "upwind_flux",
     # Area and volume reductions, masked statistics
@@ -449,7 +407,6 @@ __all__ = [
     "vorticity_flux_upwind",
     # Arakawa Jacobian
     "ArakawaJacobian2D",
-    "arakawa_jacobian",
     # Coriolis
     "Coriolis2D",
     "Coriolis3D",
@@ -461,22 +418,17 @@ __all__ = [
     "available_potential_energy",
     "bernoulli_potential",
     "enstrophy",
-    "kinetic_energy",
     "okubo_weiss",
     "potential_enstrophy",
     "potential_vorticity",
     "potential_vorticity_multilayer",
     "qg_potential_vorticity",
-    "shear_strain",
     "ssh_to_streamfn",
     "strain_magnitude_squared",
     "streamfn_to_ssh",
     "stretching_term",
     "sw_potential_vorticity",
     "sw_potential_vorticity_multilayer",
-    "tensor_strain",
-    "total_energy",
-    "total_enstrophy",
     "vertical_velocity",
     # Spherical differences
     "SphericalDifference2D",
@@ -508,7 +460,6 @@ __all__ = [
     "BiharmonicDiffusion3D",
     "Diffusion2D",
     "Diffusion3D",
-    "diffusion_2d",
     # Momentum advection
     "MomentumAdvection2D",
     "MomentumAdvection3D",

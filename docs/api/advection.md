@@ -2,6 +2,10 @@
 
 Flux-form advection operators for scalar transport on staggered C-grids.
 
+::: gridax.advect
+
+## The class forms
+
 ::: gridax.Advection1D
 
 ::: gridax.Advection2D

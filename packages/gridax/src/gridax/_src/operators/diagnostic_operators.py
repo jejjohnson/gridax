@@ -42,7 +42,7 @@ import numpy as np
 from gridax._src.backend import set_at
 from gridax._src.grid import CartesianCGrid2D
 from gridax._src.mask import Mask2D
-from gridax._src.operators._utils import _spacing
+from gridax._src.operators._utils import _sanitize, _spacing, _where
 from gridax._src.operators.diagnostics import (
     available_potential_energy,
     bernoulli_potential,
@@ -62,39 +62,6 @@ if TYPE_CHECKING:
     from jaxtyping import Array
 else:
     Array = np.ndarray
-
-
-def _where(
-    wet: Array | None, field: Float[Array, "... Ny Nx"]
-) -> Float[Array, "... Ny Nx"]:
-    """Zero ``field`` where ``wet`` is False; identity when ``wet`` is None.
-
-    field[..., j, i] = field[..., j, i] if wet[j, i] else 0
-    """
-    xp = array_namespace(wet, field)
-    if wet is None:
-        return field
-    return xp.where(wet, field, 0.0)
-
-
-def _sanitize(
-    wet: Array | None, field: Float[Array, "... Ny Nx"]
-) -> Float[Array, "... Ny Nx"]:
-    """Zero ``field`` on dry *interior* cells; pass the ghost ring through.
-
-    field[..., j, i] = field[..., j, i]  on the ghost ring (BC-owned)
-    field[..., j, i] = field[..., j, i] if wet[j, i] else 0
-                                         for 1 <= j <= Ny-2, 1 <= i <= Nx-2
-    """
-    xp = array_namespace(wet, field)
-    if wet is None:
-        return field
-    wet = xp.asarray(wet, dtype=bool)
-    # keep[j, i] = True on the ghost ring, wet[j, i] in the interior
-    keep = set_at(
-        xp.ones_like(wet), (..., slice(1, -1), slice(1, -1)), wet[..., 1:-1, 1:-1]
-    )
-    return xp.where(keep, field, 0.0)
 
 
 @pytree_dataclass
@@ -170,8 +137,7 @@ class Energetics2D:
             Kinetic energy at T-points, zero in the ghost ring and, when
             ``self.mask`` is set, at dry T-cells.
         """
-        u, v = self._uv(u, v)
-        return self._out(kinetic_energy(u, v))
+        return kinetic_energy(u, v, self.grid, mask=self.mask)
 
     def bernoulli_potential(
         self,
@@ -375,16 +341,7 @@ class Strain2D:
             Shear strain at X-points, zero in the ghost ring and, when
             ``self.mask`` is set, at dry X-corners.
         """
-        u, v = self._uv(u, v)
-        out = shear_strain(
-            u,
-            v,
-            _spacing(self.grid, "x", v, at="X"),
-            _spacing(self.grid, "y", u, at="X"),
-        )
-        return _where(
-            None if self.mask is None else self.mask.wet(at="X", kind="strict"), out
-        )
+        return shear_strain(u, v, self.grid, mask=self.mask)
 
     def tensor(
         self,
@@ -409,11 +366,7 @@ class Strain2D:
             Tensor strain at T-points, zero in the ghost ring and, when
             ``self.mask`` is set, at dry T-cells.
         """
-        u, v = self._uv(u, v)
-        out = tensor_strain(
-            u, v, _spacing(self.grid, "x", u), _spacing(self.grid, "y", v)
-        )
-        return _where(None if self.mask is None else self.mask.wet(), out)
+        return tensor_strain(u, v, self.grid, mask=self.mask)
 
     def magnitude_squared(
         self,
@@ -446,9 +399,7 @@ class Strain2D:
             and, when ``self.mask`` is set, at dry T-cells.
         """
         u, v = self._uv(u, v)
-        sn = tensor_strain(
-            u, v, _spacing(self.grid, "x", u), _spacing(self.grid, "y", v)
-        )
+        sn = tensor_strain(u, v, self.grid)
         ss_on_T = self.interp.X_to_T(self._x_with_ghosts(u, v, 1.0))
         out = strain_magnitude_squared(sn, ss_on_T)
         return _where(None if self.mask is None else self.mask.wet(), out)
@@ -486,9 +437,7 @@ class Strain2D:
             when ``self.mask`` is set, at dry T-cells.
         """
         u, v = self._uv(u, v)
-        sn = tensor_strain(
-            u, v, _spacing(self.grid, "x", u), _spacing(self.grid, "y", v)
-        )
+        sn = tensor_strain(u, v, self.grid)
         ss_on_T = self.interp.X_to_T(self._x_with_ghosts(u, v, 1.0))
         omega_on_T = self.interp.X_to_T(self._x_with_ghosts(u, v, -1.0))
         out = okubo_weiss(sn, ss_on_T, omega_on_T)

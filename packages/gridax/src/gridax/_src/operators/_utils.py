@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 from jaxtyping import Float
 import numpy as np
 
+from gridax._src.backend import set_at
 from gridax._src.pytree import array_namespace
 
 if TYPE_CHECKING:
@@ -128,3 +129,36 @@ def _spherical_laplacian_merid(
     dh_S = (c - s) / dlat
     d_cos_dh = (cos_N * dh_N - cos_S * dh_S) / dlat
     return _safe_div_cos(d_cos_dh, cos_T, _metric_like(R**2, cos_T))
+
+
+def _where(
+    wet: Array | None, field: Float[Array, "... Ny Nx"]
+) -> Float[Array, "... Ny Nx"]:
+    """Zero ``field`` where ``wet`` is False; identity when ``wet`` is None.
+
+    field[..., j, i] = field[..., j, i] if wet[j, i] else 0
+    """
+    xp = array_namespace(wet, field)
+    if wet is None:
+        return field
+    return xp.where(wet, field, 0.0)
+
+
+def _sanitize(
+    wet: Array | None, field: Float[Array, "... Ny Nx"]
+) -> Float[Array, "... Ny Nx"]:
+    """Zero ``field`` on dry *interior* cells; pass the ghost ring through.
+
+    field[..., j, i] = field[..., j, i]  on the ghost ring (BC-owned)
+    field[..., j, i] = field[..., j, i] if wet[j, i] else 0
+                                         for 1 <= j <= Ny-2, 1 <= i <= Nx-2
+    """
+    xp = array_namespace(wet, field)
+    if wet is None:
+        return field
+    wet = xp.asarray(wet, dtype=bool)
+    # keep[j, i] = True on the ghost ring, wet[j, i] in the interior
+    keep = set_at(
+        xp.ones_like(wet), (..., slice(1, -1), slice(1, -1)), wet[..., 1:-1, 1:-1]
+    )
+    return xp.where(keep, field, 0.0)

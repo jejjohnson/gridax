@@ -10,7 +10,8 @@ from __future__ import annotations
 
 from gridax import CartesianCGrid1D, CartesianCGrid2D
 from gridax._src.advection.reconstruction import Reconstruction1D, Reconstruction2D
-from gridax._src.diffusion.diffusion import Diffusion2D, diffusion_2d
+from gridax._src.diffusion.diffuse import diffuse
+from gridax._src.diffusion.diffusion import Diffusion2D
 from gridax._src.operators.difference import Difference1D, Difference2D
 from gridax._src.operators.divergence import Divergence2D
 from gridax._src.operators.interpolation import Interpolation2D
@@ -180,12 +181,8 @@ class TestFloat32Float64Agreement:
         h64 = jnp.broadcast_to(x**2, (grid2d.Ny, grid2d.Nx)).astype(jnp.float64)
         h32 = h64.astype(jnp.float32)
 
-        res64 = diffusion_2d(
-            h64, kappa=1.0, dx=grid2d.spacing("x"), dy=grid2d.spacing("y")
-        )
-        res32 = diffusion_2d(
-            h32, kappa=1.0, dx=grid2d.spacing("x"), dy=grid2d.spacing("y")
-        )
+        res64 = diffuse(h64, grid2d, kappa=1.0)
+        res32 = diffuse(h32, grid2d, kappa=1.0)
 
         np.testing.assert_allclose(
             res32[1:-1, 1:-1].astype(float),
@@ -309,10 +306,8 @@ class TestNoNanOnValidInputs:
         x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
         y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         h = jnp.sin(x[None, :]) * jnp.cos(y[:, None])
-        result = diffusion_2d(
-            h, kappa=1e-2, dx=grid2d.spacing("x"), dy=grid2d.spacing("y")
-        )
-        assert jnp.all(jnp.isfinite(result)), "NaN or Inf in diffusion_2d output"
+        result = diffuse(h, grid2d, kappa=1e-2)
+        assert jnp.all(jnp.isfinite(result)), "NaN or Inf in diffuse output"
 
 
 # ---------------------------------------------------------------------------

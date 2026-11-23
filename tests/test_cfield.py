@@ -262,6 +262,45 @@ class TestPytree:
             assert double(make(loc)).loc == loc
         assert traces == ["U", "V"]
 
+    def test_a_stack_has_the_tree_structure_of_one_field(self):
+        one = CField(jnp.ones((4, 5)), ("y", "x"), loc="U")
+        stack = jax.tree.map(lambda x: jnp.zeros((3, *x.shape)), one)
+        assert (stack.dims, stack.loc) == (("batch", "y", "x"), "U")
+        assert jax.tree.structure(stack) == jax.tree.structure(one)
+        # what a solver does with its output buffer
+        written = jax.tree.map(lambda buffer, x: buffer.at[1].set(x), stack, one)
+        assert float(written.data.sum()) == 20.0
+        twice = jax.tree.map(lambda x: x[None], stack)
+        assert twice.dims == ("batch", "batch_1", "y", "x")
+        assert jax.tree.structure(twice) == jax.tree.structure(one)
+
+    def test_dims_of_another_name_are_part_of_the_structure(self):
+        members = CField(jnp.ones((3, 4)), ("member", "x"))
+        times = CField(jnp.ones((3, 4)), ("time", "x"))
+        assert jax.tree.structure(members) != jax.tree.structure(times)
+        leaves, structure = jax.tree.flatten(members)
+        assert structure.unflatten(leaves).dims == ("member", "x")
+
+    def test_diffrax_saves_located_states(self):
+        dfx = pytest.importorskip("diffrax")
+        y0 = {"u": CField(jnp.ones((4, 5)), ("y", "x"), loc="U")}
+        plain = {"u": y0["u"].data}
+
+        def solve(y):
+            return dfx.diffeqsolve(
+                dfx.ODETerm(lambda t, y, args: jax.tree.map(jnp.negative, y)),
+                dfx.Tsit5(),
+                0.0,
+                1.0,
+                0.1,
+                y,
+                saveat=dfx.SaveAt(ts=jnp.linspace(0.0, 1.0, 4)),
+            ).ys["u"]
+
+        out = solve(y0)
+        assert (out.dims, out.loc) == (("batch", "y", "x"), "U")
+        np.testing.assert_array_equal(out.data, solve(plain))
+
     def test_vmap_drops_the_first_dim_and_returns_it_as_batch(self):
         u = make("U", dims=("member", "y", "x"))
         seen = []

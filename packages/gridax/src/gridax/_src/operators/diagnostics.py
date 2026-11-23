@@ -7,16 +7,29 @@ and domain-integrated conservation diagnostics.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 import warnings
 
 from geophysix.constants import STANDARD
 from jaxtyping import Float
 import numpy as np
 
+from gridax._src.api import grid_dispatch
 from gridax._src.backend import set_at, vmap
+from gridax._src.fields.located import located
+from gridax._src.grid import (
+    CartesianAGrid2D,
+    CartesianAGrid3D,
+    CartesianCGrid2D,
+    CartesianCGrid3D,
+    SphericalAGrid2D,
+    SphericalCGrid2D,
+    SphericalCGrid3D,
+)
 from gridax._src.mask import Mask3D
 from gridax._src.operators._ghost import interior
+from gridax._src.operators._utils import _sanitize, _spacing, _where
+from gridax._src.operators.calculus import _levels
 from gridax._src.operators.difference import _curl_2d, _laplacian_2d_interior
 from gridax._src.operators.stencils import (
     avg_x_bwd_2d,
@@ -41,46 +54,175 @@ else:
 # ======================================================================
 
 
+@grid_dispatch
+@located("T", u="U", v="V")
 def kinetic_energy(
-    u: Float[Array, "*batch Ny Nx"],
-    v: Float[Array, "*batch Ny Nx"],
+    u: Float[Array, "..."], v: Float[Array, "..."], grid: Any, *, mask: Any = None
+) -> Float[Array, "..."]:
+    """The kinetic energy per unit mass, at T.
+
+    ``KE = 1/2 (avg_x(u²) + avg_y(v²))`` on a C-grid, the squares of the two
+    faces of each cell averaged; ``1/2 (u² + v²)`` on a collocated grid.
+
+    Parameters
+    ----------
+    u, v : CField or Float[Array, "*batch *grid"]
+        The velocity, at U and V (at T on a collocated grid).
+    grid : grid
+        Two- or three-dimensional. The metric does not enter.
+    mask : Mask2D or Mask3D, optional
+        The wet cells. Dry interior faces are read as zero, and the result is
+        zero on dry cells (NaN on a collocated grid).
+
+    Returns
+    -------
+    CField or Float[Array, "*batch *grid"]
+        At T, with a zero ghost ring on a C-grid.
+
+    Examples
+    --------
+    >>> import gridax, numpy as np
+    >>> grid = gridax.CartesianCGrid2D.from_interior(4, 4, 4.0, 4.0)
+    >>> u = np.ones(grid.shape)
+    >>> gridax.kinetic_energy(u, u, grid)[2].tolist()
+    [0.0, 1.0, 1.0, 1.0, 1.0, 0.0]
+    """
+    return kinetic_energy._impl(grid, u, v, mask=mask)
+
+
+@grid_dispatch
+@located("X", u="U", v="V")
+def shear_strain(
+    u: Float[Array, "..."], v: Float[Array, "..."], grid: Any, *, mask: Any = None
+) -> Float[Array, "..."]:
+    """The shear strain ``δₓv + δᵧu``, at X.
+
+    Parameters
+    ----------
+    u, v : CField or Float[Array, "*batch *grid"]
+        The velocity, at U and V.
+    grid : grid
+        A 2-D or 3-D Cartesian C-grid.
+    mask : Mask2D or Mask3D, optional
+        The wet cells. Dry interior faces are read as zero, and the result is
+        zero on the corners without four wet cells.
+
+    Returns
+    -------
+    CField or Float[Array, "*batch *grid"]
+        At X, with a zero ghost ring.
+
+    Examples
+    --------
+    >>> import gridax, numpy as np
+    >>> grid = gridax.CartesianCGrid2D.from_interior(4, 4, 4.0, 4.0)
+    >>> v = np.broadcast_to(grid.coords("x", at="V"), grid.shape)
+    >>> gridax.shear_strain(0.0 * v, v, grid)[2].tolist()
+    [0.0, 1.0, 1.0, 1.0, 1.0, 0.0]
+    """
+    return shear_strain._impl(grid, u, v, mask=mask)
+
+
+@grid_dispatch
+@located("T", u="U", v="V")
+def tensor_strain(
+    u: Float[Array, "..."], v: Float[Array, "..."], grid: Any, *, mask: Any = None
+) -> Float[Array, "..."]:
+    """The normal (tensor) strain ``δₓu - δᵧv``, at T.
+
+    Parameters
+    ----------
+    u, v : CField or Float[Array, "*batch *grid"]
+        The velocity, at U and V.
+    grid : grid
+        A 2-D or 3-D Cartesian C-grid.
+    mask : Mask2D or Mask3D, optional
+        The wet cells. Dry interior faces are read as zero, and the result is
+        zero on dry cells.
+
+    Returns
+    -------
+    CField or Float[Array, "*batch *grid"]
+        At T, with a zero ghost ring.
+
+    Examples
+    --------
+    >>> import gridax, numpy as np
+    >>> grid = gridax.CartesianCGrid2D.from_interior(4, 4, 4.0, 4.0)
+    >>> u = np.broadcast_to(grid.coords("x", at="U"), grid.shape)
+    >>> gridax.tensor_strain(u, 0.0 * u, grid)[2].tolist()
+    [0.0, 1.0, 1.0, 1.0, 1.0, 0.0]
+    """
+    return tensor_strain._impl(grid, u, v, mask=mask)
+
+
+def _velocities(mask: Any, u: Any, v: Any) -> tuple[Any, Any]:
+    """``u`` and ``v``, zero on dry interior faces (no normal flow)."""
+    if mask is None:
+        return u, v
+    return _sanitize(mask.wet(at="U"), u), _sanitize(mask.wet(at="V"), v)
+
+
+@kinetic_energy.register(CartesianCGrid2D)
+@kinetic_energy.register(CartesianCGrid3D)
+@kinetic_energy.register(SphericalCGrid2D)
+@kinetic_energy.register(SphericalCGrid3D)
+def _kinetic_energy_staggered(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
+    u, v = _velocities(mask, u, v)
+    out = interior(_kinetic_energy_interior(_levels(grid, u), _levels(grid, v)), u)
+    return _where(None if mask is None else mask.wet(), out)
+
+
+@kinetic_energy.register(CartesianAGrid2D)
+@kinetic_energy.register(CartesianAGrid3D)
+@kinetic_energy.register(SphericalAGrid2D)
+def _kinetic_energy_collocated(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
+    # 1/2 (u² + v²)
+    out = 0.5 * (u**2 + v**2)
+    return out if mask is None else array_namespace(out).where(mask.wet(), out, np.nan)
+
+
+@shear_strain.register(CartesianCGrid2D)
+@shear_strain.register(CartesianCGrid3D)
+def _shear_strain_cartesian(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
+    u, v = _velocities(mask, u, v)
+    dx, dy = _spacing(grid, "x", v, at="X"), _spacing(grid, "y", u, at="X")
+    like = u
+    u, v = _levels(grid, u), _levels(grid, v)
+    # (v[j+1/2, i+1] - v[j+1/2, i]) / dx + (u[j+1, i+1/2] - u[j, i+1/2]) / dy
+    out = interior(diff_x_fwd_2d(v) / dx + diff_y_fwd_2d(u) / dy, like)
+    return _where(None if mask is None else mask.wet(at="X", kind="strict"), out)
+
+
+@tensor_strain.register(CartesianCGrid2D)
+@tensor_strain.register(CartesianCGrid3D)
+def _tensor_strain_cartesian(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
+    u, v = _velocities(mask, u, v)
+    dx, dy = _spacing(grid, "x", u), _spacing(grid, "y", v)
+    like = u
+    u, v = _levels(grid, u), _levels(grid, v)
+    # (u[j, i+1/2] - u[j, i-1/2]) / dx - (v[j+1/2, i] - v[j-1/2, i]) / dy
+    out = interior(diff_x_bwd_2d(u) / dx - diff_y_bwd_2d(v) / dy, like)
+    return _where(None if mask is None else mask.wet(), out)
+
+
+def _kinetic_energy(
+    u: Float[Array, "*batch Ny Nx"], v: Float[Array, "*batch Ny Nx"]
 ) -> Float[Array, "*batch Ny Nx"]:
-    """Kinetic energy at T-points (cell centers) on an Arakawa C-grid.
+    """The kinetic energy at T on the last two axes, with a zero ghost ring."""
+    return interior(_kinetic_energy_interior(u, v), u)
 
-    Eq:
-        ke[j, i] = 0.5 * (u²_on_T[j, i] + v²_on_T[j, i])
 
-    where u² and v² are averaged from face-points to T-points:
-        u²_on_T[j, i] = 0.5 * (u[j, i+1/2]² + u[j, i-1/2]²)
-                       = 0.5 * (u[j, i]² + u[j, i-1]²)
-        v²_on_T[j, i] = 0.5 * (v[j+1/2, i]² + v[j-1/2, i]²)
-                       = 0.5 * (v[j, i]² + v[j-1, i]²)
+def _kinetic_energy_interior(u: Any, v: Any) -> Any:
+    """``1/2 (avg_x(u²) + avg_y(v²))`` on the interior of the last two axes.
 
-    This is a mask-free Layer-2 functional helper per #209.  For masked
-    kinetic energy, multiply the result by your T-point mask at the call
-    site: ``ke = kinetic_energy(u, v) * mask.wet()``.
-
-    Args:
-        u (Array): x-velocity at U-points (east faces), shape [Ny, Nx].
-        v (Array): y-velocity at V-points (north faces), shape [Ny, Nx].
-
-    Returns:
-        ke (Array): kinetic energy at T-points, shape [Ny, Nx].
-            Ghost ring is zero; interior is [1:-1, 1:-1].
+    u²_T[j, i] = 1/2 (u[j, i+1/2]² + u[j, i-1/2]²)
+    v²_T[j, i] = 1/2 (v[j+1/2, i]² + v[j-1/2, i]²)
     """
     xp = array_namespace(u, v)
     dtype = xp.result_type(u, v, 0.0)
-    u_float = xp.asarray(u, dtype=dtype)
-    v_float = xp.asarray(v, dtype=dtype)
-    u2 = u_float**2
-    v2 = v_float**2
-    # u²_on_T[j, i] = 0.5 * (u²[j, i] + u²[j, i-1])  (east + west U-faces)
-    # v²_on_T[j, i] = 0.5 * (v²[j, i] + v²[j-1, i])  (north + south V-faces)
-    u2_on_T = avg_x_bwd_2d(u2)
-    v2_on_T = avg_y_bwd_2d(v2)
-    ke_int = 0.5 * (u2_on_T + v2_on_T)
-    out = interior(ke_int, u_float)
-    return out
+    u, v = xp.asarray(u, dtype=dtype), xp.asarray(v, dtype=dtype)
+    return 0.5 * (avg_x_bwd_2d(u**2) + avg_y_bwd_2d(v**2))
 
 
 def bernoulli_potential(
@@ -113,7 +255,7 @@ def bernoulli_potential(
     xp = array_namespace(h, u, v)
     dtype = xp.result_type(h, u, v, 0.0)
     h_float = xp.asarray(h, dtype=dtype)
-    ke = kinetic_energy(u=u, v=v)
+    ke = _kinetic_energy(u, v)
     out = interior(ke[..., 1:-1, 1:-1] + gravity * h_float[..., 1:-1, 1:-1], h_float)
     return out
 
@@ -156,70 +298,6 @@ def potential_vorticity(
 # ======================================================================
 # Strain operators  (Issue #2)
 # ======================================================================
-
-
-def shear_strain(
-    u: Float[Array, "*batch Ny Nx"],
-    v: Float[Array, "*batch Ny Nx"],
-    dx: float | Float[Array, ""],
-    dy: float | Float[Array, ""],
-) -> Float[Array, "*batch Ny Nx"]:
-    """Shear strain at X-points (corners) on an Arakawa C-grid.
-
-    Ss[j+1/2, i+1/2] = dv/dx + du/dy
-        = (v[j+1/2, i+1] - v[j+1/2, i]) / dx
-        + (u[j+1, i+1/2] - u[j, i+1/2]) / dy
-
-    Parameters
-    ----------
-    u : Float[Array, "*batch Ny Nx"]
-        x-velocity at U-points.
-    v : Float[Array, "*batch Ny Nx"]
-        y-velocity at V-points.
-    dx : float
-        Grid spacing in x.
-    dy : float
-        Grid spacing in y.
-
-    Returns
-    -------
-    Float[Array, "*batch Ny Nx"]
-        Shear strain at X-points.  Ghost ring is zero.
-    """
-    out = interior(diff_x_fwd_2d(v) / dx + diff_y_fwd_2d(u) / dy, u)
-    return out
-
-
-def tensor_strain(
-    u: Float[Array, "*batch Ny Nx"],
-    v: Float[Array, "*batch Ny Nx"],
-    dx: float | Float[Array, ""],
-    dy: float | Float[Array, ""],
-) -> Float[Array, "*batch Ny Nx"]:
-    """Tensor (normal) strain at T-points on an Arakawa C-grid.
-
-    Sn[j, i] = du/dx - dv/dy
-        = (u[j, i+1/2] - u[j, i-1/2]) / dx
-        - (v[j+1/2, i] - v[j-1/2, i]) / dy
-
-    Parameters
-    ----------
-    u : Float[Array, "*batch Ny Nx"]
-        x-velocity at U-points.
-    v : Float[Array, "*batch Ny Nx"]
-        y-velocity at V-points.
-    dx : float
-        Grid spacing in x.
-    dy : float
-        Grid spacing in y.
-
-    Returns
-    -------
-    Float[Array, "*batch Ny Nx"]
-        Tensor strain at T-points.  Ghost ring is zero.
-    """
-    out = interior(diff_x_bwd_2d(u) / dx - diff_y_bwd_2d(v) / dy, u)
-    return out
 
 
 def strain_magnitude_squared(
@@ -475,63 +553,6 @@ def stretching_term(
 # ======================================================================
 # Domain-integrated diagnostics  (Issue #73)
 # ======================================================================
-
-
-def total_energy(
-    ke: Float[Array, "*batch Ny Nx"],
-    ape: Float[Array, "*batch Ny Nx"],
-    dx: float | Float[Array, ""],
-    dy: float | Float[Array, ""],
-) -> Float[Array, ""]:
-    """Domain-integrated total energy.
-
-    E = sum_{interior}(KE + APE) * dx * dy
-
-    Parameters
-    ----------
-    ke : Float[Array, "*batch Ny Nx"]
-        Kinetic energy at T-points.
-    ape : Float[Array, "*batch Ny Nx"]
-        Available potential energy at T-points.
-    dx : float
-        Grid spacing in x.
-    dy : float
-        Grid spacing in y.
-
-    Returns
-    -------
-    Float[Array, ""]
-        Scalar total energy.
-    """
-    xp = array_namespace(ke, ape)
-    return xp.sum(ke[..., 1:-1, 1:-1] + ape[..., 1:-1, 1:-1], axis=(-2, -1)) * dx * dy
-
-
-def total_enstrophy(
-    ens: Float[Array, "*batch Ny Nx"],
-    dx: float | Float[Array, ""],
-    dy: float | Float[Array, ""],
-) -> Float[Array, ""]:
-    """Domain-integrated enstrophy.
-
-    Z = sum_{interior}(0.5 * omega^2) * dx * dy
-
-    Parameters
-    ----------
-    ens : Float[Array, "*batch Ny Nx"]
-        Enstrophy field (e.g. from :func:`enstrophy`).
-    dx : float
-        Grid spacing in x.
-    dy : float
-        Grid spacing in y.
-
-    Returns
-    -------
-    Float[Array, ""]
-        Scalar total enstrophy.
-    """
-    xp = array_namespace(ens)
-    return xp.sum(ens[..., 1:-1, 1:-1], axis=(-2, -1)) * dx * dy
 
 
 # ======================================================================

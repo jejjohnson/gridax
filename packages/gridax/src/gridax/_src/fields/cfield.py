@@ -37,7 +37,9 @@ class CField:
     The array is the only pytree leaf; ``dims``, ``labels`` and ``stagger``
     are static, so new values never recompile and a compiled program equals
     the one on bare arrays. Under a bare ``jax.vmap`` the mapped dim is the
-    first one: it is dropped inside and comes back as ``"batch"``.
+    first one: it is dropped inside and comes back as ``"batch"``. A stack of
+    fields along ``"batch"`` has the tree structure of one of them, as a stack
+    of arrays has.
 
     Parameters
     ----------
@@ -294,14 +296,32 @@ def _vmapped_dims(dims: tuple[str, ...], shape: Any) -> tuple[str, ...]:
         return dims
     if len(shape) < len(dims):
         return dims[len(dims) - len(shape) :]
+    return (*_batch_names(len(shape) - len(dims), dims), *dims)
+
+
+def _batch_names(count: int, dims: tuple[str, ...]) -> tuple[str, ...]:
+    """``count`` names for axes in front of ``dims``: ``"batch"``, ``"batch_1"``, …"""
     added: list[str] = []
     k = 0
-    while len(added) < len(shape) - len(dims):
+    while len(added) < count:
         name = "batch" if k == 0 else f"batch_{k}"
         k += 1
         if name not in dims:
             added.append(name)
-    return (*added, *dims)
+    return tuple(added)
+
+
+def _core_dims(dims: tuple[str, ...]) -> tuple[str, ...]:
+    """``dims`` without the leading ones that a batch axis would be given.
+
+    A stack of fields and one of them then have the same tree structure, as a
+    stack of arrays and one array have: a solver that allocates its output
+    with ``tree_map`` and writes one step into it compares the two.
+    """
+    k = 0
+    while k < len(dims) and dims[: k + 1] == _batch_names(k + 1, dims[k + 1 :]):
+        k += 1
+    return dims[k:]
 
 
 def _register_with_jax() -> None:
@@ -315,7 +335,7 @@ def _register_with_jax() -> None:
 
     def aux(f: CField) -> tuple[Any, ...]:
         labels = tuple((dim, f.labels[dim]) for dim in f.dims if dim in f.labels)
-        return f.dims, labels, f.stagger
+        return _core_dims(f.dims), labels, f.stagger
 
     def flatten_with_keys(f: CField) -> tuple[Any, Any]:
         return ((key, f.data),), aux(f)

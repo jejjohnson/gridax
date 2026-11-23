@@ -5,8 +5,8 @@ from __future__ import annotations
 from fractions import Fraction
 import itertools
 
+import _reconstruction_cases as cases
 import gridax
-import gridax.advection as gadv
 from gridax.schemes import TVD, WENO, Biased, Centred, Scheme, Upwind
 import gridax.stencils as gs
 import numpy as np
@@ -133,13 +133,13 @@ def test_biased_is_upwind_with_a_fixed_side(order: int) -> None:
     rng = np.random.default_rng(order)
     q, u = rng.standard_normal((2, 8, 24))
     for side, speed in (("left", np.abs(u)), ("right", -np.abs(u))):
-        got = gadv.reconstruct(q, speed, axis=-1, scheme=Biased(order, side))
-        want = gadv.reconstruct(q, speed, axis=-1, scheme=Upwind(order))
+        got = cases.flux(q, speed, axis=-1, scheme=Biased(order, side))
+        want = cases.flux(q, speed, axis=-1, scheme=Upwind(order))
         # at the edges Biased narrows one point at a time, Upwind two
         inner = (slice(None), slice(order, -order))
         np.testing.assert_allclose(got[inner], want[inner], rtol=1e-12)
         # the side does not follow the velocity
-        against = gadv.reconstruct(q, -speed, axis=-1, scheme=Biased(order, side))
+        against = cases.flux(q, -speed, axis=-1, scheme=Biased(order, side))
         np.testing.assert_allclose(against, -got, rtol=1e-12)
 
 
@@ -168,13 +168,13 @@ def test_the_footprint_is_what_reconstruct_reads(scheme: Scheme) -> None:
         rng = np.random.default_rng(3)
         q = rng.standard_normal(n)
         u = np.full(n, sign)
-        base = gadv.reconstruct(q, u, axis=-1, scheme=scheme)[face]
+        base = cases.flux(q, u, axis=-1, scheme=scheme)[face]
         for k in range(n):
             # two bumps, so that a limiter that happens to be flat still shows
             for bump in (0.37, -0.81):
                 moved = q.copy()
                 moved[k] += bump
-                if gadv.reconstruct(moved, u, axis=-1, scheme=scheme)[face] != base:
+                if cases.flux(moved, u, axis=-1, scheme=scheme)[face] != base:
                     read.add(k - face)
     assert read <= set(range(lo, hi + 1))
     if scheme.linear and scheme != Upwind(2):
@@ -279,7 +279,7 @@ def test_masked_faces_never_read_a_dry_cell(scheme: Scheme) -> None:
     q, u = rng.standard_normal((2, 14, 22))
     u = u * mask.wet(at="U")
     q = np.where(wet, q, np.nan)
-    flux = gadv.reconstruct(q, u, axis=-1, scheme=scheme, mask=mask)
+    flux = cases.flux(q, u, axis=-1, scheme=scheme, mask=mask)
     # a dry cell is NaN, and would show on any face that reads it
     assert np.isfinite(flux).all()
     # every interior face between two wet cells has a flux: none is closed
@@ -295,6 +295,6 @@ def test_masked_centred_is_the_average_of_the_two_wet_cells() -> None:
     rng = np.random.default_rng(1)
     q, u = rng.standard_normal((2, 8, 14))
     u = u * mask.wet(at="U")
-    got = gadv.reconstruct(q, u, axis=-1, scheme=Centred(), mask=mask)
-    want = gadv.reconstruct(q, u, axis=-1, scheme=Centred())
+    got = cases.flux(q, u, axis=-1, scheme=Centred(), mask=mask)
+    want = cases.flux(q, u, axis=-1, scheme=Centred())
     np.testing.assert_array_equal(got, np.where(wet, want, 0.0) + 0.0)

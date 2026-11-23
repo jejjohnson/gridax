@@ -52,6 +52,7 @@ from gridax import (
     Vorticity2D,
     pad_interior,
 )
+from gridax.schemes import Upwind
 from integrix.march import heun_step
 import matplotlib.pyplot as plt
 import numpy as np
@@ -368,7 +369,7 @@ def run_simulation(config: ShallowWaterConfig | None = None) -> xr.Dataset:
         full Bernoulli B = g*eta + 0.5*speed^2 together with the advection term.
         """
         layer_depth = mean_depth + eta_field
-        eta_rhs = adv(layer_depth, u_field, v_field, method="upwind1")
+        eta_rhs = adv(layer_depth, u_field, v_field, scheme=Upwind(1))
         eta_rhs = eta_rhs + viscosity * diff.laplacian(eta_field)
 
         u_on_t = interp.U_to_T(u_field)

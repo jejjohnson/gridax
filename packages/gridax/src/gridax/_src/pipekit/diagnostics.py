@@ -1,8 +1,7 @@
 """Diagnostic and reduction operators (2-D Cartesian).
 
 Thin wrappers over the diagnostic surface (`Vorticity2D`, `Energetics2D`,
-`Strain2D`, `QGPotentialVorticity2D`, `total_energy`, `area_sum`,
-`area_mean`): each body is a Tier-A call. Fields are ``[*batch, Ny, Nx]``;
+`Strain2D`, `QGPotentialVorticity2D`, `area_sum`, `area_mean`): each body is a Tier-A call. Fields are ``[*batch, Ny, Nx]``;
 the reductions keep the leading axes::
 
     x : [T, Ny, Nx]  ──DomainIntegral──►  [T]
@@ -21,13 +20,11 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Float
 
-from gridax._src.operators._utils import _spacing
 from gridax._src.operators.diagnostic_operators import (
     Energetics2D,
     QGPotentialVorticity2D,
     Strain2D,
 )
-from gridax._src.operators.diagnostics import total_energy
 from gridax._src.operators.reductions import area_mean, area_sum
 from gridax._src.operators.vorticity import Vorticity2D
 from gridax._src.pipekit.base import GridOperator, over_leading
@@ -157,14 +154,13 @@ class OkuboWeiss(GridOperator):
 
 
 class TotalEnergy(GridOperator):
-    """E = ∑_interior (KE + APE) Δx Δy, one value per leading index.
+    """E = ∑_interior (KE + APE) ΔA (`area_sum`), one value per leading index.
 
     ``(T, T) → [*batch]``.
     """
 
     def _apply(self, ke: Field, ape: Field) -> Scalar:
-        g = self.grid
-        return total_energy(ke, ape, _spacing(g, "x", ke), _spacing(g, "y", ke))
+        return over_leading(lambda f: area_sum(f, self.grid))(ke + ape)
 
 
 class DomainIntegral(GridOperator):

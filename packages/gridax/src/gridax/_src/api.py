@@ -30,15 +30,24 @@ _A = (_A1, *_A2, _A3)
 
 #: ``operation -> grid types`` it is defined on.
 SUPPORT: dict[str, tuple[str, ...]] = {
+    "advect": _C,
+    "arakawa_jacobian": ("CartesianCGrid2D",),
     "area_mean": (*_C2, *_A2),
     "area_sum": (*_C2, *_A2),
+    "biharmonic": (*_C2, *_C3),
+    "coriolis": ("CartesianCGrid2D", "CartesianCGrid3D"),
     "curl": (*_C2, *_C3, *_A2, _A3),
     "difference": (*_C, *_A),
+    "diffuse": (*_C2, *_C3),
     "divergence": (*_C2, *_C3, *_A2, _A3),
     "grad_perp": (*_C2, *_C3, *_A2, _A3),
     "gradient": (*_C2, *_C3, *_A2, _A3),
     "interpolate": (*_C, *_A),
+    "kinetic_energy": (*_C2, *_C3, *_A2, _A3),
     "laplacian": (*_C, *_A),
+    "reconstruct": _C,
+    "shear_strain": ("CartesianCGrid2D", "CartesianCGrid3D"),
+    "tensor_strain": ("CartesianCGrid2D", "CartesianCGrid3D"),
     "volume_mean": (*_C3, _A3),
     "volume_sum": (*_C3, _A3),
 }

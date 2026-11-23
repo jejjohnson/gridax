@@ -35,27 +35,29 @@ import jax
 jax.config.update("jax_enable_x64", True)
 
 import gridax as fvx
+from gridax.schemes import TVD, WENO, Centred, Scheme, Upwind
 from integrix.march import rk3_ssp_step
 import jax.numpy as jnp
 import numpy as np
 from scipy.special import erf
 
-METHODS = (
-    "naive",
-    "upwind1",
-    "upwind2",
-    "upwind3",
-    "weno3",
-    "weno5",
-    "wenoz5",
-    "weno7",
-    "weno9",
-    "minmod",
-    "van_leer",
-    "superbee",
-    "mc",
-)
-TVD = ("minmod", "van_leer", "superbee", "mc")
+SCHEMES: dict[str, Scheme] = {
+    "naive": Centred(),
+    "upwind1": Upwind(1),
+    "upwind2": Upwind(2),
+    "upwind3": Upwind(3),
+    "weno3": WENO(3),
+    "weno5": WENO(5),
+    "wenoz5": WENO(5, "z"),
+    "weno7": WENO(7),
+    "weno9": WENO(9),
+    "minmod": TVD("minmod"),
+    "van_leer": TVD("van_leer"),
+    "superbee": TVD("superbee"),
+    "mc": TVD("mc"),
+}
+METHODS = tuple(SCHEMES)
+LIMITERS = ("minmod", "van_leer", "superbee", "mc")
 
 # Periodic halo (cells on each side, ghost ring included) wide enough for the
 # widest stencil (weno9: 5) plus the closed-wall write offset.
@@ -70,7 +72,7 @@ _GL_X, _GL_W = 0.5 * _GL_X, 0.5 * _GL_W
 def _face_value_1d(recon: fvx.Reconstruction1D, method: str, q, sign: float):
     """Reconstructed east-face value q̂[i+1/2] (flux / u with u = ±1)."""
     u = jnp.full_like(q, sign)
-    if method in TVD:
+    if method in LIMITERS:
         flux = recon.tvd_x(q, u, limiter=method)
     else:
         flux = getattr(recon, f"{method}_x")(q, u)
@@ -178,7 +180,7 @@ def _tendency_errors_1d(
         # dq/dt(x_i) = -(u q)'(x_i)
         exact = -(duf(xc) * f(xc) + uf(xc) * df(xc))
     u = jnp.asarray(uf(xl + dx))  # U-point k sits on the east face of cell k
-    t = np.asarray(adv(jnp.asarray(q), u, method=method))
+    t = np.asarray(adv(jnp.asarray(q), u, scheme=SCHEMES[method]))
     e = np.abs(t - exact)[HALO:-HALO] / (amp * w)
     return e.max(), e.mean()
 
@@ -277,7 +279,9 @@ def _tendency_error_2d(method: str, n: int, variable: bool) -> float:
     yc = lo + 0.5 * d
     u = np.broadcast_to(uf(yc)[:, None], (ntot, ntot))
     v = np.broadcast_to(vf(yc)[None, :], (ntot, ntot))
-    t = np.asarray(adv(jnp.asarray(q), jnp.asarray(u), jnp.asarray(v), method=method))
+    t = np.asarray(
+        adv(jnp.asarray(q), jnp.asarray(u), jnp.asarray(v), scheme=SCHEMES[method])
+    )
     s = slice(HALO, -HALO)
     return float(np.max(np.abs(t[s, s] - exact[s, s])))
 
@@ -332,7 +336,7 @@ def benchmark(n: int = 64, cfl: float = 0.25, sigma: float = 0.05) -> None:
     for m in METHODS:
 
         def rhs(q, _m=m):
-            return adv(q, uj, vj, method=_m)
+            return adv(q, uj, vj, scheme=SCHEMES[_m])
 
         @jax.jit
         def run(q):
@@ -362,7 +366,7 @@ def _forward_cost(n: int = 256, repeats: int = 50) -> dict[str, float]:
     v = jax.random.normal(jax.random.PRNGKey(2), (n + 2, n + 2))
     times = {}
     for m in METHODS:
-        f = jax.jit(lambda q, u, v, _m=m: adv(q, u, v, method=_m))
+        f = jax.jit(lambda q, u, v, _m=m: adv(q, u, v, scheme=SCHEMES[_m]))
         f(q, u, v).block_until_ready()
         ts = []
         for _ in range(repeats):

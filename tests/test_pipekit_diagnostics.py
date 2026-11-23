@@ -71,7 +71,7 @@ CASES = [
     (
         "TotalEnergy",
         fp.TotalEnergy(grid=GRID),
-        lambda ke, ape: fvx.total_energy(ke, ape, GRID.spacing("x"), GRID.spacing("y")),
+        lambda ke, ape: fvx.area_sum(ke + ape, GRID),
         2,
     ),
     (
@@ -171,7 +171,7 @@ def test_energy_graph_equals_tier_a_on_a_trajectory():
     filled = {k: fvx.enforce_periodic(traj[k]) for k in "huv"}
     ke = fvx.Energetics2D(grid=g).kinetic_energy(filled["u"], filled["v"])
     ape = 0.5 * G * filled["h"] ** 2
-    want = fvx.total_energy(H * ke, ape, g.spacing("x"), g.spacing("y"))
+    want = fvx.area_sum(H * ke + ape, g)
     assert got.shape == (4,)
     np.testing.assert_allclose(got, want, rtol=1e-13)
 

@@ -28,9 +28,12 @@ from gridax._src.advection.advection import (
     Advection3D,
 )
 from gridax._src.diffusion.diffusion import Diffusion2D, Diffusion3D
+from gridax.schemes import WENO, Upwind
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
+from tests._schemes import SCHEMES
 
 
 # ── fixtures ────────────────────────────────────────────────────────────────
@@ -68,8 +71,8 @@ def test_advection_default_is_closed(grid3d):
     c = jnp.asarray(rng.normal(size=shape).astype(np.float32))
     u = jnp.asarray(rng.normal(size=shape).astype(np.float32))
     v = jnp.asarray(rng.normal(size=shape).astype(np.float32))
-    default = op(c, u, v, method="weno5")
-    closed = op(c, u, v, method="weno5", wall="closed")
+    default = op(c, u, v, scheme=WENO(5))
+    closed = op(c, u, v, scheme=WENO(5), wall="closed")
     np.testing.assert_array_equal(np.asarray(default), np.asarray(closed))
 
 
@@ -91,8 +94,8 @@ def test_closed_freezes_wall_ring_open_updates_it(grid3d):
     c = jnp.zeros((grid3d.Nz, grid3d.Ny, grid3d.Nx)).at[2, 4, 4].set(1.0)
     u = jnp.ones_like(c) * 0.7
     v = jnp.ones_like(c) * 0.5
-    closed = op(c, u, v, method="weno5", wall="closed")
-    opened = op(c, u, v, method="weno5", wall="open")
+    closed = op(c, u, v, scheme=WENO(5), wall="closed")
+    opened = op(c, u, v, scheme=WENO(5), wall="open")
     # Wall-adjacent interior ring rows/cols (j=1 and i=1) are exactly 0 closed.
     assert float(jnp.max(jnp.abs(closed[1:-1, 1, 1:-1]))) == 0.0
     assert float(jnp.max(jnp.abs(closed[1:-1, 1:-1, 1]))) == 0.0
@@ -126,7 +129,7 @@ def test_advection_open_is_exactly_conservative_2d(grid2d):
         c = jnp.asarray(rng.normal(size=shape).astype(np.float64))
         u = jnp.asarray(rng.normal(size=shape).astype(np.float64))
         v = jnp.asarray(rng.normal(size=shape).astype(np.float64))
-        tend = op(c, u, v, method=method, wall="open")
+        tend = op(c, u, v, scheme=SCHEMES[method], wall="open")
         total = float(jnp.sum(tend[1:-1, 1:-1]))
         expected = float(
             _wall_imbalance_2d(c, u, v, grid2d.spacing("x"), grid2d.spacing("y"))
@@ -146,7 +149,7 @@ def test_advection_periodic_conserves_mass_2d(grid2d):
     mass0 = float(jnp.sum(c[1:-1, 1:-1]))
     for _ in range(150):
         c = _periodic_x(_periodic_y(c))
-        c = c + dt * op(c, u, v, method="upwind1", wall="open")
+        c = c + dt * op(c, u, v, scheme=Upwind(1), wall="open")
     mass1 = float(jnp.sum(c[1:-1, 1:-1]))
     # Exact in real arithmetic; tolerance covers float32 accumulation only.
     np.testing.assert_allclose(mass1, mass0, rtol=1e-5)
@@ -162,7 +165,7 @@ def test_advection_periodic_y_wraps_3d(grid3d):
     mass0 = float(jnp.sum(c[1:-1, 1:-1, 1:-1]))
     for _ in range(60):
         c = _periodic_y(c)
-        c = c + dt * op(c, u, v, method="upwind1", wall="open")
+        c = c + dt * op(c, u, v, scheme=Upwind(1), wall="open")
     # Mass conserved (wrapped, not lost) and some mass has reached the south half.
     np.testing.assert_allclose(float(jnp.sum(c[1:-1, 1:-1, 1:-1])), mass0, rtol=1e-6)
     south_half = float(jnp.sum(c[2, 1 : grid3d.Ny // 2, 4]))
@@ -183,7 +186,7 @@ def test_advection_outflow_loses_mass_only_through_open_boundary(grid2d):
         c = c.at[:, -1].set(c[:, -2])  # east outflow
         c = c.at[:, 0].set(-c[:, 1])  # west dirichlet 0
         c = c.at[0, :].set(-c[1, :]).at[-1, :].set(-c[-2, :])  # y walls dirichlet 0
-        c = c + dt * op(c, u, v, method="upwind1", wall="open")
+        c = c + dt * op(c, u, v, scheme=Upwind(1), wall="open")
         masses.append(float(jnp.sum(c[1:-1, 1:-1])))
     # Monotonically non-increasing, and strictly lost by the end (exited east).
     assert all(b <= a + 1e-9 for a, b in itertools.pairwise(masses))
@@ -195,7 +198,7 @@ def test_advection_1d_open_conservative(grid1d):
     rng = np.random.default_rng(5)
     c = jnp.asarray(rng.normal(size=(grid1d.Nx,)).astype(np.float64))
     u = jnp.asarray(rng.normal(size=(grid1d.Nx,)).astype(np.float64))
-    tend = op(c, u, method="weno5", wall="open")
+    tend = op(c, u, scheme=WENO(5), wall="open")
     total = float(jnp.sum(tend[1:-1]))
     west = float(jnp.where(u[0] >= 0.0, c[0], c[1]) * u[0])
     east = float(jnp.where(u[-2] >= 0.0, c[-2], c[-1]) * u[-2])
@@ -283,7 +286,7 @@ def test_invalid_wall_raises(grid2d):
     op = Advection2D(grid=grid2d)
     c = jnp.zeros((grid2d.Ny, grid2d.Nx))
     with pytest.raises(ValueError, match=r"wall must be"):
-        op(c, c, c, method="upwind1", wall="bogus")
+        op(c, c, c, scheme=Upwind(1), wall="bogus")
 
 
 def test_open_with_mask_raises(grid2d):
@@ -293,4 +296,4 @@ def test_open_with_mask_raises(grid2d):
     op = Advection2D(grid=grid2d, mask=mask)
     c = jnp.zeros((grid2d.Ny, grid2d.Nx))
     with pytest.raises(NotImplementedError, match=r"open.*mask|mask"):
-        op(c, c, c, method="weno5", wall="open")
+        op(c, c, c, scheme=WENO(5), wall="open")

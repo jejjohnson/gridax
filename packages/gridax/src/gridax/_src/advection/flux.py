@@ -224,12 +224,16 @@ def upwind_flux(
             f"{sorted(missing_masks)}; got keys {sorted(mask_hierarchy.keys())}"
         )
 
-    # Slice tuples generalised to the input's dimensionality.  The interior
-    # slice strips one ghost ring on every axis; the shifted slice rolls
-    # forward by one step along ``dim`` only (for the negative-flow branch).
-    interior_slice = tuple(slice(1, -1) for _ in range(ndim))
-    shifted_slice = tuple(
-        slice(2, None) if ax == dim else slice(1, -1) for ax in range(ndim)
+    # Slice tuples generalised to the rank of the masks: the interior slice
+    # strips one ghost ring on every axis they have (the axes before those are
+    # batch axes); the shifted slice rolls forward by one step along ``dim``
+    # only (for the negative-flow branch).
+    rank = min(ndim, *(m.ndim for m in mask_hierarchy.values()))
+    axes = range(ndim - rank, ndim)
+    interior_slice = (..., *(slice(1, -1) for _ in axes))
+    shifted_slice = (
+        ...,
+        *(slice(2, None) if ax == dim else slice(1, -1) for ax in axes),
     )
 
     # Compute each face-flux field: fn(q, u) → same shape as q, ghost ring = 0

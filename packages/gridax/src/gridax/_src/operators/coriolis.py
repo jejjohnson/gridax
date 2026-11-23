@@ -28,15 +28,17 @@ References
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from jaxtyping import Float
 import numpy as np
 
-from gridax._src.backend import vmap
+from gridax._src.api import grid_dispatch
+from gridax._src.fields.located import located
 from gridax._src.grid import CartesianCGrid2D, CartesianCGrid3D
 from gridax._src.mask import Mask2D, Mask3D
-from gridax._src.operators._ghost import interior, zero_z_ghosts
+from gridax._src.operators._ghost import interior
+from gridax._src.operators.calculus import _levels
 from gridax._src.pytree import array_namespace, pytree_dataclass
 
 if TYPE_CHECKING:
@@ -45,57 +47,106 @@ else:
     Array = np.ndarray
 
 
+@grid_dispatch
+@located(("U", "V"), u="U", v="V", f="T")
+def coriolis(
+    u: Float[Array, "..."],
+    v: Float[Array, "..."],
+    grid: Any,
+    *,
+    f: float | Float[Array, "..."],
+    mask: Any = None,
+) -> tuple[Float[Array, "..."], Float[Array, "..."]]:
+    """The Coriolis tendencies ``(+f v, -f u)``, at U and V.
+
+    The energy-conserving form of Sadourny (1975), with ``f`` taken to the
+    corners:
+
+        du[j, i+1/2] = +1/2 (P[j+1/2, i+1/2] + P[j-1/2, i+1/2])
+        dv[j+1/2, i] = -1/2 (Q[j+1/2, i+1/2] + Q[j+1/2, i-1/2])
+
+        P = f_X avg_x(v),   Q = f_X avg_y(u)   at X-points
+
+    so ``∑ u du + ∑ v dv = 0`` to rounding for any ``f``. For a uniform ``f``
+    it is ``f`` times the four-point mean of the other component.
+
+    Parameters
+    ----------
+    u, v : CField or Float[Array, "*batch *grid"]
+        The velocity, at U and V. The corners on the first interior row and
+        column read the ghost ring.
+    grid : grid
+        A 2-D or 3-D Cartesian C-grid.
+    f : float, CField or Float[Array, "*batch *grid"]
+        The Coriolis parameter: a number, or a field at T with its ghost ring
+        filled, which broadcasts over the levels of a 3-D grid.
+    mask : Mask2D or Mask3D, optional
+        The wet cells. Dry velocities are not read, and the tendencies are
+        zero on dry faces.
+
+    Returns
+    -------
+    tuple
+        ``(du, dv)``, at U and V, with a zero ghost ring.
+
+    Examples
+    --------
+    >>> import gridax, numpy as np
+    >>> grid = gridax.CartesianCGrid2D.from_interior(4, 4, 4.0, 4.0)
+    >>> u, v = np.zeros(grid.shape), np.ones(grid.shape)
+    >>> du, dv = gridax.coriolis(u, v, grid, f=0.5)
+    >>> du[2].tolist()
+    [0.0, 0.5, 0.5, 0.5, 0.5, 0.0]
+    """
+    return coriolis._impl(grid, u, v, f=f, mask=mask)
+
+
+@coriolis.register(CartesianCGrid2D)
+@coriolis.register(CartesianCGrid3D)
+def _coriolis_cartesian(grid: Any, u: Any, v: Any, *, f: Any, mask: Any) -> Any:
+    xp = array_namespace(u, v, f)
+    if mask is not None:
+        # zero dry faces before any stencil reads them (NaN-filled land)
+        u = xp.where(mask.wet(at="U"), u, 0.0)
+        v = xp.where(mask.wet(at="V"), v, 0.0)
+    like_u, like_v = u, v
+    u, v = _levels(grid, u), _levels(grid, v)
+    f = xp.asarray(f)
+    if f.ndim >= 3 and len(grid.axes) == 3:
+        f = _levels(grid, f)
+    # a number, or a profile along y, on the whole plane
+    f = xp.broadcast_to(f, (*f.shape[:-2], *u.shape[-2:]))
+    # f_X[j+1/2, i+1/2] = 1/4 (f[j, i] + f[j+1, i] + f[j, i+1] + f[j+1, i+1])
+    #   X rows / cols 0 .. N-2 (the south / west ghost corners included)
+    f_x = 0.25 * (f[..., :-1, :-1] + f[..., 1:, :-1] + f[..., :-1, 1:] + f[..., 1:, 1:])
+    # v_X[j+1/2, i+1/2] = 1/2 (v[j+1/2, i] + v[j+1/2, i+1])
+    v_x = 0.5 * (v[..., :-1, :-1] + v[..., :-1, 1:])
+    # u_X[j+1/2, i+1/2] = 1/2 (u[j, i+1/2] + u[j+1, i+1/2])
+    u_x = 0.5 * (u[..., :-1, :-1] + u[..., 1:, :-1])
+    # corner products P = f_X v_X, Q = f_X u_X
+    p, q = f_x * v_x, f_x * u_x
+    # du[j, i+1/2] = +1/2 (P[j+1/2, i+1/2] + P[j-1/2, i+1/2])
+    du = interior(0.5 * (p[..., 1:, 1:] + p[..., :-1, 1:]), like_u)
+    # dv[j+1/2, i] = -1/2 (Q[j+1/2, i+1/2] + Q[j+1/2, i-1/2])
+    dv = interior(-0.5 * (q[..., 1:, 1:] + q[..., 1:, :-1]), like_v)
+    if mask is not None:
+        du = xp.where(mask.wet(at="U"), du, 0.0)
+        dv = xp.where(mask.wet(at="V"), dv, 0.0)
+    return du, dv
+
+
 @pytree_dataclass
 class Coriolis2D:
-    """Coriolis force operator for 2-D Arakawa C-grids.
+    """The Coriolis tendencies on a 2-D Cartesian C-grid.
 
-    Computes the Coriolis tendency for both velocity components in the
-    energy-conserving corner-product form (Sadourny 1975):
-
-        du_cor[j, i+1/2] = +1/2 (P[j+1/2, i+1/2] + P[j-1/2, i+1/2])
-        dv_cor[j+1/2, i] = -1/2 (Q[j+1/2, i+1/2] + Q[j+1/2, i-1/2])
-
-        P = f_X * avg_x(v),   Q = f_X * avg_y(u)   at X-points,
-
-    with ``f_X`` the 4-point average of the T-point f.  The kinetic-energy
-    tendency ``sum(u * du_cor) + sum(v * dv_cor)`` vanishes to round-off for
-    any f, including a beta-plane (the f_on_u * V_to_U(v) form used before
-    #289 conserves energy only for uniform f).  For uniform f the two forms
-    coincide.
-
-    The corner products are formed on the full arrays (X rows / columns
-    ``0 .. N-2``), so the first interior row / column reads the south /
-    west ghost corners built from the caller's ghost cells.
+    `gridax.coriolis` with a fixed grid and mask.
 
     Parameters
     ----------
     grid : CartesianCGrid2D
-        The underlying 2-D grid.
-    mask : Mask2D or None, optional
-        Optional land/ocean mask.  When provided, ``u`` / ``v`` are zeroed
-        on dry faces with ``jnp.where`` before the stencil (so NaN-filled
-        land cannot leak) and the output on dry U / V faces.  Energy is
-        still conserved, and for uniform f the result equals the face form
-        on the masked velocities.  ``None`` (default) leaves the output
-        untouched.
-
-    Notes
-    -----
-    ``f`` must be filled on the whole array, ghost ring included (e.g. an
-    analytic ``f0 + beta * y`` evaluated at every T-point): the corner
-    average ``f_X`` on the first / last interior rows reads the ghost rows
-    of ``f``.
-
-    Examples
-    --------
-    >>> import jax.numpy as jnp
-    >>> from gridax import CartesianCGrid2D, Coriolis2D
-    >>> grid = CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
-    >>> cor = Coriolis2D(grid=grid)
-    >>> u = jnp.zeros((grid.Ny, grid.Nx))
-    >>> v = jnp.ones((grid.Ny, grid.Nx))
-    >>> f = jnp.ones((grid.Ny, grid.Nx))
-    >>> du_cor, dv_cor = cor(u, v, f)
+        The grid.
+    mask : Mask2D, optional
+        The wet cells.
     """
 
     grid: CartesianCGrid2D
@@ -105,154 +156,34 @@ class Coriolis2D:
         self,
         u: Float[Array, "*batch Ny Nx"],
         v: Float[Array, "*batch Ny Nx"],
-        f: Float[Array, "*batch Ny Nx"],
+        f: float | Float[Array, "..."],
     ) -> tuple[Float[Array, "*batch Ny Nx"], Float[Array, "*batch Ny Nx"]]:
-        """Coriolis tendencies (du_cor, dv_cor).
-
-        du_cor[j, i+1/2] = +avg_y(f_X * avg_x(v))
-        dv_cor[j+1/2, i] = -avg_x(f_X * avg_y(u))
-
-        Parameters
-        ----------
-        u : Float[Array, "*batch Ny Nx"]
-            x-velocity at U-points (east faces).
-        v : Float[Array, "*batch Ny Nx"]
-            y-velocity at V-points (north faces).
-        f : Float[Array, "*batch Ny Nx"]
-            Coriolis parameter at T-points, ghost ring filled.
-
-        Returns
-        -------
-        tuple[Float[Array, "*batch Ny Nx"], Float[Array, "*batch Ny Nx"]]
-            ``(du_cor, dv_cor)`` — Coriolis tendencies at U-points and
-            V-points respectively, both zero in the ghost ring.  When
-            ``self.mask`` is set, dry U / V faces are zero.
-        """
-        xp = array_namespace(u, v, f)
-        if self.mask is not None:
-            # zero dry faces before any stencil reads them (NaN-filled land)
-            u = xp.where(self.mask.wet(at="U"), u, 0.0)
-            v = xp.where(self.mask.wet(at="V"), v, 0.0)
-        # f_X[j+1/2, i+1/2] = 1/4 (f[j, i] + f[j+1, i] + f[j, i+1] + f[j+1, i+1])
-        #   X rows / cols 0 .. N-2 (the south / west ghost corners included)
-        f_x = 0.25 * (
-            f[..., :-1, :-1] + f[..., 1:, :-1] + f[..., :-1, 1:] + f[..., 1:, 1:]
-        )  # [Ny-1, Nx-1]
-        # v_X[j+1/2, i+1/2] = 1/2 (v[j+1/2, i] + v[j+1/2, i+1])
-        v_x = 0.5 * (v[..., :-1, :-1] + v[..., :-1, 1:])  # [Ny-1, Nx-1]
-        # u_X[j+1/2, i+1/2] = 1/2 (u[j, i+1/2] + u[j+1, i+1/2])
-        u_x = 0.5 * (u[..., :-1, :-1] + u[..., 1:, :-1])  # [Ny-1, Nx-1]
-        # corner products P = f_X v_X, Q = f_X u_X              [Ny-1, Nx-1]
-        p = f_x * v_x
-        q = f_x * u_x
-        # du_cor[j, i+1/2] = +1/2 (P[j+1/2, i+1/2] + P[j-1/2, i+1/2])  [Ny-2, Nx-2]
-        du_cor = interior(0.5 * (p[..., 1:, 1:] + p[..., :-1, 1:]), u)
-        # dv_cor[j+1/2, i] = -1/2 (Q[j+1/2, i+1/2] + Q[j+1/2, i-1/2])  [Ny-2, Nx-2]
-        dv_cor = interior(-0.5 * (q[..., 1:, 1:] + q[..., 1:, :-1]), v)
-
-        if self.mask is not None:
-            du_cor = xp.where(self.mask.wet(at="U"), du_cor, 0.0)
-            dv_cor = xp.where(self.mask.wet(at="V"), dv_cor, 0.0)
-
-        return du_cor, dv_cor
+        """``(du, dv)`` at U and V (:func:`gridax.coriolis`)."""
+        return coriolis(u, v, self.grid, f=f, mask=self.mask)
 
 
 @pytree_dataclass
 class Coriolis3D:
-    """Coriolis force operator for 3-D Arakawa C-grids.
+    """The Coriolis tendencies on a 3-D Cartesian C-grid, level by level.
 
-    Applies the same horizontal Coriolis stencil as :class:`Coriolis2D`
-    independently at each z-level.  The Coriolis parameter f is 2-D
-    (depth-independent) and broadcast over all z-levels.
+    `gridax.coriolis` with a fixed grid and mask.
 
     Parameters
     ----------
     grid : CartesianCGrid3D
-        The underlying 3-D grid.
-    mask : Mask3D or None, optional
-        Optional land/ocean mask.  Pattern A (post-compute) — the
-        inner :class:`Coriolis2D` is constructed ``mask=None`` and
-        the 3-D result is post-multiplied by ``mask.wet(at="U")`` / ``mask.wet(at="V")``
-        after the vmap.
-
-        Takes a :class:`Mask3D` (not ``Mask2D``): even though ``f``
-        is 2-D and depth-independent, the velocity mask is natively
-        3-D on the Arakawa C-grid, and using ``Mask3D`` keeps the
-        3-D operator suite type-uniform per #209.  Issue #209's Q4
-        locked this in for Advection3D and this commit extends the
-        same decision to Coriolis3D.
-
-    Examples
-    --------
-    >>> import jax.numpy as jnp
-    >>> from gridax import CartesianCGrid3D, Coriolis3D
-    >>> grid = CartesianCGrid3D.from_interior(6, 6, 4, 1.0, 1.0, 1.0)
-    >>> cor = Coriolis3D(grid=grid)
-    >>> u = jnp.zeros((grid.Nz, grid.Ny, grid.Nx))
-    >>> v = jnp.ones((grid.Nz, grid.Ny, grid.Nx))
-    >>> f = jnp.ones((grid.Ny, grid.Nx))
-    >>> du_cor, dv_cor = cor(u, v, f)
+        The grid.
+    mask : Mask3D, optional
+        The wet cells.
     """
 
     grid: CartesianCGrid3D
-    mask: Mask3D | None
-    _cor2d: Coriolis2D
-
-    def __init__(
-        self,
-        grid: CartesianCGrid3D,
-        mask: Mask3D | None = None,
-    ) -> None:
-        self.grid = grid
-        self.mask = mask
-        # Pattern A: inner 2-D op is mask-free; the 3-D wrapper owns the mask.
-        self._cor2d = Coriolis2D(grid=grid.horizontal_grid())
+    mask: Mask3D | None = None
 
     def __call__(
         self,
-        u: Float[Array, "Nz Ny Nx"],
-        v: Float[Array, "Nz Ny Nx"],
-        f: Float[Array, "Ny Nx"],
-    ) -> tuple[Float[Array, "Nz Ny Nx"], Float[Array, "Nz Ny Nx"]]:
-        """Coriolis tendencies over all z-levels.
-
-        du_cor[k, j, i+1/2] = +avg_y(f_X * avg_x(v[k]))
-        dv_cor[k, j+1/2, i] = -avg_x(f_X * avg_y(u[k]))
-
-        (the energy-conserving form of :class:`Coriolis2D` at each level)
-
-        Parameters
-        ----------
-        u : Float[Array, "Nz Ny Nx"]
-            x-velocity at U-points.
-        v : Float[Array, "Nz Ny Nx"]
-            y-velocity at V-points.
-        f : Float[Array, "Ny Nx"]
-            Coriolis parameter at T-points (depth-independent).
-
-        Returns
-        -------
-        tuple[Float[Array, "Nz Ny Nx"], Float[Array, "Nz Ny Nx"]]
-            ``(du_cor, dv_cor)`` — Coriolis tendencies at U-points and
-            V-points, both zero in the ghost ring.  When ``self.mask``
-            is set, ``du_cor`` is zeroed at dry U-faces via
-            ``* mask.wet(at="U")`` and ``dv_cor`` at dry V-faces via ``* mask.wet(at="V")``.
-        """
-        xp = array_namespace(u, v, f)
-        if self.mask is not None:
-            # zero dry faces before the stencil, as Coriolis2D does
-            u = xp.where(self.mask.wet(at="U"), u, 0.0)
-            v = xp.where(self.mask.wet(at="V"), v, 0.0)
-        # Vmap the 2D Coriolis operator over z-levels.
-        # f is 2D (depth-independent) and broadcast to each z-slice.
-        du_cor, dv_cor = vmap(lambda u_k, v_k: self._cor2d(u_k, v_k, f))(u, v)
-
-        # Zero the z-ghost slices to match the 3D ghost-ring convention.
-        du_cor = zero_z_ghosts(du_cor)
-        dv_cor = zero_z_ghosts(dv_cor)
-
-        if self.mask is not None:
-            du_cor = du_cor * self.mask.wet(at="U")
-            dv_cor = dv_cor * self.mask.wet(at="V")
-
-        return du_cor, dv_cor
+        u: Float[Array, "*batch Nz Ny Nx"],
+        v: Float[Array, "*batch Nz Ny Nx"],
+        f: float | Float[Array, "..."],
+    ) -> tuple[Float[Array, "*batch Nz Ny Nx"], Float[Array, "*batch Nz Ny Nx"]]:
+        """``(du, dv)`` at U and V (:func:`gridax.coriolis`)."""
+        return coriolis(u, v, self.grid, f=f, mask=self.mask)

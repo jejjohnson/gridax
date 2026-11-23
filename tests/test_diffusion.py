@@ -1,9 +1,9 @@
-"""Tests for Diffusion2D, Diffusion3D, and diffusion_2d."""
+"""Tests for Diffusion2D, Diffusion3D, and diffuse."""
 
 from __future__ import annotations
 
-from gridax import CartesianCGrid2D, CartesianCGrid3D
-from gridax._src.diffusion.diffusion import Diffusion2D, Diffusion3D, diffusion_2d
+from gridax import CartesianCGrid2D, CartesianCGrid3D, diffuse
+from gridax._src.diffusion.diffusion import Diffusion2D, Diffusion3D
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -30,20 +30,20 @@ def diff_op3d(grid3d):
 
 
 # ---------------------------------------------------------------------------
-# Functional API: diffusion_2d
+# The function: diffuse
 # ---------------------------------------------------------------------------
 
 
 class TestDiffusion2DFunctional:
     def test_output_shape(self, grid):
         h = jnp.zeros((grid.Ny, grid.Nx))
-        result = diffusion_2d(h, kappa=1.0, dx=grid.spacing("x"), dy=grid.spacing("y"))
+        result = diffuse(h, grid, kappa=1.0)
         assert result.shape == (grid.Ny, grid.Nx)
 
     def test_ghost_ring_is_zero(self, grid):
         """Ghost ring in the output is always zero."""
         h = jnp.ones((grid.Ny, grid.Nx))
-        result = diffusion_2d(h, kappa=1.0, dx=grid.spacing("x"), dy=grid.spacing("y"))
+        result = diffuse(h, grid, kappa=1.0)
         np.testing.assert_allclose(result[0, :], 0.0)
         np.testing.assert_allclose(result[-1, :], 0.0)
         np.testing.assert_allclose(result[:, 0], 0.0)
@@ -52,7 +52,7 @@ class TestDiffusion2DFunctional:
     def test_constant_tracer_zero_tendency(self, grid):
         """Constant tracer has zero diffusion tendency everywhere."""
         h = jnp.ones((grid.Ny, grid.Nx))
-        result = diffusion_2d(h, kappa=1.0, dx=grid.spacing("x"), dy=grid.spacing("y"))
+        result = diffuse(h, grid, kappa=1.0)
         np.testing.assert_allclose(result[1:-1, 1:-1], 0.0, atol=1e-12)
 
     def test_quadratic_x_gives_constant_tendency(self, grid):
@@ -60,7 +60,7 @@ class TestDiffusion2DFunctional:
         c = 3.0
         x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
         h = jnp.broadcast_to(c * x**2, (grid.Ny, grid.Nx))
-        result = diffusion_2d(h, kappa=1.0, dx=grid.spacing("x"), dy=grid.spacing("y"))
+        result = diffuse(h, grid, kappa=1.0)
         # ∂²h/∂x² = 2c everywhere, ∂²h/∂y² = 0  →  tendency = 2c
         # Interior avoids boundary ghost-cell pollution: skip first/last column
         np.testing.assert_allclose(result[1:-1, 2:-2], 2.0 * c, rtol=1e-8)
@@ -70,7 +70,7 @@ class TestDiffusion2DFunctional:
         c = 2.5
         y = jnp.arange(grid.Ny, dtype=float) * grid.spacing("y")
         h = jnp.broadcast_to(c * y[:, None] ** 2, (grid.Ny, grid.Nx))
-        result = diffusion_2d(h, kappa=1.0, dx=grid.spacing("x"), dy=grid.spacing("y"))
+        result = diffuse(h, grid, kappa=1.0)
         # ∂²h/∂y² = 2c everywhere, ∂²h/∂x² = 0  →  tendency = 2c
         np.testing.assert_allclose(result[2:-2, 1:-1], 2.0 * c, rtol=1e-8)
 
@@ -79,8 +79,8 @@ class TestDiffusion2DFunctional:
         c = 1.0
         x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
         h = jnp.broadcast_to(c * x**2, (grid.Ny, grid.Nx))
-        r1 = diffusion_2d(h, kappa=1.0, dx=grid.spacing("x"), dy=grid.spacing("y"))
-        r2 = diffusion_2d(h, kappa=2.0, dx=grid.spacing("x"), dy=grid.spacing("y"))
+        r1 = diffuse(h, grid, kappa=1.0)
+        r2 = diffuse(h, grid, kappa=2.0)
         np.testing.assert_allclose(r2[1:-1, 1:-1], 2.0 * r1[1:-1, 1:-1], rtol=1e-10)
 
     def test_all_dry_mask_zeros_tendency_via_flux_masks(self, grid):
@@ -120,7 +120,7 @@ class TestDiffusion2DFunctional:
 
     def test_no_nan_output(self, grid):
         h = jnp.ones((grid.Ny, grid.Nx))
-        result = diffusion_2d(h, kappa=1.0, dx=grid.spacing("x"), dy=grid.spacing("y"))
+        result = diffuse(h, grid, kappa=1.0)
         assert jnp.all(jnp.isfinite(result))
 
 
@@ -146,7 +146,7 @@ class TestDiffusion2DClass:
         kappa = 0.5
         np.testing.assert_allclose(
             diff_op(h, kappa=kappa),
-            diffusion_2d(h, kappa=kappa, dx=grid.spacing("x"), dy=grid.spacing("y")),
+            diffuse(h, grid, kappa=kappa),
             atol=1e-12,
         )
 

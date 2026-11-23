@@ -6,6 +6,7 @@ from gridax import CartesianCGrid2D, CartesianCGrid3D, Mask2D, Mask3D
 from gridax._src.advection.advection import Advection2D, Advection3D
 from gridax._src.advection.flux import upwind_flux
 from gridax._src.advection.reconstruction import Reconstruction2D
+from gridax.schemes import TVD, WENO
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -388,8 +389,8 @@ class TestAdvection2DMasked:
         h = jnp.broadcast_to(jnp.arange(Nx, dtype=float), (Ny, Nx))
         u = jnp.ones((Ny, Nx))
         v = jnp.ones((Ny, Nx))
-        result_masked = adv_masked(h, u, v, method="weno5")
-        result_plain = adv_plain(h, u, v, method="weno5")
+        result_masked = adv_masked(h, u, v, scheme=WENO(5))
+        result_plain = adv_plain(h, u, v, scheme=WENO(5))
         # Deep interior should match (boundary cells may differ due to
         # mask-based stencil selection at the domain edge)
         np.testing.assert_allclose(
@@ -404,7 +405,7 @@ class TestAdvection2DMasked:
         h = jnp.ones((Ny, Nx))
         u = jnp.ones((Ny, Nx))
         v = jnp.ones((Ny, Nx))
-        result = adv(h, u, v, method="weno3")
+        result = adv(h, u, v, scheme=WENO(3))
         assert result.shape == (Ny, Nx)
         assert jnp.all(jnp.isfinite(result)).item()
 
@@ -416,7 +417,7 @@ class TestAdvection2DMasked:
         h = jnp.ones((Ny, Nx)) * 2.0
         u = jnp.ones((Ny, Nx))
         v = jnp.ones((Ny, Nx))
-        result = adv(h, u, v, method="minmod")
+        result = adv(h, u, v, scheme=TVD("minmod"))
         assert result.shape == (Ny, Nx)
         assert jnp.all(jnp.isfinite(result)).item()
 
@@ -431,7 +432,7 @@ class TestAdvection2DMasked:
         h = jnp.broadcast_to(jnp.arange(Nx, dtype=float), (Ny, Nx))
         u = jnp.ones((Ny, Nx))
         v = jnp.ones((Ny, Nx))
-        result = adv(h, u, v, method="weno5")
+        result = adv(h, u, v, scheme=WENO(5))
         assert jnp.all(jnp.isfinite(result)).item()
 
     @pytest.mark.slow
@@ -450,7 +451,7 @@ class TestAdvection2DMasked:
         h = h.at[:, -1].set(jnp.nan)
         u = jnp.ones((Ny, Nx))
         v = jnp.ones((Ny, Nx))
-        result = adv(h, u, v, method="weno5")
+        result = adv(h, u, v, scheme=WENO(5))
         # Interior wet cells should be finite
         wet_interior = result[3:-3, 3:-3]
         assert jnp.all(jnp.isfinite(wet_interior)).item()
@@ -464,8 +465,8 @@ class TestAdvection2DMasked:
         h = jnp.ones((Ny, Nx)) * 3.0
         u = jnp.ones((Ny, Nx))
         v = jnp.ones((Ny, Nx))
-        r1 = adv_default(h, u, v, method="weno5")
-        r2 = adv_none(h, u, v, method="weno5")
+        r1 = adv_default(h, u, v, scheme=WENO(5))
+        r2 = adv_none(h, u, v, scheme=WENO(5))
         np.testing.assert_array_equal(r1, r2)
 
     @pytest.mark.slow
@@ -481,8 +482,8 @@ class TestAdvection2DMasked:
         h = jnp.ones((Ny, Nx)) * 2.0
         u = jnp.ones((Ny, Nx))
         v = jnp.ones((Ny, Nx))
-        r1 = adv_plain(h, u, v, method="weno7")
-        r2 = adv_masked(h, u, v, method="weno7")
+        r1 = adv_plain(h, u, v, scheme=WENO(7))
+        r2 = adv_masked(h, u, v, scheme=WENO(7))
         np.testing.assert_array_equal(r1, r2)
 
 
@@ -501,7 +502,7 @@ class TestAdvection3DMasked:
         h = jnp.ones((Nz, Ny, Nx))
         u = jnp.ones((Nz, Ny, Nx))
         v = jnp.ones((Nz, Ny, Nx))
-        result = adv(h, u, v, method="weno3")
+        result = adv(h, u, v, scheme=WENO(3))
         assert result.shape == (Nz, Ny, Nx)
         assert jnp.all(jnp.isfinite(result)).item()
 
@@ -514,7 +515,7 @@ class TestAdvection3DMasked:
         h = jnp.ones((Nz, Ny, Nx))
         u = jnp.ones((Nz, Ny, Nx))
         v = jnp.ones((Nz, Ny, Nx))
-        result = adv(h, u, v, method="weno5")
+        result = adv(h, u, v, scheme=WENO(5))
         assert result.shape == (Nz, Ny, Nx)
         assert jnp.all(jnp.isfinite(result)).item()
 
@@ -526,7 +527,7 @@ class TestAdvection3DMasked:
         h = jnp.ones((Nz, Ny, Nx)) * 2.0
         u = jnp.ones((Nz, Ny, Nx))
         v = jnp.ones((Nz, Ny, Nx))
-        result = adv(h, u, v, method="minmod")
+        result = adv(h, u, v, scheme=TVD("minmod"))
         assert result.shape == (Nz, Ny, Nx)
         assert jnp.all(jnp.isfinite(result)).item()
 
@@ -543,7 +544,7 @@ class TestAdvection3DMasked:
         h = jnp.ones((Nz, Ny, Nx))
         u = jnp.ones((Nz, Ny, Nx))
         v = jnp.ones((Nz, Ny, Nx))
-        result = adv(h, u, v, method="weno5")
+        result = adv(h, u, v, scheme=WENO(5))
         assert jnp.all(jnp.isfinite(result)).item()
 
     def test_mask_none_is_noop(self):
@@ -555,8 +556,8 @@ class TestAdvection3DMasked:
         h = jnp.ones((Nz, Ny, Nx)) * 3.0
         u = jnp.ones((Nz, Ny, Nx))
         v = jnp.ones((Nz, Ny, Nx))
-        r1 = adv_default(h, u, v, method="weno5")
-        r2 = adv_none(h, u, v, method="weno5")
+        r1 = adv_default(h, u, v, scheme=WENO(5))
+        r2 = adv_none(h, u, v, scheme=WENO(5))
         np.testing.assert_array_equal(r1, r2)
 
 

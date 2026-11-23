@@ -8,10 +8,13 @@ from gridax import (
     Mask3D,
 )
 from gridax._src.advection.advection import Advection1D, Advection2D, Advection3D
+from gridax.schemes import WENO, Centred, Upwind
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
+from tests._schemes import SCHEMES
 
 
 @pytest.fixture
@@ -40,7 +43,7 @@ class TestAdvection1D:
         adv = Advection1D(grid=grid1d)
         h = jnp.ones(grid1d.Nx)
         u = jnp.ones(grid1d.Nx)
-        result = adv(h, u, method="upwind1")
+        result = adv(h, u, scheme=Upwind(1))
         # strictly interior (away from ghost edges): flux difference = 0
         np.testing.assert_allclose(result[2:-2], 0.0, atol=1e-10)
 
@@ -59,7 +62,7 @@ class TestAdvection1D:
             "weno7",
             "weno9",
         ]:
-            result = adv(h, u, method=method)
+            result = adv(h, u, scheme=SCHEMES[method])
             assert result.shape == (grid1d.Nx,)
 
     @pytest.mark.slow
@@ -69,7 +72,7 @@ class TestAdvection1D:
         h = jnp.ones(grid.Nx)
         u = jnp.ones(grid.Nx)
         for method, depth in [("weno3", 2), ("weno5", 3), ("weno7", 4), ("weno9", 5)]:
-            result = adv(h, u, method=method)
+            result = adv(h, u, scheme=SCHEMES[method])
             np.testing.assert_allclose(result[depth:-depth], 0.0, atol=1e-6)
 
     def test_tvd_methods_run(self, grid1d):
@@ -77,7 +80,7 @@ class TestAdvection1D:
         h = jnp.ones(grid1d.Nx)
         u = jnp.ones(grid1d.Nx)
         for method in ["minmod", "van_leer", "superbee", "mc"]:
-            result = adv(h, u, method=method)
+            result = adv(h, u, scheme=SCHEMES[method])
             assert result.shape == (grid1d.Nx,)
 
     def test_tvd_constant_zero_tendency(self, grid1d):
@@ -85,15 +88,15 @@ class TestAdvection1D:
         h = jnp.ones(grid1d.Nx)
         u = jnp.ones(grid1d.Nx)
         for method in ["minmod", "van_leer", "superbee", "mc"]:
-            result = adv(h, u, method=method)
+            result = adv(h, u, scheme=SCHEMES[method])
             np.testing.assert_allclose(result[2:-2], 0.0, atol=1e-10)
 
-    def test_unknown_method_raises(self, grid1d):
+    def test_a_string_raises(self, grid1d):
         adv = Advection1D(grid=grid1d)
         h = jnp.ones(grid1d.Nx)
         u = jnp.ones(grid1d.Nx)
-        with pytest.raises(ValueError, match="Unknown method"):
-            adv(h, u, method="invalid")
+        with pytest.raises(TypeError, match=r"gridax\.schemes"):
+            adv(h, u, scheme="weno5")
 
     def test_ghost_zero(self, grid1d):
         adv = Advection1D(grid=grid1d)
@@ -120,7 +123,7 @@ class TestAdvection2D:
         h = jnp.ones((grid2d.Ny, grid2d.Nx))
         u = jnp.ones((grid2d.Ny, grid2d.Nx))
         v = jnp.ones((grid2d.Ny, grid2d.Nx))
-        result = adv(h, u, v, method="upwind1")
+        result = adv(h, u, v, scheme=Upwind(1))
         # strictly interior (away from ghost edges): flux difference = 0
         np.testing.assert_allclose(result[2:-2, 2:-2], 0.0, atol=1e-10)
 
@@ -140,7 +143,7 @@ class TestAdvection2D:
             "weno7",
             "weno9",
         ]:
-            result = adv(h, u, v, method=method)
+            result = adv(h, u, v, scheme=SCHEMES[method])
             assert result.shape == (grid2d.Ny, grid2d.Nx)
 
     @pytest.mark.slow
@@ -151,7 +154,7 @@ class TestAdvection2D:
         u = jnp.ones((grid.Ny, grid.Nx))
         v = jnp.ones((grid.Ny, grid.Nx))
         for method, depth in [("weno3", 2), ("weno5", 3), ("weno7", 4), ("weno9", 5)]:
-            result = adv(h, u, v, method=method)
+            result = adv(h, u, v, scheme=SCHEMES[method])
             np.testing.assert_allclose(
                 result[depth:-depth, depth:-depth], 0.0, atol=1e-6
             )
@@ -163,7 +166,7 @@ class TestAdvection2D:
         u = jnp.ones((grid2d.Ny, grid2d.Nx))
         v = jnp.ones((grid2d.Ny, grid2d.Nx))
         for method in ["minmod", "van_leer", "superbee", "mc"]:
-            result = adv(h, u, v, method=method)
+            result = adv(h, u, v, scheme=SCHEMES[method])
             assert result.shape == (grid2d.Ny, grid2d.Nx)
 
     def test_tvd_constant_zero_tendency(self, grid2d):
@@ -172,7 +175,7 @@ class TestAdvection2D:
         u = jnp.ones((grid2d.Ny, grid2d.Nx))
         v = jnp.ones((grid2d.Ny, grid2d.Nx))
         for method in ["minmod", "van_leer", "superbee", "mc"]:
-            result = adv(h, u, v, method=method)
+            result = adv(h, u, v, scheme=SCHEMES[method])
             np.testing.assert_allclose(result[2:-2, 2:-2], 0.0, atol=1e-10)
 
     def test_ghost_ring_zero(self, grid2d):
@@ -191,13 +194,13 @@ class TestAdvection2D:
         np.testing.assert_array_equal(result[:, -2], 0.0)
         np.testing.assert_array_equal(result[:, -1], 0.0)
 
-    def test_unknown_method_raises(self, grid2d):
+    def test_a_string_raises(self, grid2d):
         adv = Advection2D(grid=grid2d)
         h = jnp.ones((grid2d.Ny, grid2d.Nx))
         u = jnp.ones((grid2d.Ny, grid2d.Nx))
         v = jnp.ones((grid2d.Ny, grid2d.Nx))
-        with pytest.raises(ValueError, match="Unknown method"):
-            adv(h, u, v, method="bogus")
+        with pytest.raises(TypeError, match=r"gridax\.schemes"):
+            adv(h, u, v, scheme="weno5")
 
 
 class TestAdvection3D:
@@ -213,7 +216,7 @@ class TestAdvection3D:
         h = jnp.ones((grid3d.Nz, grid3d.Ny, grid3d.Nx))
         u = jnp.ones((grid3d.Nz, grid3d.Ny, grid3d.Nx))
         v = jnp.ones((grid3d.Nz, grid3d.Ny, grid3d.Nx))
-        result = adv(h, u, v, method="upwind1")
+        result = adv(h, u, v, scheme=Upwind(1))
         # Valid region: all z-interior levels, deep horizontal interior
         # (avoids ghost-adjacent horizontal cells where flux ghosts are 0).
         np.testing.assert_allclose(result[1:-1, 2:-2, 2:-2], 0.0, atol=1e-10)
@@ -243,7 +246,7 @@ class TestAdvection3D:
         u = jnp.ones((grid3d.Nz, grid3d.Ny, grid3d.Nx))
         v = jnp.ones((grid3d.Nz, grid3d.Ny, grid3d.Nx))
         for method in ["minmod", "van_leer", "superbee", "mc"]:
-            result = adv(h, u, v, method=method)
+            result = adv(h, u, v, scheme=SCHEMES[method])
             assert result.shape == (grid3d.Nz, grid3d.Ny, grid3d.Nx)
 
     @pytest.mark.slow
@@ -253,7 +256,7 @@ class TestAdvection3D:
         u = jnp.ones((grid3d.Nz, grid3d.Ny, grid3d.Nx))
         v = jnp.ones((grid3d.Nz, grid3d.Ny, grid3d.Nx))
         for method in ["weno3", "weno5", "weno7", "weno9"]:
-            result = adv(h, u, v, method=method)
+            result = adv(h, u, v, scheme=SCHEMES[method])
             assert result.shape == (grid3d.Nz, grid3d.Ny, grid3d.Nx)
 
     @pytest.mark.slow
@@ -264,7 +267,7 @@ class TestAdvection3D:
         u = jnp.ones((grid.Nz, grid.Ny, grid.Nx))
         v = jnp.ones((grid.Nz, grid.Ny, grid.Nx))
         for method, depth in [("weno3", 2), ("weno5", 3), ("weno7", 4), ("weno9", 5)]:
-            result = adv(h, u, v, method=method)
+            result = adv(h, u, v, scheme=SCHEMES[method])
             np.testing.assert_allclose(
                 result[1:-1, depth:-depth, depth:-depth], 0.0, atol=1e-6
             )
@@ -275,7 +278,7 @@ class TestAdvection3D:
         u = jnp.ones((grid3d.Nz, grid3d.Ny, grid3d.Nx))
         v = jnp.ones((grid3d.Nz, grid3d.Ny, grid3d.Nx))
         for method in ["minmod", "van_leer", "superbee", "mc"]:
-            result = adv(h, u, v, method=method)
+            result = adv(h, u, v, scheme=SCHEMES[method])
             np.testing.assert_allclose(result[1:-1, 2:-2, 2:-2], 0.0, atol=1e-10)
 
 
@@ -306,7 +309,7 @@ class TestAdvection2DMask:
         h = jnp.ones((grid.Ny, grid.Nx))
         u = jnp.ones((grid.Ny, grid.Nx))
         v = jnp.ones((grid.Ny, grid.Nx))
-        result = adv(h, u, v, method="weno5")
+        result = adv(h, u, v, scheme=WENO(5))
         assert result.shape == (grid.Ny, grid.Nx)
 
     def test_constant_zero_tendency_all_methods(self, grid, all_ocean):
@@ -326,7 +329,7 @@ class TestAdvection2DMask:
             "minmod",
             "van_leer",
         ]:
-            result = adv(h, u, v, method=method)
+            result = adv(h, u, v, scheme=SCHEMES[method])
             np.testing.assert_allclose(
                 result[3:-3, 3:-3],
                 0.0,
@@ -342,8 +345,8 @@ class TestAdvection2DMask:
         h = jnp.ones((grid.Ny, grid.Nx))
         u = jnp.ones((grid.Ny, grid.Nx))
         v = jnp.ones((grid.Ny, grid.Nx))
-        with_mask = adv_masked(h, u, v, method="naive")
-        without_mask = adv_unmasked(h, u, v, method="naive")
+        with_mask = adv_masked(h, u, v, scheme=Centred())
+        without_mask = adv_unmasked(h, u, v, scheme=Centred())
         np.testing.assert_array_equal(with_mask, without_mask)
 
     def test_masked_matches_unmasked_all_ocean_weno5_interior(self, grid, all_ocean):
@@ -356,8 +359,8 @@ class TestAdvection2DMask:
         )
         u = jnp.ones((grid.Ny, grid.Nx))
         v = jnp.zeros((grid.Ny, grid.Nx))
-        masked = adv_masked(q, u, v, method="weno5")
-        unmasked = adv_unmasked(q, u, v, method="weno5")
+        masked = adv_masked(q, u, v, scheme=WENO(5))
+        unmasked = adv_unmasked(q, u, v, scheme=WENO(5))
         # Deep interior (depth ≥ 3 from ghost) must match
         np.testing.assert_allclose(masked[3:-3, 3:-3], unmasked[3:-3, 3:-3], atol=1e-6)
 
@@ -367,7 +370,7 @@ class TestAdvection2DMask:
         h = jnp.ones((grid.Ny, grid.Nx))
         u = jnp.ones((grid.Ny, grid.Nx))
         v = jnp.ones((grid.Ny, grid.Nx))
-        result = adv(h, u, v, method="weno5")
+        result = adv(h, u, v, scheme=WENO(5))
         assert jnp.all(jnp.isfinite(result)).item()
 
 
@@ -390,7 +393,7 @@ class TestAdvection3DMask:
         h = jnp.ones((grid.Nz, grid.Ny, grid.Nx))
         u = jnp.ones((grid.Nz, grid.Ny, grid.Nx))
         v = jnp.ones((grid.Nz, grid.Ny, grid.Nx))
-        result = adv(h, u, v, method="weno5")
+        result = adv(h, u, v, scheme=WENO(5))
         assert result.shape == (grid.Nz, grid.Ny, grid.Nx)
 
     def test_constant_zero_tendency_supported_methods(self, grid, all_ocean):
@@ -400,7 +403,7 @@ class TestAdvection3DMask:
         u = jnp.ones((grid.Nz, grid.Ny, grid.Nx))
         v = jnp.ones((grid.Nz, grid.Ny, grid.Nx))
         for method in ["upwind1", "weno3", "weno5", "minmod", "van_leer"]:
-            result = adv(h, u, v, method=method)
+            result = adv(h, u, v, scheme=SCHEMES[method])
             np.testing.assert_allclose(
                 result[1:-1, 3:-3, 3:-3],
                 0.0,
@@ -420,8 +423,8 @@ class TestAdvection3DMask:
         u = jnp.ones((grid.Nz, grid.Ny, grid.Nx))
         v = jnp.ones((grid.Nz, grid.Ny, grid.Nx))
         for method in ["weno7", "weno9"]:
-            with_mask = adv_masked(h, u, v, method=method)
-            without_mask = adv_unmasked(h, u, v, method=method)
+            with_mask = adv_masked(h, u, v, scheme=SCHEMES[method])
+            without_mask = adv_unmasked(h, u, v, scheme=SCHEMES[method])
             np.testing.assert_array_equal(with_mask, without_mask)
 
     def test_coastal_mask_finite_everywhere(self):
@@ -438,7 +441,7 @@ class TestAdvection3DMask:
         h = jnp.ones((grid.Nz, grid.Ny, grid.Nx))
         u = jnp.ones((grid.Nz, grid.Ny, grid.Nx))
         v = jnp.ones((grid.Nz, grid.Ny, grid.Nx))
-        result = adv(h, u, v, method="weno5")
+        result = adv(h, u, v, scheme=WENO(5))
         assert jnp.all(jnp.isfinite(result)).item()
 
 
@@ -508,7 +511,7 @@ class TestAdvection2DRotationStability:
 
         def rhs(q):
             q = pbc(q)
-            return advect(q, u, v, method=method)
+            return advect(q, u, v, scheme=SCHEMES[method])
 
         rhs_jit = jax.jit(rhs)
         q = q0.copy()
@@ -542,7 +545,7 @@ class TestNegativeFlowExactness:
         adv = Advection1D(grid=grid)
         h = jnp.ones(grid.Nx)
         u = -jnp.ones(grid.Nx)
-        result = adv(h, u, method=method)
+        result = adv(h, u, scheme=SCHEMES[method])
         # Wide stencils (weno9) accumulate ~1e-6 error in float32
         np.testing.assert_allclose(result[4:-4], 0.0, atol=1e-5)
 
@@ -556,7 +559,7 @@ class TestNegativeFlowExactness:
         h = jnp.ones((grid.Ny, grid.Nx))
         u = -jnp.ones((grid.Ny, grid.Nx))
         v = -jnp.ones((grid.Ny, grid.Nx))
-        result = adv(h, u, v, method=method)
+        result = adv(h, u, v, scheme=SCHEMES[method])
         np.testing.assert_allclose(result[4:-4, 4:-4], 0.0, atol=1e-5)
 
 
@@ -602,7 +605,7 @@ class TestNegativeFlowConvergence:
 
         def rhs(q):
             q = pbc(q)
-            return advect(q, u, method=method)
+            return advect(q, u, scheme=SCHEMES[method])
 
         rhs_jit = jax.jit(rhs)
         q = q0.copy()
@@ -671,7 +674,7 @@ class TestAdvectionConservation:
 
         def rhs(q):
             q = pbc(q)
-            return advect(q, u, method=method)
+            return advect(q, u, scheme=SCHEMES[method])
 
         rhs_jit = jax.jit(rhs)
         q = q0.copy()

@@ -26,7 +26,7 @@
 #    C-grid.
 # 2. How **upwind**, **TVD**, and **WENO** reconstruction schemes differ in
 #    practice.
-# 3. How to use `gridax.Advection1D` with different `method` options.
+# 3. How to use `gridax.Advection1D` with different schemes of `gridax.schemes`.
 #
 # > **Prerequisites** — read the
 # > [Advection Theory](../advection.md) page for the mathematical
@@ -127,6 +127,7 @@ import numpy as np
 jax.config.update("jax_enable_x64", True)
 
 import gridax as fvx
+from gridax.schemes import TVD, WENO, Upwind
 from integrix.march import rk3_ssp_step
 
 IMG_DIR = Path(__file__).resolve().parent.parent / "images" / "advection_1d_schemes"
@@ -291,17 +292,25 @@ print(f"CFL = {cfl}, dt = {dt:.4e}, nsteps = {nsteps}")
 
 # %%
 advect = fvx.Advection1D(grid)
-methods = ["upwind1", "upwind3", "superbee", "weno5", "weno7", "weno9"]
+SCHEMES = {
+    "upwind1": Upwind(1),
+    "upwind3": Upwind(3),
+    "superbee": TVD("superbee"),
+    "weno5": WENO(5),
+    "weno7": WENO(7),
+    "weno9": WENO(9),
+}
+methods = list(SCHEMES)
 results = {}
 
 for method in methods:
 
     def make_rhs(m):
-        """Closure to capture the method string."""
+        """Closure to capture the name of the scheme."""
 
         def rhs(q):
             q = enforce_periodic_1d(q, ng)
-            return advect(q, u_field, method=m)
+            return advect(q, u_field, scheme=SCHEMES[m])
 
         return rhs
 
@@ -463,7 +472,7 @@ for nx_test in resolutions:
         def make_rhs_conv(m, adv, u):
             def rhs(q):
                 q = enforce_periodic_1d(q, ng)
-                return adv(q, u, method=m)
+                return adv(q, u, scheme=SCHEMES[m])
 
             return rhs
 

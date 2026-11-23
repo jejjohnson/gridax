@@ -52,6 +52,8 @@ sys.path.insert(0, _REPO_ROOT)
 # test-side sibling ``tests/fixtures/__init__.py`` does the same thing.
 import jax
 
+from tests._schemes import SCHEMES
+
 jax.config.update("jax_enable_x64", True)
 
 from tests.fixtures._helpers import save_golden
@@ -955,7 +957,7 @@ def _advection_entries(
                 "Advection1D",
                 f"__call___{method}",
                 "unmasked",
-                (lambda m=method: a1(h1d, u1d, method=m)),
+                (lambda m=method: a1(h1d, u1d, scheme=SCHEMES[m])),
             )
         )
         entries.append(
@@ -963,7 +965,7 @@ def _advection_entries(
                 "Advection1D",
                 f"__call___{method}",
                 "masked",
-                (lambda m=method: a1m(h1d, u1d, method=m)),
+                (lambda m=method: a1m(h1d, u1d, scheme=SCHEMES[m])),
             )
         )
 
@@ -976,7 +978,7 @@ def _advection_entries(
                 "Advection2D",
                 f"__call___{method}",
                 "unmasked",
-                (lambda m=method: a2(h2d, u2d, v2d, method=m)),
+                (lambda m=method: a2(h2d, u2d, v2d, scheme=SCHEMES[m])),
             )
         )
         entries.append(
@@ -984,7 +986,7 @@ def _advection_entries(
                 "Advection2D",
                 f"__call___{method}",
                 "masked",
-                (lambda m=method: a2m(h2d, u2d, v2d, method=m)),
+                (lambda m=method: a2m(h2d, u2d, v2d, scheme=SCHEMES[m])),
             )
         )
 
@@ -997,7 +999,7 @@ def _advection_entries(
                 "Advection3D",
                 f"__call___{method}",
                 "unmasked",
-                (lambda m=method: a3(h3d, u3d, v3d, method=m)),
+                (lambda m=method: a3(h3d, u3d, v3d, scheme=SCHEMES[m])),
             )
         )
         entries.append(
@@ -1005,7 +1007,7 @@ def _advection_entries(
                 "Advection3D",
                 f"__call___{method}",
                 "masked",
-                (lambda m=method: a3m(h3d, u3d, v3d, method=m)),
+                (lambda m=method: a3m(h3d, u3d, v3d, scheme=SCHEMES[m])),
             )
         )
 

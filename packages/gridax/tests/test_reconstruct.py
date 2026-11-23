@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import _reconstruction_cases as cases
 import gridax
-import gridax.advection as gadv
 from gridax.schemes import TVD, WENO, Centred, Upwind
 import numpy as np
 import pytest
@@ -73,8 +72,8 @@ def test_any_axis_of_a_3d_array(scheme, axis: int) -> None:
     # along z too, which no class method offers: the same as moving z last
     rng = np.random.default_rng(-axis)
     q, u = rng.standard_normal((2, 8, 9, 10))
-    got = gadv.reconstruct(q, u, axis=axis, scheme=scheme)
-    moved = gadv.reconstruct(
+    got = cases.flux(q, u, axis=axis, scheme=scheme)
+    moved = cases.flux(
         np.moveaxis(q, axis, -1), np.moveaxis(u, axis, -1), axis=-1, scheme=scheme
     )
     np.testing.assert_array_equal(got, np.moveaxis(moved, -1, axis))
@@ -98,7 +97,7 @@ def test_orders_away_from_the_walls(scheme, order: int) -> None:
         averages = (
             np.cos(2 * np.pi * edges[:-1] + 0.7) - np.cos(2 * np.pi * edges[1:] + 0.7)
         ) / (2 * np.pi * dx)
-        flux = gadv.reconstruct(averages, np.ones(n), axis=-1, scheme=scheme)[1:-1]
+        flux = cases.flux(averages, np.ones(n), axis=-1, scheme=scheme)[1:-1]
         exact = np.sin(2 * np.pi * edges[2:-1] + 0.7)
         return np.abs(flux - exact)[6:-6].max()
 
@@ -106,11 +105,14 @@ def test_orders_away_from_the_walls(scheme, order: int) -> None:
 
 
 def test_argument_errors() -> None:
+    grid = gridax.CartesianCGrid2D.from_interior(4, 4, 1.0, 1.0)
     q = np.zeros((6, 6))
     with pytest.raises(TypeError, match="scheme"):
-        gadv.reconstruct(q, q, axis=-1)  # type: ignore[call-arg]
+        gridax.reconstruct(q, q, grid, axis="x")  # type: ignore[call-arg]
     with pytest.raises(TypeError, match=r"gridax\.schemes"):
-        gadv.reconstruct(q, q, axis=-1, scheme="weno5")  # type: ignore[arg-type]
+        gridax.reconstruct(q, q, grid, axis="x", scheme="weno5")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="axis"):
+        gridax.reconstruct(q, q, grid, axis="z", scheme=WENO(5))
     with pytest.raises(ValueError, match="WENO"):
         WENO(7, "z")
     with pytest.raises(ValueError, match="limiter"):
@@ -133,7 +135,7 @@ def test_jit_matches_eager(scheme) -> None:
     q, u = (jnp.asarray(a, dtype=jnp.float32) for a in rng.standard_normal((2, 10, 12)))
 
     def flux(q, u):
-        return gadv.reconstruct(q, u, axis=-2, scheme=scheme)
+        return cases.flux(q, u, axis=-2, scheme=scheme)
 
     np.testing.assert_allclose(
         np.asarray(jax.jit(flux)(q, u)), np.asarray(flux(q, u)), rtol=1e-5, atol=1e-6

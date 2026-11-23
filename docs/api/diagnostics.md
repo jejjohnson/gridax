@@ -6,13 +6,11 @@ Each diagnostic in the table below comes in two forms:
 
 - **Class operators** (Layer 3) take the land/ocean mask at construction and
   zero the dry cells of their output stagger — use these in masked domains.
-- **Functional helpers** (Layer 2) are mask-free; apply the mask yourself at
-  the call site if you use them directly.
+- **Functions.** `kinetic_energy`, `shear_strain` and `tensor_strain` take the
+  grid and a mask; the others are pointwise or take spacings, and are
+  mask-free.
 
-The domain-integrated `total_energy` / `total_enstrophy` and
-`vertical_velocity` have **no** class form: pass the reductions fields that
-are already masked (e.g. from the class operators), and give
-`vertical_velocity` a `Mask3D` as its per-call `mask=` argument.
+A domain integral is `area_sum(field, grid, mask=mask)`, e.g. `area_sum(ke + ape, grid)` for the total energy. `vertical_velocity` has **no** class form: give it a `Mask3D` as its per-call `mask=` argument.
 
 See [Masks → Operator API](../masks/#operator-api-how-operators-consume-masks)
 for the stagger → mask mapping.
@@ -107,12 +105,6 @@ inputs that already share a grid point.
 ### Available Potential Energy
 
 ::: gridax.available_potential_energy
-
-### Domain-Integrated Quantities
-
-::: gridax.total_energy
-
-::: gridax.total_enstrophy
 
 ### Vertical Velocity
 

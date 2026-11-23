@@ -53,7 +53,7 @@ with cell averages and compare with cell averages to see the nominal order.
 The largest polynomial degree $d$ for which the face value of $x^d$ is
 reproduced exactly (both flow signs; `scripts/benchmark_advection.py --part exactness`):
 
-| Method | `naive` | `upwind1` | `upwind2` | `upwind3` | `weno3` | `weno5` / `wenoz5` | `weno7` | `weno9` | TVD limiters |
+| Scheme | `Centred(2)` | `Upwind(1)` | `Upwind(2)` | `Upwind(3)` | `WENO(3)` | `WENO(5)` / `WENO(5, "z")` | `WENO(7)` | `WENO(9)` | TVD limiters |
 |---|---|---|---|---|---|---|---|---|---|
 | fed cell averages | 1 | 0 | 1 | 2 | 1 | 2 | 3 | 4 | 1 |
 | fed point values  | 1 | 0 | 1 | 1 | 1 | 1 | 1 | 1 | 1 |
@@ -73,13 +73,13 @@ value is then multiplied by a different velocity on each face.  Measured
 1-D L∞ / L1 orders of the tendency of $e^{\sin 2\pi x}$ (periodic,
 $N = 128 \to 256$; `--part convergence`):
 
-| Method | $u = 1$, averages | $u = 1$, point values | $u(x) = 1 + \tfrac12\sin 2\pi x$, averages | $u(x)$, point values |
+| Scheme | $u = 1$, averages | $u = 1$, point values | $u(x) = 1 + \tfrac12\sin 2\pi x$, averages | $u(x)$, point values |
 |---|---|---|---|---|
-| `upwind3` | 3.0 / 3.0 | 3.0 / 3.0 | 3.0 / 3.0 | 2.2 / 2.1 |
-| `weno5`   | 5.0 / 5.0 | 5.0 / 5.0 | 5.0 / 5.0 | 2.0 / 2.0 |
-| `wenoz5`  | 5.0 / 5.0 | 5.0 / 5.0 | 5.0 / 5.0 | 2.0 / 2.0 |
-| `weno7`   | 5.1 / 6.1 | 5.1 / 6.1 | 5.1 / 6.1 | 2.0 / 2.0 |
-| `weno9`   | 8.6 / 8.8 | 9.0 / 8.9 | 8.4 / 8.8 | 2.0 / 2.0 |
+| `Upwind(3)` | 3.0 / 3.0 | 3.0 / 3.0 | 3.0 / 3.0 | 2.2 / 2.1 |
+| `WENO(5)`   | 5.0 / 5.0 | 5.0 / 5.0 | 5.0 / 5.0 | 2.0 / 2.0 |
+| `WENO(5, "z")`  | 5.0 / 5.0 | 5.0 / 5.0 | 5.0 / 5.0 | 2.0 / 2.0 |
+| `WENO(7)`   | 5.1 / 6.1 | 5.1 / 6.1 | 5.1 / 6.1 | 2.0 / 2.0 |
+| `WENO(9)`   | 8.6 / 8.8 | 9.0 / 8.9 | 8.4 / 8.8 | 2.0 / 2.0 |
 
 ---
 
@@ -125,8 +125,8 @@ times that value (midpoint quadrature along the face):
   per face, or a genuinely 2-D reconstruction; finitevolX does neither.)
 
 Measured L∞ orders of the 2-D cell-average tendency against the exact one
-($N = 64 \to 128$, `--part order2d`): constant $(u, v)$: `upwind3` 3.0,
-`weno5` 5.0, `weno9` 8.8; divergence-free $u(y)$, $v(x)$: 2.1, 2.0, 2.0.
+($N = 64 \to 128$, `--part order2d`): constant $(u, v)$: `Upwind(3)` 3.0,
+`WENO(5)` 5.0, `WENO(9)` 8.8; divergence-free $u(y)$, $v(x)$: 2.1, 2.0, 2.0.
 In practice the high-order schemes still have far smaller errors on smooth
 flows (the second-order term has a small constant): see the
 [accuracy benchmark](#measured-accuracy-and-cost).
@@ -169,27 +169,27 @@ directly only to compose a custom tier ladder.
 ## Reconstruction Schemes
 
 The key design choice is how to estimate the face value $\hat{q}$ from
-the cell averages.  The operators' default is `method="upwind1"`.
+the cell averages. It is a [scheme](schemes.md), the same object for every operator and every grid; the operators' default is `Upwind(1)`.
 
-| Method | Nominal order | Measured order L∞ / L1 | Cells read per face | Mask tier (fallback) | Non-oscillatory |
+| Scheme | Nominal order | Measured order L∞ / L1 | Cells read per face | Mask tier (fallback) | Non-oscillatory |
 |--------|---|---|---|---|---|
-| `naive` (centred) | 2 | 2.0 / 2.0 | 2 | — (dry face zeroed) | No (dispersive) |
-| `upwind1` | 1 | 1.0 / 1.0 | 1 | 2 | Yes (monotone) |
-| `upwind2` | 2 | 2.0 / 2.0 | 2 | 4 (→ `upwind1`) | No |
-| `upwind3` | 3 | 3.0 / 3.0 | 3 | 4 (→ `upwind1`) | No (small undershoots) |
-| `weno3` | 3 | 1.0 / 2.0 | 3 | 4 (→ `upwind1`) | Essentially (ENO) |
-| `weno5` | 5 | 5.0 / 5.0 | 5 | 6 (→ `weno3` → `upwind1`) | Essentially (ENO) |
-| `wenoz5` | 5 | 5.0 / 5.0 | 5 | 6 (→ `wenoz3` → `upwind1`) | Essentially (ENO) |
-| `weno7` | 7 | 5.1 / 6.1 | 7 | 8 (→ `weno5` → …) | Essentially (ENO) |
-| `weno9` | 9 | 8.6 / 8.8 | 9 | 10 (→ `weno7` → …) | Essentially (ENO) |
-| `minmod`, `van_leer`, `superbee`, `mc` | 2 | 1.0 / 2.0 | 3 | 4 (→ `upwind1`) | Yes (TVD) |
+| `Centred(2)` | 2 | 2.0 / 2.0 | 2 | — (dry face zeroed) | No (dispersive) |
+| `Upwind(1)` | 1 | 1.0 / 1.0 | 1 | 2 | Yes (monotone) |
+| `Upwind(2)` | 2 | 2.0 / 2.0 | 2 | 4 (→ `Upwind(1)`) | No |
+| `Upwind(3)` | 3 | 3.0 / 3.0 | 3 | 4 (→ `Upwind(1)`) | No (small undershoots) |
+| `WENO(3)` | 3 | 1.0 / 2.0 | 3 | 4 (→ `Upwind(1)`) | Essentially (ENO) |
+| `WENO(5)` | 5 | 5.0 / 5.0 | 5 | 6 (→ `WENO(3)` → `Upwind(1)`) | Essentially (ENO) |
+| `WENO(5, "z")` | 5 | 5.0 / 5.0 | 5 | 6 (→ `wenoz3` → `Upwind(1)`) | Essentially (ENO) |
+| `WENO(7)` | 7 | 5.1 / 6.1 | 7 | 8 (→ `WENO(5)` → …) | Essentially (ENO) |
+| `WENO(9)` | 9 | 8.6 / 8.8 | 9 | 10 (→ `WENO(7)` → …) | Essentially (ENO) |
+| `TVD("minmod")`, `"van_leer"`, `"superbee"`, `"mc"` | 2 | 1.0 / 2.0 | 3 | 4 (→ `Upwind(1)`) | Yes (TVD) |
 
 "Measured order" is the 1-D rate of the tendency of $e^{\sin 2\pi x}$ from
 cell averages ($N = 128 \to 256$), a smooth field *with extrema*.  At smooth
 extrema the TVD limiters clip to first order (hence L∞ 1, L1 2), and the
 Jiang–Shu weights of WENO3 and WENO7 degrade (WENO3-JS is first order in
-L∞ there, WENO7-JS fifth); WENO-Z does not.  `Advection3D` and
-`SphericalAdvection3D` accept every method except `upwind2` / `upwind3`.
+L∞ there, WENO7-JS fifth); WENO-Z does not.  Every
+operator takes every scheme, along any axis.
 
 ### Total Variation Diminishing (TVD)
 
@@ -305,17 +305,17 @@ fastest of 50 jitted forward tendencies on a $256^2$ grid (one
 (JAX 0.10.1, CPU): indicative only.  Regenerate with
 `uv run python scripts/benchmark_advection.py --part benchmark`.
 
-| Method | rel-L2 | min | max | ms ($256^2$) |
+| Scheme | rel-L2 | min | max | ms ($256^2$) |
 |---|---|---|---|---|
-| `naive` | 0.49 | −0.16 | 0.822 | 0.09 |
-| `upwind1` | 0.80 | 0 | 0.145 | 0.10 |
-| `upwind2` | 0.57 | −0.11 | 0.617 | 0.17 |
-| `upwind3` | 0.13 | −7.7e-3 | 0.815 | 0.21 |
-| `weno3` | 0.38 | 0 | 0.473 | 0.65 |
-| `weno5` | 3.3e-2 | −1.5e-11 | 0.929 | 0.83 |
-| `wenoz5` | 1.5e-2 | −1.8e-8 | 0.949 | 0.82 |
-| `weno7` | 5.4e-3 | 0 | 0.959 | 1.35 |
-| `weno9` | 6.4e-4 | −7.1e-9 | 0.967 | 1.71 |
+| `Centred(2)` | 0.49 | −0.16 | 0.822 | 0.09 |
+| `Upwind(1)` | 0.80 | 0 | 0.145 | 0.10 |
+| `Upwind(2)` | 0.57 | −0.11 | 0.617 | 0.17 |
+| `Upwind(3)` | 0.13 | −7.7e-3 | 0.815 | 0.21 |
+| `WENO(3)` | 0.38 | 0 | 0.473 | 0.65 |
+| `WENO(5)` | 3.3e-2 | −1.5e-11 | 0.929 | 0.83 |
+| `WENO(5, "z")` | 1.5e-2 | −1.8e-8 | 0.949 | 0.82 |
+| `WENO(7)` | 5.4e-3 | 0 | 0.959 | 1.35 |
+| `WENO(9)` | 6.4e-4 | −7.1e-9 | 0.967 | 1.71 |
 | `minmod` | 0.44 | 0 | 0.429 | 0.27 |
 | `van_leer` | 0.27 | 0 | 0.600 | 0.38 |
 | `superbee` | 0.15 | 0 | 0.817 | 0.50 |
@@ -324,15 +324,15 @@ fastest of 50 jitted forward tendencies on a $256^2$ grid (one
 What it says:
 
 - **WENO3-JS is a poor choice on its own**: 0.38, worse than every TVD
-  limiter except minmod and three times worse than the linear `upwind3`, at
-  four times the cost of `upwind3`.  It earns its place as the coastal
-  fallback of `weno5`.
-- `wenoz5` halves the `weno5` error at the same cost; `weno7` / `weno9`
-  cut the `wenoz5` error by another ~3× / ~25× for ~1.6× / ~2× the cost.
+  limiter except minmod and three times worse than the linear `Upwind(3)`, at
+  four times the cost of `Upwind(3)`.  It earns its place as the coastal
+  fallback of `WENO(5)`.
+- `WENO(5, "z")` halves the `WENO(5)` error at the same cost; `WENO(7)` / `WENO(9)`
+  cut the `WENO(5, "z")` error by another ~3× / ~25× for ~1.6× / ~2× the cost.
 - The TVD limiters are the only schemes guaranteed free of undershoots;
   among them superbee and MC are the most accurate on this smooth bump.
 - The WENO undershoots are tiny ($\le 2\times10^{-8}$ of the peak) but not
-  guaranteed zero; `naive` and `upwind2` are dispersive (undershoots of
+  guaranteed zero; `Centred(2)` and `Upwind(2)` are dispersive (undershoots of
   16 % and 11 % of the peak).
 
 ---
@@ -340,7 +340,7 @@ What it says:
 (masks-land-safe-advection)=
 ## Masks: Land-Safe Advection
 
-Every method of `Advection1D/2D/3D` and `SphericalAdvection2D/3D` is
+Every scheme of `Advection1D/2D/3D` and `SphericalAdvection2D/3D` is
 land-safe when the operator is constructed with a mask.  The mask is a
 **constructor field** (`Advection2D(grid=grid, mask=mask)`), not a
 `__call__` argument: `__init__` pre-builds the adaptive stencil hierarchy
@@ -353,10 +353,10 @@ reuses it.
 - **Narrower stencils near the coast.**  Each T-point's
   `StencilCapability2D` gives the widest centred stencil that stays wet in
   each direction (tiers 2, 4, 6, 8, 10 = 1, 3, 5, 7, 9 cells).  Every
-  upwind-biased method goes through `upwind_flux` and, at each face, uses
+  upwind-biased scheme goes through `upwind_flux` and, at each face, uses
   the highest tier of its own ladder that the upwind cell supports (the
   "Mask tier" column above), so no chosen stencil reads a land cell.
-  `naive` reads only the two cells beside the face and needs no ladder.
+  `Centred(2)` reads only the two cells beside the face and needs no ladder.
 - **No flux through a dry face.**  The face fluxes on every face with
   `mask.wet(at="U")` / `mask.wet(at="V")` false are zeroed before the divergence, as in
   `Diffusion2D`, so no mass crosses the coastline: in a closed basin
@@ -369,6 +369,7 @@ reuses it.
 import jax.numpy as jnp
 import numpy as np
 from gridax import Advection2D, CartesianCGrid2D, Mask2D
+from gridax.schemes import TVD, WENO, Centred, Upwind
 
 grid = CartesianCGrid2D.from_interior(16, 16, 1.0, 1.0)
 wet = np.ones((grid.Ny, grid.Nx), dtype=bool)
@@ -380,8 +381,8 @@ adv = Advection2D(grid=grid, mask=mask)  # hierarchy built once, here
 h = jnp.where(mask.wet(), 1.0, jnp.nan)  # NaN on land is fine
 u = jnp.ones((grid.Ny, grid.Nx))  # [Ny, Nx] U-points
 v = 0.5 * jnp.ones((grid.Ny, grid.Nx))  # [Ny, Nx] V-points
-for method in ("naive", "upwind3", "weno5", "weno9", "van_leer"):
-    dh = adv(h, u, v, method=method)  # [Ny, Nx]
+for scheme in (Centred(2), Upwind(3), WENO(5), WENO(9), TVD("van_leer")):
+    dh = adv(h, u, v, scheme=scheme)  # [Ny, Nx]
     assert bool(jnp.isfinite(dh).all())
     assert abs(float(dh.sum())) < 1e-10  # no mass crosses the coastline
 ```
@@ -418,13 +419,13 @@ fill the outer $H$ cells of every field by wrapping, and keep the physical
 cells `[H:-H]`.  Measured minimum $H$, the same for the Cartesian and the
 spherical operators:
 
-| Method | $H$ (`wall="open"`) | $H$ (`wall="closed"`) |
+| Scheme | $H$ (`wall="open"`) | $H$ (`wall="closed"`) |
 |---|---|---|
-| `upwind1` | 1 | 2 |
-| `naive`, `upwind2`, `upwind3`, `weno3`, TVD limiters | 2 | 2 |
-| `weno5`, `wenoz5` | 3 | 3 |
-| `weno7` | 4 | 4 |
-| `weno9` | 5 | 5 |
+| `Upwind(1)` | 1 | 2 |
+| `Centred(2)`, `Upwind(2)`, `Upwind(3)`, `WENO(3)`, TVD limiters | 2 | 2 |
+| `WENO(5)`, `WENO(5, "z")` | 3 | 3 |
+| `WENO(7)` | 4 | 4 |
+| `WENO(9)` | 5 | 5 |
 
 With `wall="open"` a one-cell ghost ring still conserves mass exactly (the
 seam face is first-order upwind, the same on both sides); a halo strictly
@@ -482,6 +483,7 @@ from gridax import (
     interior,
     rusanov_flux,
 )
+from gridax.schemes import WENO, Upwind
 
 grid = CartesianCGrid2D.from_interior(16, 16, 1.0, 1.0)
 y, x = jnp.meshgrid(jnp.arange(grid.Ny), jnp.arange(grid.Nx), indexing="ij")
@@ -501,14 +503,14 @@ dq = interior(
 )  # [Ny, Nx]; reads the wall faces, like wall="open"
 # With eps=0 the Rusanov flux of the cell values is first-order upwind:
 adv = Advection2D(grid=grid)
-assert jnp.allclose(dq, adv(q, u, v, method="upwind1", wall="open"))
+assert jnp.allclose(dq, adv(q, u, v, scheme=Upwind(1), wall="open"))
 
 # Transports: the operator is linear in the velocity.
 h = 2.0 + 0.1 * jnp.cos(0.3 * x)  # [Ny, Nx] layer thickness at T-points
 interp = Interpolation2D(grid=grid)
 U = interp.T_to_U(h) * u  # [Ny, Nx] face transport
 V = interp.T_to_V(h) * v  # [Ny, Nx] face transport
-dhq = adv(q, U, V, method="weno5")  # -div(q U): tendency of h q
+dhq = adv(q, U, V, scheme=WENO(5))  # -div(q U): tendency of h q
 ```
 
 ---
@@ -518,11 +520,12 @@ dhq = adv(q, U, V, method="weno5")  # -div(q U): tendency of h q
 ```python
 import jax.numpy as jnp
 import numpy as np
-from gridax import CartesianCGrid2D, Advection2D, Mask2D
+from gridax import CartesianCGrid2D, Advection2D, Mask2D, advect
+from gridax.schemes import TVD, WENO
 
 grid = CartesianCGrid2D.from_interior(64, 64, 1e6, 1e6)
 
-# Construct once; the operator is method-agnostic.
+# Construct once; the scheme is an argument of the call.
 adv = Advection2D(grid=grid)
 
 # T-point tracer (cell averages) and U/V-point velocities
@@ -530,12 +533,15 @@ q = jnp.ones((grid.Ny, grid.Nx))   # T-point tracer
 u = jnp.zeros((grid.Ny, grid.Nx))  # U-point velocity
 v = jnp.zeros((grid.Ny, grid.Nx))  # V-point velocity
 
-# Default upwind1 (no mask)
+# Default Upwind(1) (no mask)
 dq_dt = adv(q, u, v)
 
-# Choose a method per-call
-dq_dt_tvd = adv(q, u, v, method="van_leer")
-dq_dt_weno = adv(q, u, v, method="weno5")
+# Choose a scheme per call
+dq_dt_tvd = adv(q, u, v, scheme=TVD("van_leer"))
+dq_dt_weno = adv(q, u, v, scheme=WENO(5))
+
+# The same without an operator
+dq_dt_weno = advect(q, u, v, grid, scheme=WENO(5))
 
 # With a land mask: the mask is a constructor field, so build a second
 # operator instance with `mask=`.  The adaptive stencil hierarchy is
@@ -544,7 +550,7 @@ ocean_mask = np.ones((grid.Ny, grid.Nx), dtype=bool)
 ocean_mask[20:30, 20:30] = False  # an island
 mask = Mask2D.from_mask(ocean_mask)
 adv_masked = Advection2D(grid=grid, mask=mask)
-dq_dt_masked = adv_masked(q, u, v, method="weno5")
+dq_dt_masked = adv_masked(q, u, v, scheme=WENO(5))
 # shape [Ny, Nx], non-zero only in [2:-2, 2:-2] and on wet cells
 ```
 
@@ -575,7 +581,7 @@ Is accuracy on smooth fields the priority?
 
 Does the domain have land / islands?
 ├── Yes → construct the operator with mask=Mask2D.from_mask(wet):
-│         every method is land-safe (coastal fallback, no flux through land)
+│         every scheme is land-safe (coastal fallback, no flux through land)
 └── No  → omit the mask
 
 Periodic in x or y?  → wall="open" with the halo H of the table above.

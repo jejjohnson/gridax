@@ -2,6 +2,10 @@
 
 Coriolis force operators for rotating-frame geophysical models on C-grids.
 
+::: gridax.coriolis
+
+## The class forms
+
 ::: gridax.Coriolis2D
 
 ::: gridax.Coriolis3D

@@ -16,10 +16,13 @@ from gridax._src.advection.spherical_advection import (
     SphericalAdvection3D,
 )
 from gridax._src.operators.reductions import area_weights
+from gridax.schemes import WENO, Upwind
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
+from tests._schemes import SCHEMES
 
 R = 6.371e6
 NX_INT, NY_INT = 16, 10
@@ -72,7 +75,7 @@ class TestSphericalAdvection2D:
         h = jax.random.normal(key, (grid.Ny, grid.Nx))
         u = jnp.zeros_like(h)
         v = jnp.zeros_like(h)
-        out = op(h, u, v, method="upwind1")
+        out = op(h, u, v, scheme=Upwind(1))
         np.testing.assert_allclose(out, 0.0, atol=1e-12)
 
     @pytest.mark.parametrize(
@@ -100,7 +103,7 @@ class TestSphericalAdvection2D:
         h = jax.random.normal(k1, (grid.Ny, grid.Nx))
         u = jax.random.normal(k2, (grid.Ny, grid.Nx))
         v = jax.random.normal(k3, (grid.Ny, grid.Nx))
-        out = op(h, u, v, method=method)
+        out = op(h, u, v, scheme=SCHEMES[method])
         assert jnp.all(jnp.isfinite(out))
 
     def test_ghost_ring_zero(self, op, grid):
@@ -109,7 +112,7 @@ class TestSphericalAdvection2D:
         h = jax.random.normal(k1, (grid.Ny, grid.Nx))
         u = jax.random.normal(k2, (grid.Ny, grid.Nx))
         v = jax.random.normal(k3, (grid.Ny, grid.Nx))
-        out = op(h, u, v, method="upwind1")
+        out = op(h, u, v, scheme=Upwind(1))
         np.testing.assert_allclose(out[0, :], 0.0)
         np.testing.assert_allclose(out[-1, :], 0.0)
         np.testing.assert_allclose(out[:, 0], 0.0)
@@ -145,8 +148,8 @@ class TestSphericalAdvection2D:
         cart_op = Advection2D(grid=cart)
 
         for method in ("upwind1", "weno3", "weno5"):
-            t_s = sph_op(h, u, v, method=method)
-            t_c = cart_op(h, u, v, method=method)
+            t_s = sph_op(h, u, v, scheme=SCHEMES[method])
+            t_c = cart_op(h, u, v, scheme=SCHEMES[method])
             # Across 1-degree latitude, cos varies by O(1e-4).
             np.testing.assert_allclose(
                 t_s[2:-2, 2:-2],
@@ -161,7 +164,7 @@ class TestSphericalAdvection2D:
         h = jax.random.normal(k1, (grid.Ny, grid.Nx))
         u = jax.random.normal(k2, (grid.Ny, grid.Nx))
         v = jax.random.normal(k3, (grid.Ny, grid.Nx))
-        out = jax.jit(lambda a, b, c: op(a, b, c, method="weno5"))(h, u, v)
+        out = jax.jit(lambda a, b, c: op(a, b, c, scheme=WENO(5)))(h, u, v)
         assert out.shape == h.shape
         assert jnp.all(jnp.isfinite(out))
 
@@ -174,7 +177,7 @@ class TestSphericalAdvection2D:
         v = jax.random.normal(k3, (grid.Ny, grid.Nx))
 
         def loss(h_, u_, v_):
-            return op(h_, u_, v_, method="upwind1").sum()
+            return op(h_, u_, v_, scheme=Upwind(1)).sum()
 
         gh, gu, gv = jax.grad(loss, argnums=(0, 1, 2))(h, u, v)
         for g in (gh, gu, gv):
@@ -192,7 +195,7 @@ class TestSphericalAdvection2D:
         h = 2.0 * jnp.ones((grid.Ny, grid.Nx))
         u = 1.5 * jnp.ones((grid.Ny, grid.Nx))
         v = jnp.zeros_like(h)
-        out = op(h, u, v, method="upwind1")
+        out = op(h, u, v, scheme=Upwind(1))
         np.testing.assert_allclose(out[2:-2, 2:-2], 0.0, atol=1e-10)
 
 
@@ -210,7 +213,7 @@ class TestSphericalAdvection2DMasked:
         h = jax.random.normal(k1, (grid.Ny, grid.Nx))
         u = jax.random.normal(k2, (grid.Ny, grid.Nx))
         v = jax.random.normal(k3, (grid.Ny, grid.Nx))
-        out = op(h, u, v, method="weno3")
+        out = op(h, u, v, scheme=WENO(3))
         np.testing.assert_allclose(out, 0.0, atol=1e-12)
 
     def test_all_wet_matches_unmasked_upwind1(self, grid):
@@ -224,8 +227,8 @@ class TestSphericalAdvection2DMasked:
         v = jax.random.normal(k3, (grid.Ny, grid.Nx))
         # Non-dispatchable method — should match bit-for-bit.
         np.testing.assert_allclose(
-            op_m(h, u, v, method="upwind1"),
-            op_u(h, u, v, method="upwind1"),
+            op_m(h, u, v, scheme=Upwind(1)),
+            op_u(h, u, v, scheme=Upwind(1)),
             atol=1e-12,
         )
 
@@ -238,7 +241,7 @@ class TestSphericalAdvection2DMasked:
         h = jax.random.normal(k1, (grid.Ny, grid.Nx))
         u = jax.random.normal(k2, (grid.Ny, grid.Nx))
         v = jax.random.normal(k3, (grid.Ny, grid.Nx))
-        out = op(h, u, v, method="weno3")
+        out = op(h, u, v, scheme=WENO(3))
         assert float(out[4, 6]) == 0.0
 
 
@@ -265,7 +268,7 @@ class TestSphericalAdvection3D:
         h = jax.random.normal(key, (grid3d.Nz, grid3d.Ny, grid3d.Nx))
         u = jnp.zeros_like(h)
         v = jnp.zeros_like(h)
-        out = op(h, u, v, method="upwind1")
+        out = op(h, u, v, scheme=Upwind(1))
         np.testing.assert_allclose(out, 0.0, atol=1e-12)
 
     @pytest.mark.parametrize(
@@ -291,7 +294,7 @@ class TestSphericalAdvection3D:
         h = jax.random.normal(k1, shape)
         u = jax.random.normal(k2, shape)
         v = jax.random.normal(k3, shape)
-        out = op(h, u, v, method=method)
+        out = op(h, u, v, scheme=SCHEMES[method])
         assert jnp.all(jnp.isfinite(out))
 
     def test_z_ghost_slices_zero(self, op, grid3d):
@@ -301,7 +304,7 @@ class TestSphericalAdvection3D:
         h = jax.random.normal(k1, shape)
         u = jax.random.normal(k2, shape)
         v = jax.random.normal(k3, shape)
-        out = op(h, u, v, method="weno3")
+        out = op(h, u, v, scheme=WENO(3))
         np.testing.assert_allclose(out[0, :, :], 0.0, atol=1e-10)
         np.testing.assert_allclose(out[-1, :, :], 0.0, atol=1e-10)
 
@@ -319,8 +322,8 @@ class TestSphericalAdvection3D:
         u_3d = jnp.broadcast_to(u_2d, shape)
         v_3d = jnp.broadcast_to(v_2d, shape)
 
-        t_2d = op2d(h_2d, u_2d, v_2d, method="weno3")
-        t_3d = op(h_3d, u_3d, v_3d, method="weno3")
+        t_2d = op2d(h_2d, u_2d, v_2d, scheme=WENO(3))
+        t_3d = op(h_3d, u_3d, v_3d, scheme=WENO(3))
 
         for k in range(1, grid3d.Nz - 1):
             np.testing.assert_allclose(t_3d[k], t_2d, atol=1e-12)
@@ -357,8 +360,8 @@ class TestSphericalAdvection3D:
         op_c = Advection3D(grid=cart)
 
         for method in ("upwind1", "weno3"):
-            t_s = op_s(h, u, v, method=method)
-            t_c = op_c(h, u, v, method=method)
+            t_s = op_s(h, u, v, scheme=SCHEMES[method])
+            t_c = op_c(h, u, v, scheme=SCHEMES[method])
             np.testing.assert_allclose(
                 t_s[1:-1, 2:-2, 2:-2],
                 t_c[1:-1, 2:-2, 2:-2],
@@ -377,7 +380,7 @@ class TestSphericalAdvection3D:
         h = jax.random.normal(k1, shape)
         u = jax.random.normal(k2, shape)
         v = jax.random.normal(k3, shape)
-        out = op(h, u, v, method="weno3")
+        out = op(h, u, v, scheme=WENO(3))
         np.testing.assert_allclose(out, 0.0, atol=1e-12)
 
     @pytest.mark.slow
@@ -388,10 +391,10 @@ class TestSphericalAdvection3D:
         h = jax.random.normal(k1, shape)
         u = jax.random.normal(k2, shape)
         v = jax.random.normal(k3, shape)
-        jitted = jax.jit(lambda a, b, c: op(a, b, c, method="weno3"))
+        jitted = jax.jit(lambda a, b, c: op(a, b, c, scheme=WENO(3)))
         out = jitted(h, u, v)
         assert out.shape == shape
-        g = jax.grad(lambda a: op(a, u, v, method="upwind1").sum())(h)
+        g = jax.grad(lambda a: op(a, u, v, scheme=Upwind(1)).sum())(h)
         assert g.shape == shape
         assert jnp.all(jnp.isfinite(g))
 
@@ -445,7 +448,9 @@ def _periodic_setup(halo, seed=0):
 def _advect(op, h, u, v, method, wall="closed"):
     """``op(h, u, v, method, wall)`` under ``jax.jit`` (one compiled program:
     ~5x faster than eager on these grids, keeping the tests in the fast tier)."""
-    return jax.jit(lambda a, b, c: op(a, b, c, method=method, wall=wall))(h, u, v)
+    return jax.jit(lambda a, b, c: op(a, b, c, scheme=SCHEMES[method], wall=wall))(
+        h, u, v
+    )
 
 
 def _relative_net(area, tendency, region=(slice(1, -1), slice(1, -1))):
@@ -559,8 +564,10 @@ class TestSphericalOpenWall:
         shape = (sphere.Ny, sphere.Nx)
         h, u, v = (jax.random.normal(k, shape) for k in (k1, k2, k3))
         for method in ("upwind1", "weno5", "van_leer"):
-            t_s = SphericalAdvection2D(grid=sphere)(h, u, v, method, wall="open")
-            t_c = Advection2D(grid=cart)(h, u, v, method, wall="open")
+            t_s = SphericalAdvection2D(grid=sphere)(
+                h, u, v, SCHEMES[method], wall="open"
+            )
+            t_c = Advection2D(grid=cart)(h, u, v, SCHEMES[method], wall="open")
             # Across 1 degree of latitude, cos varies by O(1e-4).
             # metric departure at |lat| <= 0.5 deg: 1 - cos(0.5 deg) ~ 3.8e-5
             np.testing.assert_allclose(
@@ -572,11 +579,11 @@ class TestSphericalOpenWall:
         k1, k2, k3 = jax.random.split(jax.random.PRNGKey(23), 3)
         shape = (grid3d.Nz, grid3d.Ny, grid3d.Nx)
         h, u, v = (jax.random.normal(k, shape) for k in (k1, k2, k3))
-        out3 = SphericalAdvection3D(grid=grid3d)(h, u, v, "weno5", wall="open")
+        out3 = SphericalAdvection3D(grid=grid3d)(h, u, v, WENO(5), wall="open")
         op2 = SphericalAdvection2D(grid=grid)
         for k in range(1, grid3d.Nz - 1):
             np.testing.assert_allclose(
-                out3[k], op2(h[k], u[k], v[k], "weno5", wall="open"), rtol=1e-12
+                out3[k], op2(h[k], u[k], v[k], WENO(5), wall="open"), rtol=1e-12
             )
         np.testing.assert_array_equal(out3[0], 0.0)
         np.testing.assert_array_equal(out3[-1], 0.0)

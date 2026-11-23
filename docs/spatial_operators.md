@@ -20,15 +20,15 @@ and what they compute:
 | `Vorticity2D.relative_vorticity` | vorticity | X-points | $\zeta = \partial v/\partial x - \partial u/\partial y$ |
 | `Vorticity2D.potential_vorticity` | vorticity | X-points | $q = (\zeta + f)/h$ |
 | `Vorticity2D.pv_flux_energy_conserving` | vorticity | U/V-points | $(q\,Uh, q\,Vh)$ |
-| `Diffusion2D` / `diffusion_2d` | diffusion | T-points | $\nabla \cdot (\kappa\,\nabla h)$ |
-| `BiharmonicDiffusion2D` | diffusion | T-points | $-\kappa\,\nabla^4 h$ |
-| `Coriolis2D` | coriolis | U/V-points | $(+\overline{f_X\bar{v}}, -\overline{f_X\bar{u}})$, energy-conserving |
+| `Diffusion2D` / `diffuse` | diffusion | T-points | $\nabla \cdot (\kappa\,\nabla h)$ |
+| `BiharmonicDiffusion2D` / `biharmonic` | diffusion | T-points | $-\kappa\,\nabla^4 h$ |
+| `Coriolis2D` / `coriolis` | coriolis | U/V-points | $(+\overline{f_X\bar{v}}, -\overline{f_X\bar{u}})$, energy-conserving |
 | `MomentumAdvection2D` | momentum | U/V-points | Vortex-force form |
 | `Vorticity2D.enstrophy` / `.potential_enstrophy` | vorticity | X-points | $\tfrac12\zeta^2$, $\tfrac12 q^2 h$ |
-| `Energetics2D` | diagnostics | T-points | KE, Bernoulli potential, APE |
-| `Strain2D` | diagnostics | T/X-points | shear & tensor strain, $\sigma^2$, Okubo–Weiss |
+| `Energetics2D` / `kinetic_energy` | diagnostics | T-points | KE, Bernoulli potential, APE |
+| `Strain2D` / `shear_strain`, `tensor_strain` | diagnostics | T/X-points | shear & tensor strain, $\sigma^2$, Okubo–Weiss |
 | `QGPotentialVorticity2D` | diagnostics | T-points | $q = \nabla^2\psi/f_0 + \beta(y - y_0)/f_0$ (− stretching) |
-| `ArakawaJacobian2D` / `arakawa_jacobian` | jacobian | T-points / interior | $J(f, g)$ |
+| `ArakawaJacobian2D` / `arakawa_jacobian` | jacobian | T-points | $J(f, g)$ |
 
 ---
 
@@ -228,7 +228,7 @@ never enter the wet tendency, and the operator conserves $\sum_\text{wet} h$.
 ### Usage
 
 ```python
-from gridax import Diffusion2D, BiharmonicDiffusion2D, diffusion_2d
+from gridax import Diffusion2D, BiharmonicDiffusion2D, diffuse
 from gridax import CartesianCGrid2D
 
 grid = CartesianCGrid2D.from_interior(64, 64, 1e6, 1e6)
@@ -247,8 +247,8 @@ dh_dt = diff_op_masked(h, kappa=100.0)
 biharm_op = BiharmonicDiffusion2D(grid=grid)
 dh_dt = biharm_op(h, kappa=1e9)
 
-# Functional API (no grid object, mask-free)
-dh_dt = diffusion_2d(h, kappa=100.0, dx=grid.spacing("x"), dy=grid.spacing("y"))
+# The function, on any C-grid
+dh_dt = diffuse(h, grid, kappa=100.0, mask=mask)
 ```
 
 ---
@@ -408,9 +408,8 @@ jac = ArakawaJacobian2D(grid=grid, mask=mask)   # mask optional
 Jpsi_q = jac(psi, q)
 # Jpsi_q has shape [Ny, Nx]; ghost ring and dry cells are 0
 
-# Functional form: interior only, no mask
-Jpsi_q_int = arakawa_jacobian(psi, q, dx=grid.spacing("x"), dy=grid.spacing("y"))
-# Jpsi_q_int has shape [Ny-2, Nx-2]
+# The function
+Jpsi_q = arakawa_jacobian(psi, q, grid, mask=mask)
 ```
 
 ---
@@ -431,7 +430,7 @@ What spatial operator do you need?
 │   └── Vorticity2D.potential_vorticity
 │
 ├── Tracer diffusion ∂q/∂t = ∇·(κ∇q)
-│   ├── Harmonic   → Diffusion2D  or  diffusion_2d
+│   ├── Harmonic   → Diffusion2D  or  diffuse
 │   └── Biharmonic → BiharmonicDiffusion2D  (scale-selective)
 │
 ├── Coriolis tendency (f×v, −f×u)

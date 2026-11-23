@@ -34,7 +34,7 @@ class TestKineticEnergy2D:
         """Constant u=v=1 everywhere → ke = 1.0 at interior."""
         u = jnp.ones((grid2d.Ny, grid2d.Nx))
         v = jnp.ones((grid2d.Ny, grid2d.Nx))
-        ke = kinetic_energy(u=u, v=v)
+        ke = kinetic_energy(u, v, grid2d)
 
         assert ke.shape == (grid2d.Ny, grid2d.Nx)
         # u²_on_T = 0.5*(1² + 1²) = 1, v²_on_T = 0.5*(1² + 1²) = 1
@@ -45,7 +45,7 @@ class TestKineticEnergy2D:
         """Ghost cells must remain zero (interior-point idiom)."""
         u = jnp.ones((grid2d.Ny, grid2d.Nx))
         v = jnp.ones((grid2d.Ny, grid2d.Nx))
-        ke = kinetic_energy(u=u, v=v)
+        ke = kinetic_energy(u, v, grid2d)
 
         np.testing.assert_array_equal(ke[0, :], 0.0)
         np.testing.assert_array_equal(ke[-1, :], 0.0)
@@ -56,7 +56,7 @@ class TestKineticEnergy2D:
         """ke must have the same shape as u and v."""
         u = jnp.zeros((grid2d.Ny, grid2d.Nx))
         v = jnp.zeros((grid2d.Ny, grid2d.Nx))
-        ke = kinetic_energy(u=u, v=v)
+        ke = kinetic_energy(u, v, grid2d)
         assert ke.shape == (grid2d.Ny, grid2d.Nx)
 
     def test_nonconst_u_linear_in_x(self, grid2d):
@@ -70,7 +70,7 @@ class TestKineticEnergy2D:
         u = jnp.broadcast_to(ix, (grid2d.Ny, grid2d.Nx))
         v = jnp.zeros((grid2d.Ny, grid2d.Nx))
 
-        ke = kinetic_energy(u=u, v=v)
+        ke = kinetic_energy(u, v, grid2d)
 
         # expected for interior columns i=1..Nx-2
         u2 = ix**2
@@ -91,7 +91,7 @@ class TestKineticEnergy2D:
         u = jnp.zeros((grid2d.Ny, grid2d.Nx))
         v = jnp.broadcast_to(jy[:, None], (grid2d.Ny, grid2d.Nx))
 
-        ke = kinetic_energy(u=u, v=v)
+        ke = kinetic_energy(u, v, grid2d)
 
         # expected for interior rows j=1..Ny-2
         v2 = jy**2
@@ -109,7 +109,7 @@ class TestKineticEnergy2D:
         u = jnp.broadcast_to(ix, (grid2d.Ny, grid2d.Nx))
         v = jnp.broadcast_to(jy[:, None], (grid2d.Ny, grid2d.Nx))
 
-        ke = kinetic_energy(u=u, v=v)
+        ke = kinetic_energy(u, v, grid2d)
 
         u2 = ix**2
         u2_on_T = 0.5 * (u2[1:-1] + u2[:-2])  # shape [Nx-2]
@@ -124,7 +124,7 @@ class TestKineticEnergy2D:
         u = jnp.ones((grid2d.Ny, grid2d.Nx), dtype=jnp.int32)
         v = jnp.zeros((grid2d.Ny, grid2d.Nx), dtype=jnp.int32)
 
-        ke = kinetic_energy(u=u, v=v)
+        ke = kinetic_energy(u, v, grid2d)
 
         assert jnp.issubdtype(ke.dtype, jnp.floating)
         np.testing.assert_allclose(ke[1:-1, 1:-1], 0.5, rtol=1e-6)
@@ -179,7 +179,7 @@ class TestBernoulliPotential2D:
         h = (ix[None, :] + jy[:, None]) * 0.1
 
         p = bernoulli_potential(h=h, u=u, v=v)
-        ke = kinetic_energy(u=u, v=v)
+        ke = kinetic_energy(u, v, grid2d)
 
         expected = ke[1:-1, 1:-1] + STANDARD.standard_gravity * h[1:-1, 1:-1]
         np.testing.assert_allclose(p[1:-1, 1:-1], expected, rtol=1e-6)

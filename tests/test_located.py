@@ -7,6 +7,7 @@ from gridax import CField, StaggerMismatchError, combine
 from gridax._src.api import OPERATIONS, SUPPORT
 from gridax._src.grid.points import POINT_AXES, point_stagger
 from gridax._src.operators.triples import PAIRS, TRIPLES
+from gridax.schemes import WENO, Centred, Upwind
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -46,6 +47,10 @@ def wet_mask(grid, seed=1):
 
 def keywords(name, grid):
     """The keyword arguments of each call an operation is checked on."""
+    if name == "advect":
+        return [{"scheme": Upwind(3)}, {"scheme": Centred(4)}]
+    if name == "reconstruct":
+        return [{"axis": axis, "scheme": WENO(5)} for axis in grid.axes]
     if getattr(grid, "_collocated", False):
         axes = [{"axis": axis} for axis in grid.axes]
         return axes if name == "difference" else [{}]
@@ -67,11 +72,25 @@ def resolve(point, kwargs, grid):
     """A declared point: a name, or the keyword that holds it; T if collocated."""
     if getattr(grid, "_collocated", False):
         return "T"
+    if point == "axis":
+        return {"x": "U", "y": "V", "z": "W"}[kwargs["axis"]]
     return point if point in POINT_AXES else kwargs[point]
 
 
+def operands(name, grid):
+    """The points of the operands of an operation on a grid, by name."""
+    _, points = OPERATIONS[name].__located__
+    return {
+        n: p
+        for n, p in points.items()
+        if p not in POINT_AXES or set(POINT_AXES[p]) <= set(grid.axes)
+    }
+
+
 CALLS = [
-    pytest.param(name, grid, kwargs, id=f"{name}-{grid}-{'-'.join(kwargs.values())}")
+    pytest.param(
+        name, grid, kwargs, id=f"{name}-{grid}-{'-'.join(map(str, kwargs.values()))}"
+    )
     for name in sorted(OPERATIONS)
     for grid in SUPPORT[name]
     for kwargs in keywords(name, GRIDS[grid])
@@ -84,7 +103,11 @@ def test_every_operation_declares_its_points(name):
     out, points = OPERATIONS[name].__located__
     assert points, name
     for point in (*points.values(), *(out if isinstance(out, tuple) else (out,))):
-        assert point is None or point in POINT_AXES or point in ("src", "dst", "at")
+        assert (
+            point is None
+            or point in POINT_AXES
+            or point in ("src", "dst", "at", "axis")
+        )
 
 
 @pytest.mark.parametrize("masked", [False, True])
@@ -93,7 +116,9 @@ def test_the_field_path_is_the_array_path(name, grid, kwargs, masked):
     """``op(CField…).data`` equals ``op(array…, src=…)``, with max|Δ| = 0."""
     grid = GRIDS[grid]
     op = OPERATIONS[name]
-    out, points = op.__located__
+    out, _ = op.__located__
+    points = operands(name, grid)
+    absent = dict.fromkeys(set(op.__located__[1]) - set(points))
     mask = wet_mask(grid) if masked else None
     arrays = {n: array(grid, seed) for seed, n in enumerate(points)}
     fields = {
@@ -101,9 +126,11 @@ def test_the_field_path_is_the_array_path(name, grid, kwargs, masked):
         for n, a in arrays.items()
     }
     # the keywords that only name the point of an operand are inferred
-    inferred = {k: v for k, v in kwargs.items() if k not in points.values()}
-    want = op(**arrays, grid=grid, mask=mask, **kwargs)
-    got = op(**fields, grid=grid, mask=mask, **inferred)
+    inferred = {
+        k: v for k, v in kwargs.items() if k == "axis" or k not in points.values()
+    }
+    want = op(**arrays, **absent, grid=grid, mask=mask, **kwargs)
+    got = op(**fields, **absent, grid=grid, mask=mask, **inferred)
     if out is None:
         assert not isinstance(got, CField)
         np.testing.assert_array_equal(got, want)
@@ -120,7 +147,8 @@ def test_the_field_path_is_the_array_path(name, grid, kwargs, masked):
 def test_a_field_on_another_point_raises(name, grid, kwargs):
     grid = GRIDS[grid]
     op = OPERATIONS[name]
-    _, points = op.__located__
+    points = operands(name, grid)
+    absent = dict.fromkeys(set(op.__located__[1]) - set(points))
     for wrong in points:
         fields = {}
         for n, point in points.items():
@@ -129,7 +157,7 @@ def test_a_field_on_another_point_raises(name, grid, kwargs):
                 at = "U" if at == "T" else "T"
             fields[n] = CField(array(grid), grid.axes, loc=at)
         with pytest.raises(StaggerMismatchError, match=name):
-            op(**fields, grid=grid, **kwargs)
+            op(**fields, **absent, grid=grid, **kwargs)
 
 
 class TestPoints:

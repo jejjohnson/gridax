@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import inspect
 
+import _reconstruction_cases as cases
 import gridax
+from gridax.advection import kernels
 import numpy as np
 import pytest
 
@@ -20,12 +22,15 @@ except ImportError:  # the gridax-numpy-only CI job
 
 needs_jax = pytest.mark.skipif(jax is None, reason="needs JAX")
 
+LIMITERS = ("minmod", "van_leer", "superbee", "mc")
 POINTWISE = [
-    n
-    for n in gridax.__all__
-    if n.startswith(("linear_", "weno_"))
-    or n in ("minmod", "van_leer", "superbee", "mc")
+    *LIMITERS,
+    *(n for n in kernels.__all__ if n.startswith(("linear_", "weno_"))),
 ]
+
+
+def _pointwise(name: str):
+    return getattr(gridax if name in LIMITERS else kernels, name)
 
 
 @pytest.fixture(autouse=True)
@@ -45,9 +50,9 @@ def _fields(n: int, shape=(6, 7), seed: int = 0) -> list[np.ndarray]:
 
 
 def _pointwise_args(name: str) -> list[np.ndarray]:
-    n = len(inspect.signature(getattr(gridax, name)).parameters)
+    n = len(inspect.signature(_pointwise(name)).parameters)
     args = _fields(n)
-    if name in ("minmod", "van_leer", "superbee", "mc"):
+    if name in LIMITERS:
         args = [np.linspace(-3.0, 3.0, 13)]
     return args
 
@@ -58,7 +63,7 @@ def test_pointwise_family_is_covered():
 
 @pytest.mark.parametrize("name", POINTWISE)
 def test_pointwise_on_numpy_keeps_dtype(name):
-    fn = getattr(gridax, name)
+    fn = _pointwise(name)
     for dtype in (np.float32, np.float64):
         out = fn(*(a.astype(dtype) for a in _pointwise_args(name)))
         assert isinstance(out, np.ndarray) and out.dtype == dtype, name
@@ -67,7 +72,7 @@ def test_pointwise_on_numpy_keeps_dtype(name):
 @needs_jax
 @pytest.mark.parametrize("name", POINTWISE)
 def test_pointwise_numpy_equals_jax(name):
-    fn = getattr(gridax, name)
+    fn = _pointwise(name)
     args = _pointwise_args(name)
     want = fn(*args)
     got = jax.jit(fn)(*(jax.numpy.asarray(a) for a in args))
@@ -93,7 +98,7 @@ def _reconstruct(q, u, method, num_pts):
         scheme = Upwind(num_pts)
     else:
         scheme = WENO(num_pts, "z" if method == "wenoz" else "js")
-    return gridax.reconstruct(q, u, axis=-1, scheme=scheme)
+    return cases.flux(q, u, axis=-1, scheme=scheme)
 
 
 @pytest.mark.parametrize(("method", "num_pts"), RECONSTRUCT_CASES)

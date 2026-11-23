@@ -13,10 +13,13 @@ from __future__ import annotations
 
 from gridax import Advection2D, CartesianCGrid2D, Mask2D, uv_center_flux, uv_node_flux
 from gridax._src.operators._ghost import interior
+from gridax.schemes import WENO, Upwind
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
+from tests._schemes import SCHEMES
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -72,7 +75,7 @@ class TestUvCenterFluxBasic:
         h = jnp.full((Ny, Nx), C)
         u = jnp.ones((Ny, Nx))
         v = jnp.ones((Ny, Nx))
-        fe, fn = uv_center_flux(h, u, v, grid, method="upwind1")
+        fe, fn = uv_center_flux(h, u, v, grid, scheme=Upwind(1))
         # Interior face fluxes should be C * 1.0 = 3.0
         np.testing.assert_allclose(fe[1:-1, 1:-1], C, atol=1e-12)
         np.testing.assert_allclose(fn[1:-1, 1:-1], C, atol=1e-12)
@@ -84,7 +87,7 @@ class TestUvCenterFluxBasic:
         h = _smooth_field(Ny, Nx)
         u = jnp.zeros((Ny, Nx))
         v = jnp.zeros((Ny, Nx))
-        fe, fn = uv_center_flux(h, u, v, grid, method="weno5")
+        fe, fn = uv_center_flux(h, u, v, grid, scheme=WENO(5))
         np.testing.assert_allclose(fe, 0.0, atol=1e-15)
         np.testing.assert_allclose(fn, 0.0, atol=1e-15)
 
@@ -95,7 +98,7 @@ class TestUvCenterFluxBasic:
         h = _smooth_field(Ny, Nx)
         u = jnp.ones((Ny, Nx))
         v = jnp.ones((Ny, Nx))
-        fe, _fn = uv_center_flux(h, u, v, grid, method="weno3")
+        fe, _fn = uv_center_flux(h, u, v, grid, scheme=WENO(3))
         # Ghost cells
         assert jnp.all(fe[0, :] == 0.0)
         assert jnp.all(fe[-1, :] == 0.0)
@@ -122,7 +125,7 @@ class TestUvNodeFluxBasic:
         q = jnp.full((Ny, Nx), C)
         u = jnp.ones((Ny, Nx))
         v = jnp.ones((Ny, Nx))
-        uq, vq = uv_node_flux(q, u, v, grid, method="upwind1")
+        uq, vq = uv_node_flux(q, u, v, grid, scheme=Upwind(1))
         np.testing.assert_allclose(uq[1:-1, 1:-1], C, atol=1e-12)
         np.testing.assert_allclose(vq[1:-1, 1:-1], C, atol=1e-12)
 
@@ -134,7 +137,7 @@ class TestUvNodeFluxBasic:
         q = jnp.broadcast_to(i_vals, (Ny, Nx))
         u = jnp.ones((Ny, Nx))  # positive x-velocity
         v = jnp.zeros((Ny, Nx))
-        uq, _vq = uv_node_flux(q, u, v, grid, method="upwind1")
+        uq, _vq = uv_node_flux(q, u, v, grid, scheme=Upwind(1))
         # With positive u, upwind1 picks q[j, i] for east face → flux = q[j, i] * u
         # Interior east-face flux at [j, i] should equal i (the left cell value)
         for j in range(2, Ny - 2):
@@ -149,7 +152,7 @@ class TestUvNodeFluxBasic:
         q = jnp.broadcast_to(j_vals, (Ny, Nx))
         u = jnp.zeros((Ny, Nx))
         v = -jnp.ones((Ny, Nx))  # negative y-velocity
-        _uq, vq = uv_node_flux(q, u, v, grid, method="upwind1")
+        _uq, vq = uv_node_flux(q, u, v, grid, scheme=Upwind(1))
         # With negative v, upwind1 picks q[j+1, i] for north face → flux = q[j+1, i] * v
         for j in range(2, Ny - 2):
             for i in range(2, Nx - 2):
@@ -189,10 +192,10 @@ class TestConsistencyWithAdvection2D:
 
         # Advection2D tendency
         adv = Advection2D(grid)
-        tendency = adv(h, u, v, method=method)
+        tendency = adv(h, u, v, scheme=SCHEMES[method])
 
         # Reconstruct from face fluxes
-        fe, fn = uv_center_flux(h, u, v, grid, method=method)
+        fe, fn = uv_center_flux(h, u, v, grid, scheme=SCHEMES[method])
         dx, dy = grid.spacing("x"), grid.spacing("y")
         tendency_from_flux = interior(
             -(
@@ -242,7 +245,7 @@ class TestAllMethods:
         h = _smooth_field(Ny, Nx)
         u = jnp.ones((Ny, Nx))
         v = jnp.ones((Ny, Nx))
-        fe, fn = uv_center_flux(h, u, v, grid, method=method)
+        fe, fn = uv_center_flux(h, u, v, grid, scheme=SCHEMES[method])
         assert jnp.all(jnp.isfinite(fe))
         assert jnp.all(jnp.isfinite(fn))
 
@@ -251,8 +254,8 @@ class TestAllMethods:
         h = jnp.ones((Ny, Nx))
         u = jnp.ones((Ny, Nx))
         v = jnp.ones((Ny, Nx))
-        with pytest.raises(ValueError, match="Unknown method"):
-            uv_center_flux(h, u, v, grid, method="bogus")
+        with pytest.raises(TypeError, match=r"gridax\.schemes"):
+            uv_center_flux(h, u, v, grid, scheme="weno5")
 
 
 # ===========================================================================
@@ -279,7 +282,7 @@ class TestMaskedFlux:
         h = _smooth_field(Ny, Nx) * jnp.asarray(mask.wet(), dtype=float)
         u = jnp.ones((Ny, Nx)) * jnp.asarray(mask.wet(at="U"), dtype=float)
         v = jnp.ones((Ny, Nx)) * jnp.asarray(mask.wet(at="V"), dtype=float)
-        fe, fn = uv_center_flux(h, u, v, grid, method=method, mask=mask)
+        fe, fn = uv_center_flux(h, u, v, grid, scheme=SCHEMES[method], mask=mask)
         assert jnp.all(jnp.isfinite(fe))
         assert jnp.all(jnp.isfinite(fn))
 
@@ -291,9 +294,9 @@ class TestMaskedFlux:
         v = 0.3 * jnp.ones((Ny, Nx)) * jnp.asarray(mask.wet(at="V"), dtype=float)
 
         adv = Advection2D(grid, mask=mask)
-        tendency = adv(h, u, v, method="weno5")
+        tendency = adv(h, u, v, scheme=WENO(5))
 
-        fe, fn = uv_center_flux(h, u, v, grid, method="weno5", mask=mask)
+        fe, fn = uv_center_flux(h, u, v, grid, scheme=WENO(5), mask=mask)
         dx, dy = grid.spacing("x"), grid.spacing("y")
         tendency_from_flux = interior(
             -(
@@ -327,7 +330,7 @@ class TestConservation:
         h = jnp.full((Ny, Nx), C)
         u = jnp.ones((Ny, Nx))
         v = jnp.ones((Ny, Nx))
-        fe, fn = uv_center_flux(h, u, v, grid, method="weno5")
+        fe, fn = uv_center_flux(h, u, v, grid, scheme=WENO(5))
 
         # Divergence at each interior cell should be zero
         dx, dy = grid.spacing("x"), grid.spacing("y")
@@ -344,8 +347,8 @@ class TestConservation:
         u = jnp.ones((Ny, Nx))
         v = jnp.ones((Ny, Nx))
 
-        fe_pos, fn_pos = uv_center_flux(h, u, v, grid, method="upwind1")
-        fe_neg, fn_neg = uv_center_flux(h, -u, -v, grid, method="upwind1")
+        fe_pos, fn_pos = uv_center_flux(h, u, v, grid, scheme=Upwind(1))
+        fe_neg, fn_neg = uv_center_flux(h, -u, -v, grid, scheme=Upwind(1))
 
         np.testing.assert_allclose(fe_pos, -fe_neg, atol=1e-12)
         np.testing.assert_allclose(fn_pos, -fn_neg, atol=1e-12)
@@ -368,11 +371,11 @@ class TestAccuracy:
         v = jnp.zeros((Ny, Nx))
 
         # Use weno9 as reference (highest-order)
-        fe_ref, _ = uv_center_flux(h, u, v, grid, method="weno9")
+        fe_ref, _ = uv_center_flux(h, u, v, grid, scheme=WENO(9))
 
-        fe_1, _ = uv_center_flux(h, u, v, grid, method="upwind1")
-        fe_3, _ = uv_center_flux(h, u, v, grid, method="weno3")
-        fe_5, _ = uv_center_flux(h, u, v, grid, method="weno5")
+        fe_1, _ = uv_center_flux(h, u, v, grid, scheme=Upwind(1))
+        fe_3, _ = uv_center_flux(h, u, v, grid, scheme=WENO(3))
+        fe_5, _ = uv_center_flux(h, u, v, grid, scheme=WENO(5))
 
         err_1 = float(jnp.linalg.norm(fe_1[2:-2, 2:-2] - fe_ref[2:-2, 2:-2]))
         err_3 = float(jnp.linalg.norm(fe_3[2:-2, 2:-2] - fe_ref[2:-2, 2:-2]))
@@ -392,10 +395,10 @@ class TestAccuracy:
         u_neg = -jnp.ones((Ny, Nx))
 
         fe_pos, _ = uv_center_flux(
-            h, u_pos, jnp.zeros((Ny, Nx)), grid, method="upwind1"
+            h, u_pos, jnp.zeros((Ny, Nx)), grid, scheme=Upwind(1)
         )
         fe_neg, _ = uv_center_flux(
-            h, u_neg, jnp.zeros((Ny, Nx)), grid, method="upwind1"
+            h, u_neg, jnp.zeros((Ny, Nx)), grid, scheme=Upwind(1)
         )
 
         # Positive flow biased left (lower values), negative biased right (higher)
@@ -420,10 +423,10 @@ class TestJaxCompat:
 
         @jax.jit
         def f(h, u, v):
-            return uv_center_flux(h, u, v, grid, method="weno3")
+            return uv_center_flux(h, u, v, grid, scheme=WENO(3))
 
         fe, fn = f(h, u, v)
-        fe_ref, fn_ref = uv_center_flux(h, u, v, grid, method="weno3")
+        fe_ref, fn_ref = uv_center_flux(h, u, v, grid, scheme=WENO(3))
         np.testing.assert_allclose(fe, fe_ref, atol=1e-14)
         np.testing.assert_allclose(fn, fn_ref, atol=1e-14)
 
@@ -436,7 +439,7 @@ class TestJaxCompat:
         v = jnp.ones((Ny, Nx))
 
         def loss(h):
-            fe, fn = uv_center_flux(h, u, v, grid, method="weno3")
+            fe, fn = uv_center_flux(h, u, v, grid, scheme=WENO(3))
             return jnp.sum(fe**2 + fn**2)
 
         grad_h = jax.grad(loss)(h)

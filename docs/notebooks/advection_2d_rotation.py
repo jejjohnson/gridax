@@ -105,6 +105,7 @@ import numpy as np
 jax.config.update("jax_enable_x64", True)
 
 import gridax as fvx
+from gridax.schemes import TVD, WENO, Upwind
 from integrix.march import rk3_ssp_step
 
 IMG_DIR = Path(__file__).resolve().parent.parent / "images" / "advection_2d_rotation"
@@ -308,7 +309,15 @@ print(f"|u|_max = {u_max:.2f}, |v|_max = {v_max:.2f}, CFL ≈ {cfl:.2f}")
 
 # %%
 advect = fvx.Advection2D(grid)
-methods_2d = ["upwind1", "upwind3", "superbee", "weno5", "weno7", "weno9"]
+SCHEMES = {
+    "upwind1": Upwind(1),
+    "upwind3": Upwind(3),
+    "superbee": TVD("superbee"),
+    "weno5": WENO(5),
+    "weno7": WENO(7),
+    "weno9": WENO(9),
+}
+methods_2d = list(SCHEMES)
 results_2d = {}
 
 # Snapshot times (fractions of period)
@@ -320,7 +329,7 @@ for method in methods_2d:
     def make_rhs(m):
         def rhs(q):
             q = enforce_periodic_2d(q, ng)
-            return advect(q, u_field, v_field, method=m)
+            return advect(q, u_field, v_field, scheme=SCHEMES[m])
 
         return rhs
 

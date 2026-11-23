@@ -52,7 +52,7 @@ pass.
    `zeros_like(h).at[1:-1, 1:-2].set(flux)` followed by
    `flux[1:-1, 1:-1] - flux[1:-1, :-2]` materialises the flux array. Compute
    only the faces the next stencil reads and add zero wall faces as a `pad`
-   of the *result* (see `diffusion._diffusion_2d_impl`). 2-D diffusion:
+   of the *result* (see `diffusion.diffuse._sides`). 2-D diffusion:
    forward and VJP ~2× faster, one fusion, no temporaries; 3-D diffusion:
    forward 2–3×, VJP 1.5–1.9×.
 

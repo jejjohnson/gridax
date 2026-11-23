@@ -24,12 +24,19 @@ from gridax._src.grid.points import (
 )
 
 #: What a point of the declaration may be: a point name, or the name of the
-#: keyword argument that gives it (``"src"``, ``"dst"``, ``"at"``).
+#: keyword argument that gives it (``"src"``, ``"dst"``, ``"at"``), or that
+#: gives the axis of the faces it is (``"axis"``).
 type Point = str
 
 
+#: The faces along each axis, for a keyword that is an axis (``axis="x"``).
+_FACES = {"x": "U", "y": "V", "z": "W"}
+
+
 def _as_stagger(point: str | Stagger) -> Stagger:
-    return point_stagger(point) if isinstance(point, str) else as_stagger(point)
+    if isinstance(point, str):
+        return point_stagger(_FACES.get(point, point))
+    return as_stagger(point)
 
 
 def _where(stagger: Stagger) -> Any:
@@ -63,7 +70,9 @@ def located[F: Callable[..., Any]](
     Notes
     -----
     Located operands must have the same dims, whatever their order; the
-    result has the order of the first. A plain array next to a field may only
+    result has the order of the first. A later operand may lack the leading
+    ones (a Coriolis parameter without the levels of the velocity), and
+    broadcasts over them. A plain array next to a field may only
     broadcast, as in `gridax.combine`. A reduction returns a plain array, or a
     ``pipekit_array.DimArray`` if other dims are left.
     """
@@ -96,7 +105,8 @@ def _call(
     undeclared = sorted(set(fields) - set(points))
     if undeclared:
         raise TypeError(f"{fn.__name__} takes no CField for {undeclared}")
-    first = next(iter(fields.values()))
+    # the field with the most dims, the first of those
+    first = max(fields.values(), key=lambda x: x.ndim)
     missing = [axis for axis in grid.axes if axis not in first.dims]
     if missing:
         raise ValueError(f"{first!r} has no dims {missing} of the grid")
@@ -117,7 +127,8 @@ def _call(
             _check_plain(x, first.transpose(canonical), i)
             continue
         _check_point(fn, name, x, point, values)
-        if set(x.dims) != set(canonical):
+        own = canonical[len(canonical) - x.ndim :]
+        if set(x.dims) != set(own):
             raise ValueError(f"{name} has dims {x.dims}, not {first.dims}")
         for dim in others:
             if (
@@ -125,7 +136,7 @@ def _call(
                 and labels.setdefault(dim, x.labels[dim]) != x.labels[dim]
             ):
                 raise ValueError(f"{name} has other labels on {dim!r}")
-        values[name] = x.transpose(canonical).data
+        values[name] = x.transpose(own).data
 
     result = fn(**values)
     if out is None:

@@ -72,6 +72,7 @@ import numpy as np
 jax.config.update("jax_enable_x64", True)
 
 import gridax as fvx
+from gridax.schemes import Upwind
 from integrix.march import heun_step
 
 IMG_DIR = Path(__file__).resolve().parent.parent / "images" / "shallow_water"
@@ -200,12 +201,12 @@ print(
 #
 # ```python
 # adv_op = fvx.Advection2D(grid=grid)
-# tendency = adv_op(h, u, v, method="upwind1")
+# tendency = adv_op(h, u, v, scheme=Upwind(1))
 # ```
 #
 # - `h` is the scalar field being advected (at T-points).
 # - `u`, `v` are the advecting velocities (at U- and V-points).
-# - `method="upwind1"` selects first-order upwind reconstruction; higher
+# - `scheme=Upwind(1)` selects first-order upwind reconstruction; higher
 #   orders (`"weno3"`, `"weno5"`, etc.) are also available.
 #
 # The operator returns the tendency $-\nabla \cdot (h\,\mathbf{u})$,
@@ -222,7 +223,7 @@ test_h = pad_to_full(np.sin(np.pi * x_2d / Lx) * np.sin(np.pi * y_2d / Ly))
 test_u = pad_to_full(0.01 * np.ones_like(x_2d))
 test_v = jnp.zeros_like(test_h)
 
-adv_tendency = adv(test_h, test_u, test_v, method="upwind1")
+adv_tendency = adv(test_h, test_u, test_v, scheme=Upwind(1))
 print(f"Advection tendency shape: {adv_tendency.shape}")
 print(f"max |tendency|: {float(jnp.abs(adv_tendency[1:-1, 1:-1]).max()):.4e}")
 
@@ -250,7 +251,7 @@ print(f"max |tendency|: {float(jnp.abs(adv_tendency[1:-1, 1:-1]).max()):.4e}")
 #
 # ```python
 # layer_depth = mean_depth + eta
-# eta_rhs = adv(layer_depth, u, v, method="upwind1")  # -div((H+eta)*u)
+# eta_rhs = adv(layer_depth, u, v, scheme=Upwind(1))  # -div((H+eta)*u)
 # eta_rhs = eta_rhs + viscosity * diff.laplacian(eta)  # + nu * lap(eta)
 # ```
 #
@@ -261,7 +262,7 @@ print(f"max |tendency|: {float(jnp.abs(adv_tendency[1:-1, 1:-1]).max()):.4e}")
 # %%
 # Demonstrate the nonlinear continuity tendency
 layer_depth = mean_depth + eta
-eta_rhs_nonlinear = adv(layer_depth, u, v, method="upwind1")
+eta_rhs_nonlinear = adv(layer_depth, u, v, scheme=Upwind(1))
 eta_rhs_nonlinear = eta_rhs_nonlinear + viscosity * diff.laplacian(eta)
 
 # Compare with the linear version
@@ -356,7 +357,7 @@ def tendency(eta_field, u_field, v_field):
         layer_depth,
         u_field,
         v_field,  # -div((H+eta)*u) [Ny, Nx]
-        method="upwind1",
+        scheme=Upwind(1),
     )
     eta_rhs = eta_rhs + viscosity * diff.laplacian(eta_field)  # + nu*lap(eta)
 

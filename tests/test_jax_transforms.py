@@ -12,7 +12,8 @@ from gridax import (
     CartesianCGrid3D,
 )
 from gridax._src.advection.reconstruction import Reconstruction1D, Reconstruction2D
-from gridax._src.diffusion.diffusion import Diffusion2D, diffusion_2d
+from gridax._src.diffusion.diffuse import diffuse
+from gridax._src.diffusion.diffusion import Diffusion2D
 from gridax._src.operators.difference import (
     Difference1D,
     Difference2D,
@@ -321,12 +322,8 @@ class TestJitDiffusion:
         x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
         h = jnp.broadcast_to(x**2, (grid2d.Ny, grid2d.Nx))
 
-        eager = diffusion_2d(
-            h, kappa=1.0, dx=grid2d.spacing("x"), dy=grid2d.spacing("y")
-        )
-        jitted = jax.jit(diffusion_2d, static_argnums=(2, 3))(
-            h, 1.0, grid2d.spacing("x"), grid2d.spacing("y")
-        )
+        eager = diffuse(h, grid2d, kappa=1.0)
+        jitted = jax.jit(lambda h, grid: diffuse(h, grid, kappa=1.0))(h, grid2d)
 
         np.testing.assert_allclose(jitted, eager, rtol=1e-7)
 

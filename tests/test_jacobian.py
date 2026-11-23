@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from gridax import arakawa_jacobian
+from gridax._src.operators.jacobian import _jacobian
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -71,13 +71,13 @@ class TestArakawaJacobianShape:
     def test_output_shape_2d(self, grid_2d):
         X, Y, dx, dy = grid_2d
         Ny, Nx = X.shape
-        J = arakawa_jacobian(X, Y, dx, dy)
+        J = _jacobian(X, Y, dx, dy)
         assert J.shape == (Ny - 2, Nx - 2)
 
     def test_output_shape_nonsquare(self, grid_nonsquare):
         X, Y, dx, dy = grid_nonsquare
         Ny, Nx = X.shape
-        J = arakawa_jacobian(X, Y, dx, dy)
+        J = _jacobian(X, Y, dx, dy)
         assert J.shape == (Ny - 2, Nx - 2)
 
     def test_output_shape_batched(self):
@@ -85,7 +85,7 @@ class TestArakawaJacobianShape:
         Nz, Ny, Nx = 4, 12, 10
         f = jnp.ones((Nz, Ny, Nx))
         g = jnp.ones((Nz, Ny, Nx))
-        J = arakawa_jacobian(f, g, 1.0, 1.0)
+        J = _jacobian(f, g, 1.0, 1.0)
         assert J.shape == (Nz, Ny - 2, Nx - 2)
 
 
@@ -95,8 +95,8 @@ class TestArakawaJacobianSymmetry:
         X, Y, dx, dy = grid_2d
         f = jnp.sin(X) * jnp.cos(Y)
         g = jnp.cos(X) * jnp.sin(Y)
-        Jfg = arakawa_jacobian(f, g, dx, dy)
-        Jgf = arakawa_jacobian(g, f, dx, dy)
+        Jfg = _jacobian(f, g, dx, dy)
+        Jgf = _jacobian(g, f, dx, dy)
         # Algebraically exact; tolerance covers float32 rounding (~1 ULP ~1e-7)
         np.testing.assert_allclose(Jfg, -Jgf, atol=1e-7)
 
@@ -104,7 +104,7 @@ class TestArakawaJacobianSymmetry:
         """J(f, f) = 0 for any f (algebraic identity)."""
         X, Y, dx, dy = grid_2d
         f = jnp.sin(X + Y)
-        J = arakawa_jacobian(f, f, dx, dy)
+        J = _jacobian(f, f, dx, dy)
         # Exactly zero in exact arithmetic; float32 rounding ~1e-8
         np.testing.assert_allclose(J, 0.0, atol=1e-7)
 
@@ -112,7 +112,7 @@ class TestArakawaJacobianSymmetry:
         """J(f, f) = 0 on a non-square grid."""
         X, Y, dx, dy = grid_nonsquare
         f = X**2 + Y**2
-        J = arakawa_jacobian(f, f, dx, dy)
+        J = _jacobian(f, f, dx, dy)
         np.testing.assert_allclose(J, 0.0, atol=1e-7)
 
 
@@ -133,7 +133,7 @@ class TestArakawaJacobianConservation:
         g = _periodic_field(
             Ny, Nx, lambda j, i: jnp.cos(2 * jnp.pi * j) + jnp.sin(2 * jnp.pi * i)
         )
-        J = arakawa_jacobian(f, g, 1.0, 1.0)
+        J = _jacobian(f, g, 1.0, 1.0)
         # Algebraically zero for periodic BCs; float32 precision ~1e-6
         np.testing.assert_allclose(float(jnp.sum(J)), 0.0, atol=1e-6)
 
@@ -146,7 +146,7 @@ class TestArakawaJacobianConservation:
         g = _periodic_field(
             Ny, Nx, lambda j, i: jnp.cos(2 * jnp.pi * j) + jnp.sin(2 * jnp.pi * i)
         )
-        J = arakawa_jacobian(f, g, 1.0, 1.0)
+        J = _jacobian(f, g, 1.0, 1.0)
         f_int = f[1:-1, 1:-1]
         np.testing.assert_allclose(float(jnp.sum(f_int * J)), 0.0, atol=1e-6)
 
@@ -159,7 +159,7 @@ class TestArakawaJacobianConservation:
         g = _periodic_field(
             Ny, Nx, lambda j, i: jnp.cos(2 * jnp.pi * j) + jnp.sin(2 * jnp.pi * i)
         )
-        J = arakawa_jacobian(f, g, 1.0, 1.0)
+        J = _jacobian(f, g, 1.0, 1.0)
         g_int = g[1:-1, 1:-1]
         np.testing.assert_allclose(float(jnp.sum(g_int * J)), 0.0, atol=1e-6)
 
@@ -172,7 +172,7 @@ class TestArakawaJacobianConservation:
         g = _periodic_field(
             Ny, Nx, lambda j, i: jnp.cos(2 * jnp.pi * j) + jnp.sin(2 * jnp.pi * i)
         )
-        J = arakawa_jacobian(f, g, 0.5, 1.0)
+        J = _jacobian(f, g, 0.5, 1.0)
         # Slightly wider tolerance for non-square grids due to dx scaling in float32
         np.testing.assert_allclose(float(jnp.sum(J)), 0.0, atol=1e-5)
 
@@ -191,7 +191,7 @@ class TestArakawaJacobianAnalytical:
         y = jnp.arange(Ny, dtype=float)
         X, Y = jnp.meshgrid(x, y)
         # J(x, y) = ∂x/∂x * ∂y/∂y - ∂x/∂y * ∂y/∂x = 1*1 - 0*0 = 1
-        J = arakawa_jacobian(X, Y, dx, dy)
+        J = _jacobian(X, Y, dx, dy)
         np.testing.assert_allclose(J, 1.0, atol=1e-6)
 
     def test_quadratic_known_jacobian(self):
@@ -206,7 +206,7 @@ class TestArakawaJacobianAnalytical:
         #        = y * 0 - x * 2x = -2x²
         f = X * Y
         g = X**2
-        J = arakawa_jacobian(f, g, dx, dy)
+        J = _jacobian(f, g, dx, dy)
         X_int = X[1:-1, 1:-1]
         expected = -2.0 * X_int**2
         # Second-order accurate; O(h²) truncation error
@@ -217,7 +217,7 @@ class TestArakawaJacobianAnalytical:
         Ny, Nx = 12, 10
         f = jnp.arange(Ny * Nx, dtype=float).reshape(Ny, Nx)
         g = jnp.full((Ny, Nx), 3.14)
-        J = arakawa_jacobian(f, g, 1.0, 1.0)
+        J = _jacobian(f, g, 1.0, 1.0)
         np.testing.assert_allclose(J, 0.0, atol=1e-6)
 
     def test_constant_f_zero_jacobian(self):
@@ -225,7 +225,7 @@ class TestArakawaJacobianAnalytical:
         Ny, Nx = 12, 10
         f = jnp.full((Ny, Nx), 2.71)
         g = jnp.arange(Ny * Nx, dtype=float).reshape(Ny, Nx)
-        J = arakawa_jacobian(f, g, 1.0, 1.0)
+        J = _jacobian(f, g, 1.0, 1.0)
         np.testing.assert_allclose(J, 0.0, atol=1e-6)
 
 
@@ -242,8 +242,8 @@ class TestArakawaJacobianJAX:
         X, Y, dx, dy = grid_2d
         f = jnp.sin(X) * jnp.cos(Y)
         g = jnp.cos(X) * jnp.sin(Y)
-        J_eager = arakawa_jacobian(f, g, dx, dy)
-        J_jit = jax.jit(arakawa_jacobian, static_argnums=(2, 3))(f, g, dx, dy)
+        J_eager = _jacobian(f, g, dx, dy)
+        J_jit = jax.jit(_jacobian, static_argnums=(2, 3))(f, g, dx, dy)
         # JIT and eager produce bit-identical results in practice;
         # 1e-7 covers any reordering differences in float32
         np.testing.assert_allclose(J_jit, J_eager, atol=1e-7)
@@ -257,6 +257,6 @@ class TestArakawaJacobianJAX:
         X, Y = jnp.meshgrid(x, y)
         g = jnp.broadcast_to(jnp.sin(X) * jnp.cos(Y), (Nz, Ny, Nx))
 
-        J_batched = arakawa_jacobian(f, g, 1.0, 1.0)
-        J_loop = jnp.stack([arakawa_jacobian(f[k], g[k], 1.0, 1.0) for k in range(Nz)])
+        J_batched = _jacobian(f, g, 1.0, 1.0)
+        J_loop = jnp.stack([_jacobian(f[k], g[k], 1.0, 1.0) for k in range(Nz)])
         np.testing.assert_allclose(J_batched, J_loop, atol=1e-6)
