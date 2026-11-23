@@ -366,22 +366,40 @@ print(h[2, 3])  # the mean of the copies of h[2, 2] and h[1, 3]
 - A periodic face says nothing about a coast, and neither does a face left out. `coast=` gives the conditions of the coasts, axis by axis, where the faces do not.
 - No wet point is written. The first layer reads wet points only, so land may hold `NaN`; layer $k$ reads $\phi_k$, and `Extrapolation` `order + 1` points, which a narrow strait may not have.
 
-## Helpers
+## Regions
 
-### `pad_interior`
-
-Pads a field array *from* an interior-only view *to* the full `[Ny, Nx]`
-ghost-ring layout.  Useful when you have a field defined only on interior
-points and need to apply ghost-cell BCs:
+Four functions read and write parts of a field by name, with static slices, so they run under `jit` and `vmap`. They take plain arrays, with any leading axes, and `CField`s, whose point they know.
 
 ```python
-from gridax import pad_interior
+import gridax
+import numpy as np
 
-q_interior = jnp.ones((Ny - 2, Nx - 2))   # interior only
-q_full     = pad_interior(q_interior, mode="constant", constant_values=0.0)
+grid = gridax.CartesianCGrid2D.from_interior(4, 3, 4.0, 3.0)
+f = np.arange(30.0).reshape(grid.shape)  # [Ny, Nx] = [5, 6]
+
+inner = gridax.interior(f, grid)  # [3, 4]: without the ghost ring
+zeroed = gridax.embed(inner, grid)  # [5, 6]: with a zero ring, fill=0
+north = gridax.select(f, grid, "north")  # [6]: the north ghost row
+wall = gridax.select(f, grid, "wall_east", stagger="U")  # [3]: the U nodes on the east wall
+
+mask = gridax.Mask2D.from_grid(grid, np.ones(grid.shape, dtype=bool))
+u = gridax.apply_mask(f, mask, at="U")  # zero on the dry U points
 ```
 
-Supported modes match `jnp.pad`: `"constant"`, `"edge"`, `"reflect"`, `"wrap"`.
+| Region of `select` | What it is | Shape on `[*b, Ny+2, Nx+2]` |
+|---|---|---|
+| `"interior"` | everything but the ghost ring | `[*b, Ny, Nx]` |
+| `"ghost"` | the ghost ring, flattened | `[*b, 2(Ny+2) + 2Nx]` |
+| `"south"`, `"north"` | one ghost row | `[*b, Nx+2]` |
+| `"west"`, `"east"` | one ghost column | `[*b, Ny+2]` |
+| `"wall_south"`, … | the first row or column inside that face | `[*b, Nx]` or `[*b, Ny]` |
+| `"corners"` | the four ghost corners | `[*b, 4]` |
+
+A face is also `(axis, "low")` or `(axis, "high")`. Which row or column a wall is depends on the point: the east wall of a U field is the face at `Nx`, and that of a T field the last column of cells.
+
+`gridax.stencils.interior(values, like)` is another thing, the Layer 1 padding that puts the interior result of a raw stencil back on a full array.
+
+## Helpers
 
 ### `enforce_periodic`
 

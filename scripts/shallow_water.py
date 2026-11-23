@@ -50,7 +50,8 @@ from gridax import (
     Difference2D,
     Interpolation2D,
     Vorticity2D,
-    pad_interior,
+    embed,
+    interior,
 )
 from gridax.schemes import Upwind
 from integrix.march import heun_step
@@ -401,7 +402,7 @@ def run_simulation(config: ShallowWaterConfig | None = None) -> xr.Dataset:
 
     def apply_bc(state: tuple[Array, ...]) -> tuple[Array, ...]:
         """Re-apply wall (zero ghost-cell) boundary conditions."""
-        return tuple(pad_interior(f, mode="constant") for f in state)
+        return tuple(embed(interior(f, grid), grid) for f in state)
 
     def rhs(state: tuple[Array, ...]) -> tuple[Array, Array, Array]:
         """Tendency with BC enforcement, for use with heun_step."""

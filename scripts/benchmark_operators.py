@@ -42,6 +42,7 @@ import time
 
 import gridax as fvx
 from gridax.schemes import TVD, WENO, Upwind
+from gridax.stencils import interior
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -76,7 +77,7 @@ def _okubo_weiss_fn(u, v):
     grid = fvx.CartesianCGrid2D.from_interior(nx - 2, ny - 2, nx - 2.0, ny - 2.0)
     ss = fvx.shear_strain(u, v, grid)
     sn = fvx.tensor_strain(u, v, grid)
-    om = fvx.interior(fvx.diff_x_fwd_2d(v) - fvx.diff_y_fwd_2d(u), u)
+    om = interior(fvx.diff_x_fwd_2d(v) - fvx.diff_y_fwd_2d(u), u)
     return fvx.okubo_weiss(sn, ss, om)
 
 

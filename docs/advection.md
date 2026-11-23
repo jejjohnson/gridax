@@ -484,10 +484,10 @@ from gridax import (
     Advection2D,
     CartesianCGrid2D,
     Interpolation2D,
-    interior,
     rusanov_flux,
 )
 from gridax.schemes import WENO, Upwind
+from gridax.stencils import interior
 
 grid = CartesianCGrid2D.from_interior(16, 16, 1.0, 1.0)
 y, x = jnp.meshgrid(jnp.arange(grid.Ny), jnp.arange(grid.Nx), indexing="ij")

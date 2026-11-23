@@ -322,7 +322,7 @@ def apply_bc(state):
     no-normal-flow at the basin walls for velocity, and homogeneous
     Dirichlet for eta.
     """
-    return tuple(fvx.pad_interior(f, mode="constant") for f in state)
+    return tuple(fvx.embed(fvx.interior(f, grid), grid) for f in state)
 
 
 def rhs(state):
@@ -528,6 +528,6 @@ print(f"Saved: {IMG_DIR / 'demo_results.png'}")
 # | **Interpolation** | `Interpolation2D(grid)` | `T_to_U`, `T_to_V`, `V_to_U`, `U_to_V`, `U_to_T`, `V_to_T`, `X_to_T` |
 # | **Vorticity** | `Vorticity2D(grid)` | `relative_vorticity` at corner (X) points |
 # | **Time stepping** | `heun_step(state, rhs, dt)` | Heun / modified Euler (RK2) |
-# | **Boundary conditions** | `pad_interior(field, mode="constant")` | Zero ghost cells = solid walls |
+# | **Boundary conditions** | `embed(interior(field, grid), grid)` | Zero ghost cells = solid walls |
 # | **Variable placement** | T-points (centres), U-points (east faces), V-points (north faces) | Standard Arakawa C-grid staggering |
 # | **Coriolis coupling** | Interpolate $f$ to U/V, cross-average $v$ to U / $u$ to V | Ensures energy-conserving discretisation |

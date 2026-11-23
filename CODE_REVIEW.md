@@ -157,7 +157,7 @@ order); review what they cannot see.
 dh_dx = jnp.zeros_like(h).at[1:-1, 1:-1].set((h[1:-1, 1:-1] - h[1:-1, :-2]) / dx)
 
 # ✅ dh_dx[j, i+1/2] = (h[j, i+1] - h[j, i]) / dx — equal to Difference2D.diff_x_T_to_U
-dh_dx = fvx.interior(fvx.diff_x_fwd_2d(h) / dx, h)
+dh_dx = interior(fvx.diff_x_fwd_2d(h) / dx, h)
 ```
 
 ### NaN on land: sanitise the input, not only the output

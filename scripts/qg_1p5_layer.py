@@ -82,7 +82,8 @@ from gridax import (
     Difference2D,
     Interpolation2D,
     Vorticity2D,
-    pad_interior,
+    embed,
+    interior,
 )
 from gridax.schemes import Upwind
 from gridax.solvers import solve_helmholtz_dst
@@ -479,7 +480,7 @@ def run_simulation(config: QuasiGeostrophicConfig | None = None) -> xr.Dataset:
 
     def apply_bc(q_field: Array) -> Array:
         """Re-apply wall (zero ghost-cell) boundary conditions."""
-        return pad_interior(q_field, mode="constant")
+        return embed(interior(q_field, grid), grid)
 
     def pv_tendency(q_field: Array) -> Array:
         """PV tendency with BC enforcement, for use with heun_step."""

@@ -32,41 +32,6 @@ def _fill(field: Float[Array, "*batch Ny Nx"], bc: BC, point: str = "T") -> Any:
     return fill_ghosts(field, grid, bc, stagger=point)
 
 
-def pad_interior(
-    field: Float[Array, "*batch Ny Nx"], mode: str = "edge"
-) -> Float[Array, "*batch Ny Nx"]:
-    """Extract physical interior and re-pad to original size.
-
-    Strips the ghost-cell ring, then re-pads using the requested mode.
-    Useful for enforcing boundary conditions by re-filling the ghost ring.
-
-    Parameters
-    ----------
-    field : Float[Array, "*batch Ny Nx"]
-        Input array of shape [Ny, Nx].
-    mode : str, optional
-        Padding mode passed to ``jnp.pad``.  Defaults to ``'edge'``
-        (copy nearest interior value into ghost cells).
-
-    Returns
-    -------
-    Float[Array, "*batch Ny Nx"]
-        Array of shape [Ny, Nx] with ghost cells re-filled.
-
-    Examples
-    --------
-    >>> import jax.numpy as jnp
-    >>> f = jnp.ones((6, 6))
-    >>> pad_interior(f).shape
-    (6, 6)
-    """
-    xp = array_namespace(field)
-    if mode == "edge":
-        return _fill(field, BC(x=Outflow(), y=Outflow(), corners="priority"))
-    interior = field[..., 1:-1, 1:-1]  # shape [Ny-2, Nx-2]
-    return xp.pad(interior, _pad_last2(field.ndim, 1), mode=mode)  # [..., Ny, Nx]
-
-
 def enforce_periodic(
     field: Float[Array, "*batch Ny Nx"],
 ) -> Float[Array, "*batch Ny Nx"]:

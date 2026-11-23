@@ -405,14 +405,14 @@ print(f"d_v   max: {float(jnp.abs(d_v[1:-1, 1:-1]).max()):.4e}")
 #
 # We use `integrix.march.heun_step` (Heun/RK2 predictor-corrector) and
 # run a short integration of 500 steps.  After each step, we re-apply
-# wall boundary conditions (zero ghost cells) using `fvx.pad_interior`.
+# wall boundary conditions (zero ghost cells) using `fvx.embed(fvx.interior(f, grid), grid)`.
 
 # %%
 
 
 def apply_bc(state):
     """Re-apply solid-wall BCs (zero ghost cells)."""
-    return tuple(fvx.pad_interior(f, mode="constant") for f in state)
+    return tuple(fvx.embed(fvx.interior(f, grid), grid) for f in state)
 
 
 def rhs(state):
@@ -606,4 +606,4 @@ plt.show()
 # | `Advection2D` | Upwind flux advection $-\nabla\cdot(h\,\mathbf{u})$ |
 # | `Vorticity2D` | Relative vorticity at corner (X) points |
 # | `heun_step` | Heun/RK2 time integrator |
-# | `pad_interior` | Re-apply ghost-cell boundary conditions |
+# | `embed`, `interior` | Re-apply ghost-cell boundary conditions |

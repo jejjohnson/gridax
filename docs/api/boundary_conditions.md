@@ -32,4 +32,12 @@ Boundary conditions and the ghost-ring fill for staggered C-grid fields.
 
 ::: gridax.enforce_periodic
 
-::: gridax.pad_interior
+## Regions
+
+::: gridax.interior
+
+::: gridax.embed
+
+::: gridax.select
+
+::: gridax.apply_mask

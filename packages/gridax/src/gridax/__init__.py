@@ -81,12 +81,12 @@ from gridax._src.boundary.boundary import (
     free_slip_boundaries,
     no_flux_boundaries,
     no_slip_boundaries,
-    pad_interior,
     wall_boundaries,
     zero_boundaries,
     zero_gradient_boundaries,
 )
 from gridax._src.boundary.fill import BC, fill_ghosts
+from gridax._src.boundary.regions import apply_mask, embed, interior, select
 from gridax._src.diffusion.diffuse import biharmonic, diffuse
 from gridax._src.diffusion.diffusion import (
     BiharmonicDiffusion2D,
@@ -149,7 +149,6 @@ from gridax._src.mask import (
     make_sponge,
     pool_bool,
 )
-from gridax._src.operators._ghost import interior
 from gridax._src.operators.calculus import (
     curl,
     divergence,
@@ -372,7 +371,6 @@ __all__ = [
     "avg_xbwd_ybwd_3d",
     "avg_xbwd_yfwd_3d",
     "avg_xfwd_ybwd_3d",
-    "interior",
     # Differentiable surrogates
     "smooth_abs",
     "smooth_clamp",
@@ -479,6 +477,11 @@ __all__ = [
     # Boundary conditions
     "BC",
     "fill_ghosts",
+    # Regions of a field
+    "interior",
+    "embed",
+    "select",
+    "apply_mask",
     "Dirichlet",
     "Neumann",
     "Robin",
@@ -494,7 +497,6 @@ __all__ = [
     "free_slip_boundaries",
     "no_flux_boundaries",
     "no_slip_boundaries",
-    "pad_interior",
     "wall_boundaries",
     "zero_boundaries",
     "zero_gradient_boundaries",

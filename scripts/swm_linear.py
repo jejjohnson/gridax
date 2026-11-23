@@ -47,7 +47,8 @@ from gridax import (
     Difference2D,
     Interpolation2D,
     Vorticity2D,
-    pad_interior,
+    embed,
+    interior,
 )
 from integrix.march import heun_step
 import matplotlib.pyplot as plt
@@ -395,7 +396,7 @@ def run_simulation(config: LinearShallowWaterConfig | None = None) -> xr.Dataset
         state: tuple[Float[Array, "Ny Nx"], ...],
     ) -> tuple[Float[Array, "Ny Nx"], ...]:
         """Re-apply wall (zero ghost-cell) boundary conditions."""
-        return tuple(pad_interior(f, mode="constant") for f in state)
+        return tuple(embed(interior(f, grid), grid) for f in state)
 
     def rhs(
         state: tuple[Float[Array, "Ny Nx"], ...],
