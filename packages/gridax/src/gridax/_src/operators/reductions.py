@@ -5,16 +5,15 @@ Provides scalar totals and means of T-point fields that account for
 the correct per-cell metric on Cartesian and spherical grids:
 
     Cartesian T-cell area  = dx · dy
-    Spherical T-cell area  = R² · cos(lat_T) · dlon · dlat
+    Spherical T-cell area  = 2 R² · dlon · sin(dlat / 2) · cos(lat_T)
     3-D T-cell volume      = area · dz
 
 Only physical interior cells contribute — the ghost ring is excluded
 by construction.  When a mask is supplied, dry cells are excluded from
 both the numerator and the denominator of ``*_mean``.
 
-The polymorphic dispatchers :func:`area_sum`, :func:`area_mean`,
-:func:`volume_sum`, :func:`volume_mean` choose the right metric at
-runtime based on the grid type, so user code can stay grid-agnostic.
+:func:`area_sum`, :func:`area_mean`, :func:`volume_sum` and
+:func:`volume_mean` dispatch on the type of the grid.
 
 Example
 -------
@@ -32,11 +31,12 @@ from typing import TYPE_CHECKING, Any
 from jaxtyping import Bool, Float
 import numpy as np
 
+from gridax._src.api import grid_dispatch
 from gridax._src.grid import (
-    ArakawaCGrid2D,
-    ArakawaCGrid3D,
     CartesianCGrid2D,
     CartesianCGrid3D,
+    CurvilinearGrid2D,
+    CurvilinearGrid3D,
     SphericalCGrid2D,
     SphericalCGrid3D,
 )
@@ -56,16 +56,13 @@ else:
 # ----------------------------------------------------------------------
 
 
-def cartesian_area_weights(
-    grid: CartesianCGrid2D, *, xp: Any = None
-) -> Float[Array, "Ny Nx"]:
-    """T-cell areas on a Cartesian grid.
-
-    ``A[j, i] = dx · dy`` broadcast to the grid shape.
+def area_weights(grid: CurvilinearGrid2D, *, xp: Any = None) -> Float[Array, "Ny Nx"]:
+    """The T-cell areas of a 2-D grid: ``grid.area()`` in a chosen namespace.
 
     Parameters
     ----------
-    grid : CartesianCGrid2D
+    grid : CurvilinearGrid2D
+        A Cartesian or spherical 2-D grid.
     xp : array namespace, optional
         The namespace to build the weights in. Default: the namespace of
         the grid's own arrays (NumPy for a grid built with ``from_interior``,
@@ -75,107 +72,33 @@ def cartesian_area_weights(
     Returns
     -------
     Float[Array, "Ny Nx"]
-        Per-cell area, constant everywhere.
-    """
-    return grid._area(xp=xp)
-
-
-def spherical_area_weights(
-    grid: SphericalCGrid2D, *, xp: Any = None
-) -> Float[Array, "Ny Nx"]:
-    """T-cell areas on a spherical grid, exact for a lat-lon cell.
-
-    ``A[j, i] = R² · dlon · (sin lat_{j+1/2} − sin lat_{j−1/2})
-    = 2 R² · dlon · sin(dlat / 2) · cos(lat_T[j, i])``.
-
-    The two forms are the same identity; the second needs only cos(lat_T). Summed over the interior of a grid that spans
-    ``[lat_min, lat_max]`` it gives ``R² · Lλ · (sin lat_max − sin lat_min)``
-    exactly (``4πR²`` for the whole sphere), where the midpoint rule
-    ``R² cos(lat_T) dlon dlat`` overestimates by ``dlat / (2 sin(dlat/2))``.
-
-    A cell whose ``cos(lat_T)`` is negative (a ghost row past a pole) or
-    indistinguishable from zero (within ``8 eps`` of the dtype) gets weight
-    zero, so the weights are never negative in float32 or float64.
-
-    Parameters
-    ----------
-    grid : SphericalCGrid2D
-    xp : array namespace, optional
-        The namespace to build the weights in. Default: the namespace of
-        the grid's own arrays (NumPy for a grid built with ``from_interior``,
-        JAX when the grid's leaves are traced). The reductions pass the
-        field's namespace.
-
-    Returns
-    -------
-    Float[Array, "Ny Nx"]
-        Per-T-cell area.
-    """
-    return grid._area(xp=xp)
-
-
-def area_weights(grid: ArakawaCGrid2D, *, xp: Any = None) -> Float[Array, "Ny Nx"]:
-    """Dispatch to :func:`cartesian_area_weights` or :func:`spherical_area_weights`.
-
-    Parameters
-    ----------
-    grid : ArakawaCGrid2D
-        A concrete 2-D grid (Cartesian or spherical).
-    xp : array namespace, optional
-        The namespace to build the weights in. Default: the namespace of
-        the grid's own arrays (NumPy for a grid built with ``from_interior``,
-        JAX when the grid's leaves are traced). The reductions pass the
-        field's namespace.
-
-    Returns
-    -------
-    Float[Array, "Ny Nx"]
-        Per-T-cell area on the supplied grid.
+        Per-T-cell area, exact for a lat-lon cell.
 
     Raises
     ------
     TypeError
-        If the grid type is not recognized.
+        If the grid is not a 2-D one.
     """
-    if isinstance(grid, SphericalCGrid2D):
-        return spherical_area_weights(grid, xp=xp)
-    if isinstance(grid, CartesianCGrid2D):
-        return cartesian_area_weights(grid, xp=xp)
+    if isinstance(grid, CurvilinearGrid2D):
+        return grid._area(xp=xp)
     raise TypeError(
         f"area_weights: unsupported grid type {type(grid).__name__}. "
         "Use CartesianCGrid2D or SphericalCGrid2D."
     )
 
 
-def cartesian_volume_weights(
-    grid: CartesianCGrid3D, *, xp: Any = None
+def volume_weights(
+    grid: CurvilinearGrid3D, *, xp: Any = None
 ) -> Float[Array, "Nz Ny Nx"]:
-    """T-cell volumes on a Cartesian 3-D grid: ``dx · dy · dz`` (``xp`` as in :func:`area_weights`)."""
-    cell = grid.spacing("x") * grid.spacing("y") * grid.spacing("z")
-    xp = array_namespace(cell) if xp is None else xp
-    return xp.full((grid.Nz, grid.Ny, grid.Nx), cell)
-
-
-def spherical_volume_weights(
-    grid: SphericalCGrid3D, *, xp: Any = None
-) -> Float[Array, "Nz Ny Nx"]:
-    """T-cell volumes on a spherical 3-D grid.
-
-    ``V[k, j, i] = R² · cos(lat_T[j, i]) · dlon · dlat · dz`` — the
-    horizontal area broadcast over z, times the uniform vertical
-    thickness. ``xp`` as in :func:`area_weights`.
-    """
-    area_2d = grid._area(xp=xp)
-    xp = array_namespace(area_2d) if xp is None else xp
-    return xp.broadcast_to(area_2d * grid.spacing("z"), (grid.Nz, grid.Ny, grid.Nx))
-
-
-def volume_weights(grid: ArakawaCGrid3D, *, xp: Any = None) -> Float[Array, "Nz Ny Nx"]:
-    """Dispatch to Cartesian/spherical volume weights (``xp`` as in :func:`area_weights`)."""
-    if isinstance(grid, SphericalCGrid3D):
-        return spherical_volume_weights(grid, xp=xp)
+    """The T-cell volumes of a 3-D grid, area times ``dz`` (``xp`` as in :func:`area_weights`)."""
     if isinstance(grid, CartesianCGrid3D):
-        return cartesian_volume_weights(grid, xp=xp)
+        cell = grid.spacing("x") * grid.spacing("y") * grid.spacing("z")
+        xp = array_namespace(cell) if xp is None else xp
+        return xp.full(grid.shape, cell)
+    if isinstance(grid, CurvilinearGrid3D):
+        area = grid._area(xp=xp)
+        xp = array_namespace(area) if xp is None else xp
+        return xp.broadcast_to(area * grid.spacing("z"), grid.shape)
     raise TypeError(
         f"volume_weights: unsupported grid type {type(grid).__name__}. "
         "Use CartesianCGrid3D or SphericalCGrid3D."
@@ -183,262 +106,179 @@ def volume_weights(grid: ArakawaCGrid3D, *, xp: Any = None) -> Float[Array, "Nz 
 
 
 # ----------------------------------------------------------------------
-# 2-D interior reductions
+# Interior reductions
 # ----------------------------------------------------------------------
 
 
-def _interior_2d(field: Float[Array, "Ny Nx"]) -> Float[Array, "Ny_i Nx_i"]:
-    """Slice physical interior (exclude 1-cell ghost ring)."""
-    return field[1:-1, 1:-1]
+def _weighted(
+    x: Float[Array, "..."], weights: Float[Array, "..."], mask: Mask2D | Mask3D | None
+) -> tuple[Float[Array, "..."], Float[Array, "..."]]:
+    """The field and the weights, zero on the dry cells, in the field's dtype.
 
-
-def _apply_mask_2d(
-    field: Float[Array, "Ny Nx"],
-    weights: Float[Array, "Ny Nx"],
-    mask: Mask2D | None,
-) -> tuple[Float[Array, "Ny Nx"], Float[Array, "Ny Nx"]]:
-    """Zero out dry cells in ``field`` and ``weights`` (2-D).
-
-    Uses ``jnp.where(mask.wet(), x, 0.0)`` rather than a multiplicative
-    float-cast mask, so that NaN/Inf values on dry T-cells — common
-    for land cells in realistic data — cannot contaminate the wet-cell
-    totals.  Returns the inputs unchanged when ``mask is None``.  The
-    dtype of ``field`` and ``weights`` is preserved.
+    Uses ``where(mask.wet(), x, 0.0)`` rather than a multiplicative
+    float-cast mask, so that NaN/Inf values on dry T-cells, common for land
+    cells in realistic data, cannot contaminate the wet-cell totals. The 0.0
+    is weakly typed, so the dtype stays that of the field.
     """
-    xp = array_namespace(field, weights)
+    xp = array_namespace(x)
+    weights = _metric_like(weights, x)
     if mask is None:
-        return field, weights
-    m = mask.wet()  # Bool[Array, "Ny Nx"]
-    # Use plain 0.0 (weak-typed) so the mask path does not introduce an
-    # upcast to float64 on top of the input dtype; the actual dtype
-    # comes from the field/weights arrays themselves.
-    safe_field = xp.where(m, field, 0.0)
-    safe_weights = xp.where(m, weights, 0.0)
-    return safe_field, safe_weights
+        return x, weights
+    wet = mask.wet()
+    return xp.where(wet, x, 0.0), xp.where(wet, weights, 0.0)
 
 
+def _sum(x: Any, weights: Any, mask: Any) -> Any:
+    """∑ w x over the interior."""
+    xp = array_namespace(x)
+    x, weights = _weighted(x, weights, mask)
+    inner = (slice(1, -1),) * x.ndim
+    return xp.sum((weights * x)[inner])
+
+
+def _mean(x: Any, weights: Any, mask: Any) -> Any:
+    """∑ w x / ∑ w over the interior, NaN where there is no wet cell."""
+    xp = array_namespace(x)
+    x, weights = _weighted(x, weights, mask)
+    inner = (slice(1, -1),) * x.ndim
+    num = xp.sum(weights[inner] * x[inner])
+    den = xp.sum(weights[inner])
+    return xp.where(den == 0.0, xp.nan, num / xp.where(den == 0.0, 1.0, den))
+
+
+@grid_dispatch
 def area_sum(
-    field: Float[Array, "Ny Nx"],
-    grid: ArakawaCGrid2D,
-    mask: Mask2D | None = None,
+    x: Float[Array, "Ny Nx"], grid: Any, *, mask: Mask2D | None = None
 ) -> Float[Array, ""]:
-    """Area-weighted sum over physical interior T-cells.
+    """Area-weighted sum over the interior T cells.
 
-    Computes ``Σ_j Σ_i A[j, i] · field[j, i]`` summed over the
-    interior ``[1:-1, 1:-1]`` only.  When ``mask`` is supplied, dry
-    T-cells are zeroed out *before* multiplication using
-    ``jnp.where(mask.wet(), field, 0.0)`` so NaN/Inf sentinels stored on
-    land cells cannot contaminate the result.
+    ``∑ⱼᵢ A[j, i] x[j, i]`` over ``[1:-1, 1:-1]``. With a mask the dry cells
+    are zeroed before the product, so a NaN or Inf on land cannot
+    contaminate the result.
 
     Parameters
     ----------
-    field : Float[Array, "Ny Nx"]
+    x : Float[Array, "Ny Nx"]
         T-point field.
-    grid : ArakawaCGrid2D
-        Cartesian or spherical 2-D grid.
-    mask : Mask2D or None, optional
-        Optional land/ocean mask.  Dry cells contribute zero.
+    grid : CartesianCGrid2D or SphericalCGrid2D
+    mask : Mask2D, optional
+        Dry cells contribute zero.
 
     Returns
     -------
     Float[Array, ""]
-        Scalar area-weighted sum.  Dtype follows the promoted dtype of
-        ``field`` and the area weights.
+        In the dtype of ``x``.
+
+    Examples
+    --------
+    >>> import gridax, numpy as np
+    >>> grid = gridax.CartesianCGrid2D.from_interior(4, 4, 2.0, 3.0)
+    >>> float(gridax.area_sum(np.ones(grid.shape), grid))
+    6.0
     """
-    xp = array_namespace(field)
-    w = _metric_like(area_weights(grid, xp=xp), field)
-    f, w = _apply_mask_2d(field, w, mask)
-    return xp.sum(_interior_2d(w * f))
+    return area_sum._impl(grid, x, mask=mask)
 
 
+@grid_dispatch
 def area_mean(
-    field: Float[Array, "Ny Nx"],
-    grid: ArakawaCGrid2D,
-    mask: Mask2D | None = None,
+    x: Float[Array, "Ny Nx"], grid: Any, *, mask: Mask2D | None = None
 ) -> Float[Array, ""]:
-    """Area-weighted mean over physical interior T-cells.
+    """Area-weighted mean over the interior T cells.
 
-    Returns ``(Σ A·field) / (Σ A)`` over wet T-cells.  Dry cells are
-    excluded from both numerator and denominator via
-    ``jnp.where(mask.wet(), ..., 0.0)``, so NaN/Inf on land does not
-    contaminate the mean.  When the total wet area is zero, returns
-    NaN rather than ±inf.
+    ``(∑ A x) / (∑ A)`` over the wet T cells; a NaN or Inf on land does not
+    contaminate it.
 
     Parameters
     ----------
-    field : Float[Array, "Ny Nx"]
+    x : Float[Array, "Ny Nx"]
         T-point field.
-    grid : ArakawaCGrid2D
-    mask : Mask2D or None, optional
+    grid : CartesianCGrid2D or SphericalCGrid2D
+    mask : Mask2D, optional
+        Dry cells are left out of both sums.
 
     Returns
     -------
     Float[Array, ""]
-        Scalar area-weighted mean, or NaN if the total wet area is 0.
+        NaN if the total wet area is zero.
+
+    Examples
+    --------
+    >>> import gridax, numpy as np
+    >>> grid = gridax.CartesianCGrid2D.from_interior(4, 4, 2.0, 3.0)
+    >>> float(gridax.area_mean(2.0 * np.ones(grid.shape), grid))
+    2.0
     """
-    xp = array_namespace(field)
-    w = _metric_like(area_weights(grid, xp=xp), field)
-    f, w = _apply_mask_2d(field, w, mask)
-    wi = _interior_2d(w)
-    num = xp.sum(wi * _interior_2d(f))
-    den = xp.sum(wi)
-    return xp.where(den == 0.0, xp.nan, num / xp.where(den == 0.0, 1.0, den))
+    return area_mean._impl(grid, x, mask=mask)
 
 
-# ----------------------------------------------------------------------
-# 3-D interior reductions
-# ----------------------------------------------------------------------
-
-
-def _interior_3d(
-    field: Float[Array, "Nz Ny Nx"],
-) -> Float[Array, "Nz_i Ny_i Nx_i"]:
-    return field[1:-1, 1:-1, 1:-1]
-
-
-def _apply_mask_3d(
-    field: Float[Array, "Nz Ny Nx"],
-    weights: Float[Array, "Nz Ny Nx"],
-    mask: Mask3D | None,
-) -> tuple[Float[Array, "Nz Ny Nx"], Float[Array, "Nz Ny Nx"]]:
-    """Zero out dry cells in ``field`` and ``weights`` (3-D).
-
-    Same NaN/Inf-safe pattern as :func:`_apply_mask_2d`.
-    """
-    xp = array_namespace(field, weights)
-    if mask is None:
-        return field, weights
-    m = mask.wet()  # Bool[Array, "Nz Ny Nx"]
-    # See _apply_mask_2d for the weak-typed 0.0 rationale.
-    safe_field = xp.where(m, field, 0.0)
-    safe_weights = xp.where(m, weights, 0.0)
-    return safe_field, safe_weights
-
-
+@grid_dispatch
 def volume_sum(
-    field: Float[Array, "Nz Ny Nx"],
-    grid: ArakawaCGrid3D,
-    mask: Mask3D | None = None,
+    x: Float[Array, "Nz Ny Nx"], grid: Any, *, mask: Mask3D | None = None
 ) -> Float[Array, ""]:
-    """Volume-weighted sum over physical interior T-cells (3-D).
+    """Volume-weighted sum over the interior T cells.
 
-    Same semantics as :func:`area_sum` but with the per-cell volume
-    metric ``V[k, j, i] = A[j, i] · dz`` and interior
-    ``[1:-1, 1:-1, 1:-1]``.  NaN/Inf-safe under masking — dry cells
-    are zeroed via ``jnp.where(mask.wet(), field, 0.0)`` before
-    multiplication.
+    :func:`area_sum` with the volumes ``V[k, j, i] = A[j, i] dz`` and the
+    interior ``[1:-1, 1:-1, 1:-1]``.
 
     Parameters
     ----------
-    field : Float[Array, "Nz Ny Nx"]
+    x : Float[Array, "Nz Ny Nx"]
         T-point field.
-    grid : ArakawaCGrid3D
-    mask : Mask3D or None, optional
+    grid : CartesianCGrid3D or SphericalCGrid3D
+    mask : Mask3D, optional
+        Dry cells contribute zero.
 
     Returns
     -------
     Float[Array, ""]
     """
-    xp = array_namespace(field)
-    w = _metric_like(volume_weights(grid, xp=xp), field)
-    f, w = _apply_mask_3d(field, w, mask)
-    return xp.sum(_interior_3d(w * f))
+    return volume_sum._impl(grid, x, mask=mask)
 
 
+@grid_dispatch
 def volume_mean(
-    field: Float[Array, "Nz Ny Nx"],
-    grid: ArakawaCGrid3D,
-    mask: Mask3D | None = None,
+    x: Float[Array, "Nz Ny Nx"], grid: Any, *, mask: Mask3D | None = None
 ) -> Float[Array, ""]:
-    """Volume-weighted mean over physical interior T-cells (3-D).
+    """Volume-weighted mean over the interior T cells, ``(∑ V x) / (∑ V)``.
 
-    Returns ``(Σ V·field) / (Σ V)`` over wet T-cells.  NaN/Inf-safe
-    under masking; NaN when the total wet volume is zero.
+    Parameters
+    ----------
+    x : Float[Array, "Nz Ny Nx"]
+        T-point field.
+    grid : CartesianCGrid3D or SphericalCGrid3D
+    mask : Mask3D, optional
+        Dry cells are left out of both sums.
+
+    Returns
+    -------
+    Float[Array, ""]
+        NaN if the total wet volume is zero.
     """
-    xp = array_namespace(field)
-    w = _metric_like(volume_weights(grid, xp=xp), field)
-    f, w = _apply_mask_3d(field, w, mask)
-    wi = _interior_3d(w)
-    num = xp.sum(wi * _interior_3d(f))
-    den = xp.sum(wi)
-    return xp.where(den == 0.0, xp.nan, num / xp.where(den == 0.0, 1.0, den))
+    return volume_mean._impl(grid, x, mask=mask)
 
 
-# ----------------------------------------------------------------------
-# Explicit per-coordinate convenience aliases
-# ----------------------------------------------------------------------
+@area_sum.register(CartesianCGrid2D)
+@area_sum.register(SphericalCGrid2D)
+def _area_sum(grid: Any, x: Any, *, mask: Mask2D | None) -> Any:
+    return _sum(x, area_weights(grid, xp=array_namespace(x)), mask)
 
 
-def cartesian_area_sum(
-    field: Float[Array, "Ny Nx"],
-    grid: CartesianCGrid2D,
-    mask: Mask2D | None = None,
-) -> Float[Array, ""]:
-    """Cartesian area-weighted sum (:func:`area_sum` with Cartesian grid)."""
-    return area_sum(field, grid, mask)
+@area_mean.register(CartesianCGrid2D)
+@area_mean.register(SphericalCGrid2D)
+def _area_mean(grid: Any, x: Any, *, mask: Mask2D | None) -> Any:
+    return _mean(x, area_weights(grid, xp=array_namespace(x)), mask)
 
 
-def cartesian_area_mean(
-    field: Float[Array, "Ny Nx"],
-    grid: CartesianCGrid2D,
-    mask: Mask2D | None = None,
-) -> Float[Array, ""]:
-    """Cartesian area-weighted mean."""
-    return area_mean(field, grid, mask)
+@volume_sum.register(CartesianCGrid3D)
+@volume_sum.register(SphericalCGrid3D)
+def _volume_sum(grid: Any, x: Any, *, mask: Mask3D | None) -> Any:
+    return _sum(x, volume_weights(grid, xp=array_namespace(x)), mask)
 
 
-def spherical_area_sum(
-    field: Float[Array, "Ny Nx"],
-    grid: SphericalCGrid2D,
-    mask: Mask2D | None = None,
-) -> Float[Array, ""]:
-    """Spherical area-weighted sum."""
-    return area_sum(field, grid, mask)
-
-
-def spherical_area_mean(
-    field: Float[Array, "Ny Nx"],
-    grid: SphericalCGrid2D,
-    mask: Mask2D | None = None,
-) -> Float[Array, ""]:
-    """Spherical area-weighted mean."""
-    return area_mean(field, grid, mask)
-
-
-def cartesian_volume_sum(
-    field: Float[Array, "Nz Ny Nx"],
-    grid: CartesianCGrid3D,
-    mask: Mask3D | None = None,
-) -> Float[Array, ""]:
-    """Cartesian volume-weighted sum."""
-    return volume_sum(field, grid, mask)
-
-
-def cartesian_volume_mean(
-    field: Float[Array, "Nz Ny Nx"],
-    grid: CartesianCGrid3D,
-    mask: Mask3D | None = None,
-) -> Float[Array, ""]:
-    """Cartesian volume-weighted mean."""
-    return volume_mean(field, grid, mask)
-
-
-def spherical_volume_sum(
-    field: Float[Array, "Nz Ny Nx"],
-    grid: SphericalCGrid3D,
-    mask: Mask3D | None = None,
-) -> Float[Array, ""]:
-    """Spherical volume-weighted sum."""
-    return volume_sum(field, grid, mask)
-
-
-def spherical_volume_mean(
-    field: Float[Array, "Nz Ny Nx"],
-    grid: SphericalCGrid3D,
-    mask: Mask3D | None = None,
-) -> Float[Array, ""]:
-    """Spherical volume-weighted mean."""
-    return volume_mean(field, grid, mask)
+@volume_mean.register(CartesianCGrid3D)
+@volume_mean.register(SphericalCGrid3D)
+def _volume_mean(grid: Any, x: Any, *, mask: Mask3D | None) -> Any:
+    return _mean(x, volume_weights(grid, xp=array_namespace(x)), mask)
 
 
 # ----------------------------------------------------------------------

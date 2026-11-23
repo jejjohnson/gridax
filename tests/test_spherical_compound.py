@@ -5,7 +5,7 @@ from gridax import (
     SphericalCGrid2D,
     SphericalCGrid3D,
 )
-from gridax._src.operators.reductions import spherical_area_weights
+from gridax._src.operators.reductions import area_weights
 from gridax._src.operators.spherical_compound import (
     SphericalDivergence2D,
     SphericalDivergence3D,
@@ -209,7 +209,7 @@ class TestSphericalLaplacian2D:
         h = jax.random.normal(jax.random.PRNGKey(3), (grid.Ny, grid.Nx))
         h = h.at[0, :].set(h[1, :]).at[-1, :].set(h[-2, :])  # zero lat flux
         h = h.at[:, 0].set(h[:, -2]).at[:, -1].set(h[:, 1])  # periodic in lon
-        area = spherical_area_weights(grid)
+        area = area_weights(grid)
         total = jnp.sum((area * lap_op(h))[1:-1, 1:-1])
         scale = jnp.sum(jnp.abs(area * lap_op(h))[1:-1, 1:-1])
         assert abs(float(total)) < 1e-14 * float(scale)

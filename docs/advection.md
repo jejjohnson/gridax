@@ -445,7 +445,7 @@ $$
 
 with $\cos\varphi$ at the T-rows for the cell area and at the V-rows for the
 meridional faces.  The divergence telescopes against
-`spherical_area_weights` ($R^2\cos\varphi_T\,\Delta\lambda\,\Delta\varphi$):
+`area_weights` ($R^2\cos\varphi_T\,\Delta\lambda\,\Delta\varphi$):
 $\sum A\,\partial_t\bar q$ is the net flux through the faces bounding the
 written cells.  With `wall="closed"` that region is `[2:-2, 2:-2]`, so on a
 zonally periodic grid the seam-adjacent columns get no tendency; use

@@ -44,7 +44,7 @@ from gridax._src.advection.advection import (
     Advection3D,
 )
 from gridax._src.advection.spherical_advection import SphericalAdvection2D
-from gridax._src.operators.reductions import spherical_area_weights
+from gridax._src.operators.reductions import area_weights
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -338,7 +338,7 @@ class TestMaskSafety:
         h = jnp.ones(wet.shape)
         u = jnp.ones(wet.shape)
         out = _call(op, h, u, u, method)
-        weight = spherical_area_weights(op.grid) if dim == "sph2d" else 1.0
+        weight = area_weights(op.grid) if dim == "sph2d" else 1.0
         total = jnp.sum(weight * out)
         scale = jnp.sum(weight * jnp.abs(out))
         assert float(scale) > 0.0  # the coastal cells do see the flow

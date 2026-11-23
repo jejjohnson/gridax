@@ -14,15 +14,6 @@ from gridax._src.operators.reductions import (
     area_mean,
     area_sum,
     area_weights,
-    cartesian_area_mean,
-    cartesian_area_sum,
-    cartesian_volume_mean,
-    cartesian_volume_sum,
-    spherical_area_mean,
-    spherical_area_sum,
-    spherical_area_weights,
-    spherical_volume_mean,
-    spherical_volume_sum,
     volume_mean,
     volume_sum,
     volume_weights,
@@ -116,7 +107,7 @@ class TestWeights:
             R=R,
         )
         w = volume_weights(grid)
-        expected_2d = spherical_area_weights(grid.horizontal_grid()) * grid.spacing("z")
+        expected_2d = area_weights(grid.horizontal_grid()) * grid.spacing("z")
         for k in range(grid.Nz):
             np.testing.assert_allclose(w[k], expected_2d, rtol=1e-12)
 
@@ -158,19 +149,6 @@ class TestCartesianArea:
         # Pollute ghost ring — it should be ignored.
         h = h.at[0, :].set(1e6).at[-1, :].set(1e6).at[:, 0].set(1e6).at[:, -1].set(1e6)
         np.testing.assert_allclose(area_sum(h, grid), 0.0, atol=1e-10)
-
-    def test_alias_cartesian_area_sum(self, grid):
-        h = jnp.arange(grid.Ny * grid.Nx, dtype=float).reshape(grid.Ny, grid.Nx)
-        np.testing.assert_allclose(
-            cartesian_area_sum(h, grid),
-            area_sum(h, grid),
-            rtol=1e-12,
-        )
-        np.testing.assert_allclose(
-            cartesian_area_mean(h, grid),
-            area_mean(h, grid),
-            rtol=1e-12,
-        )
 
     def test_all_dry_mean_is_nan(self, grid):
         h = jnp.ones((grid.Ny, grid.Nx))
@@ -284,28 +262,6 @@ class TestSphericalArea:
         s_cart = area_sum(h, cart)
         np.testing.assert_allclose(float(s_sph), float(s_cart), rtol=1e-4)
 
-    @pytest.mark.slow
-    def test_alias_spherical_area_sum(self):
-        grid = SphericalCGrid2D.from_interior(
-            16,
-            10,
-            lon_range=(0.0, 360.0),
-            lat_range=(-40.0, 40.0),
-            R=R,
-        )
-        key = jax.random.PRNGKey(8)
-        h = jax.random.normal(key, (grid.Ny, grid.Nx))
-        np.testing.assert_allclose(
-            spherical_area_sum(h, grid),
-            area_sum(h, grid),
-            rtol=1e-12,
-        )
-        np.testing.assert_allclose(
-            spherical_area_mean(h, grid),
-            area_mean(h, grid),
-            rtol=1e-12,
-        )
-
     def test_masked_all_dry_mean_nan(self):
         grid = SphericalCGrid2D.from_interior(
             16,
@@ -395,26 +351,6 @@ class TestVolume:
         )
         expected = area * sph_grid.spacing("z") * (sph_grid.Nz - 2)
         np.testing.assert_allclose(float(v), float(expected), rtol=1e-12)
-
-    def test_aliases(self, cart_grid, sph_grid):
-        h_c = jnp.ones((cart_grid.Nz, cart_grid.Ny, cart_grid.Nx))
-        h_s = jnp.ones((sph_grid.Nz, sph_grid.Ny, sph_grid.Nx))
-        np.testing.assert_allclose(
-            cartesian_volume_sum(h_c, cart_grid),
-            volume_sum(h_c, cart_grid),
-        )
-        np.testing.assert_allclose(
-            cartesian_volume_mean(h_c, cart_grid),
-            volume_mean(h_c, cart_grid),
-        )
-        np.testing.assert_allclose(
-            spherical_volume_sum(h_s, sph_grid),
-            volume_sum(h_s, sph_grid),
-        )
-        np.testing.assert_allclose(
-            spherical_volume_mean(h_s, sph_grid),
-            volume_mean(h_s, sph_grid),
-        )
 
     def test_mask_excludes_dry_volume(self, cart_grid):
         h = jnp.ones((cart_grid.Nz, cart_grid.Ny, cart_grid.Nx))

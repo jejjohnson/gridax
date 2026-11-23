@@ -79,14 +79,14 @@ q = np.exp(-((x - 0.25) ** 2 + (y - 0.5) ** 2) / 0.01) * wet  # → (N_y, N_x)
 advection = gridax.Advection2D(grid=grid, mask=mask)
 # today (gridax)
 # ∑ A_ji q̄_ji over the wet cells
-total = gridax.area_sum(q, grid, mask)  # → ()
+total = gridax.area_sum(q, grid, mask=mask)  # → ()
 dt = 0.2 * grid.spacing("x")
 for _ in range(200):
     # Heun's method on dq̄/dt, with WENO-5 face values
     q1 = q + dt * advection(q, u, v, method="weno5")  # (N_y, N_x) → (N_y, N_x)
     q = 0.5 * (q + q1 + dt * advection(q1, u, v, method="weno5"))
 # today (gridax)
-change = gridax.area_sum(q, grid, mask) / total - 1.0  # → ()
+change = gridax.area_sum(q, grid, mask=mask) / total - 1.0  # → ()
 print(f"{float(change):.1e} {float(q.max()):.3f} {float(q.min()):.1e}")
 ```
 
@@ -131,7 +131,7 @@ def tendency(q, u, v):
 # today (gridax)
 # J(q̄) = ∑ A (dq̄/dt)², a scalar to differentiate
 def cost(q):
-    return gridax.area_sum(tendency(q, u_j, v_j) ** 2, grid, mask)  # → ()
+    return gridax.area_sum(tendency(q, u_j, v_j) ** 2, grid, mask=mask)  # → ()
 
 
 # ∂J/∂q̄, by reverse-mode autodiff through the WENO weights

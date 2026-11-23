@@ -33,7 +33,7 @@ The repository is a uv workspace with one package, `packages/gridax/` (`src/grid
 | Time integration | not here | `solve_ocean_pde` moved to `sesmax_core.solve_pde` (#475); the time steppers live in `integrix.march`, the semi-Lagrangian scheme included (#476, with `gridax.t_point_coordinates` for its nodes), and gridax has no alias for them; `gridax/_src/pipekit/timestep.py` imports `integrix.march` directly |
 | Vertical, forcing | not here | forcing, vertical modes, `multilayer` and the barotropic filter are `sesmax_core.forcing` and `sesmax_core.vertical` (#422); new forcing goes to sesmax-core |
 | pipekit layer (Tier B) | `pipekit/` (public: `gridax.pipekit`) | `FVXOperator` / `GridOperator` on `pipekit_jax.JaxOperator`, `over_leading`, `check_operator` (`gridax.pipekit.testing`); behind the `pipekit` extra, never imported by `import gridax` |
-| Shared | `gridax/_src/backend.py`, `gridax/_src/pytree.py`; constants from geophysix | the backend hooks and `pytree_dataclass` (see Boundaries); physical constants are geophysix records (`geophysix.earth.SPHERE`, `WGS84`, `geophysix.constants.STANDARD`), used as parameter defaults only (contract 6). The Coriolis helpers and the linear equation of state are `geophysix.rotation` and `geophysix.seawater` (#446), and gridax has no alias for them |
+| Shared | `gridax/_src/backend.py`, `gridax/_src/pytree.py`, `gridax/_src/api.py` (`grid_dispatch`: the canonical functions dispatch on the grid type; `SUPPORT` lists the grid types of each); constants from geophysix | the backend hooks and `pytree_dataclass` (see Boundaries); physical constants are geophysix records (`geophysix.earth.SPHERE`, `WGS84`, `geophysix.constants.STANDARD`), used as parameter defaults only (contract 6). The Coriolis helpers and the linear equation of state are `geophysix.rotation` and `geophysix.seawater` (#446), and gridax has no alias for them |
 
 The four layers of the derivative stack are the ones `docs/stencils.md` ("The derivative stack") and `docs/masks.md` describe: Layer 0 coefficients (numbers, no arrays), Layer 1 raw stencils, Layer 2 canonical functions (one per operation, `grid` positional, `mask=` keyword; `gridax.analysis` is its collocated part, and `gridax.advection.reconstruct` its advection part), Layer 3 bindings (a binding holds a grid, a mask and caches derived from them, and each method is one call of a Layer 2 function). ADR 1 has the reasons and the rejected alternatives.
 
@@ -113,7 +113,7 @@ whether it exists:
 | Element-wise maths on fields that know their point | `gridax.combine`, `gridax.fields` (`sqrt`, `where`, `clip`, …) on `gridax.CField`; `f.like(array)` for a full array |
 | Filling ghost cells | `gridax.fill_ghosts(f, grid, gridax.BC(x=gridax.Dirichlet(0.0), …))` with `Dirichlet` / `Neumann` / `Periodic` / …; `enforce_periodic`, `zero_gradient_boundaries`, `no_slip_boundaries`, `wall_boundaries` |
 | Land / ocean masks, coastal stencil fallback | `Mask2D.from_mask` (or `from_center`, `from_u_face`, …), `mask.get_adaptive_masks`, `StencilCapability2D` |
-| Area / volume integrals and masked means | `area_sum`, `area_mean`, `volume_mean`, `masked_mean`, `masked_moments` (grid-polymorphic; `cartesian_*` / `spherical_*` explicit) |
+| Area / volume integrals and masked means | `area_sum`, `area_mean`, `volume_mean`, `masked_mean`, `masked_moments`: the sums and means dispatch on the grid type (`mask=` is a keyword) |
 | A Poisson / Helmholtz solve | `solve_helmholtz_dst` / `_dct` / `_fft` (spectraldiffx) on a rectangle; `build_capacitance_solver`, gaussx's CG (`gaussx.linear_solve_with_info` with `gaussx.CGSolver`) with `make_spectral_preconditioner` or `build_multigrid_solver(...).as_preconditioner()`, or `build_multigrid_solver` on its own on a masked domain; the one-call wrappers `streamfunction_from_vorticity`, `pressure_from_divergence`, `pv_inversion` live in sesmax-core (`sesmax_core.gfd`) |
 | A DCT / DST | `dct`, `dst`, `dctn`, … (spectraldiffx, scipy's unnormalised convention) |
 | A tridiagonal (Thomas) solve | `solve_tridiagonal`, `solve_tridiagonal_batched` (gaussx) |
@@ -352,6 +352,7 @@ docstring before changing what it checks.
 | `tests/test_fixture_smoke.py` | The golden-fixture inputs, masks and helpers themselves |
 | `tests/test_convergence.py` | Second-order spatial convergence of the difference operators |
 | `tests/test_jax_transforms.py`, `tests/test_differentiable.py` | `jit` / `vmap` match eager execution; the smooth surrogates differentiate |
+| `tests/test_registry_parity.py` | Every canonical function is implemented on exactly the grid types `SUPPORT` lists, and raises `NotImplementedError` naming the others |
 | `tests/test_batch_dims.py` | Every 2-D entry point annotated `*batch Ny Nx` equals a loop over the batch members, masked and unmasked, eager and under `jit` |
 | `tests/test_dtype_behavior.py` | float32 and float64 agree; outputs are finite on extreme inputs |
 | `tests/test_open_walls.py`, conservation tests in `test_advection.py`, `test_jacobian.py`, `test_momentum.py`, `test_diagnostics.py` | Mass / energy / enstrophy conservation of the flux-form and Arakawa schemes, including `wall="open"` |
