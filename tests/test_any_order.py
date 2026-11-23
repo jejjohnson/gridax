@@ -197,6 +197,7 @@ def test_masked_and_periodic(scheme: Any) -> None:
     assert abs(got.sum()) < 1e-10 * np.abs(got).sum()
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("scheme", [WENO(11), WENO(9, "z")], ids=repr)
 def test_jit_grad_and_dtype(scheme: Any) -> None:
     grid = g.CartesianCGrid1D.from_interior(24, 1.0)
@@ -206,11 +207,13 @@ def test_jit_grad_and_dtype(scheme: Any) -> None:
     def loss(q: Any) -> Any:
         return (g.advect(q, u, None, grid, scheme=scheme) ** 2).sum()
 
-    assert np.isfinite(jax.jit(jax.grad(loss))(q)).all()
-    flat = jax.grad(loss)(jnp.full(26, 2.0))
-    assert np.isfinite(flat).all()
-    small = g.advect(
-        q.astype(jnp.float32), u.astype(jnp.float32), None, grid, scheme=scheme
+    gradient = jax.jit(jax.grad(loss))
+    assert np.isfinite(gradient(q)).all()
+    assert np.isfinite(gradient(jnp.full(26, 2.0))).all()
+    small = jax.eval_shape(
+        lambda q, u: g.advect(q, u, None, grid, scheme=scheme),
+        q.astype(jnp.float32),
+        u.astype(jnp.float32),
     )
     assert small.dtype == jnp.float32
 
