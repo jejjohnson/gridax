@@ -65,6 +65,8 @@ def keywords(name, grid):
         return [{"scheme": Upwind(3)}, {"scheme": Centred(4)}]
     if name == "qg_potential_vorticity":
         return [{"f0": 0.7, "beta": 0.2}]
+    if name == "vortex_force":
+        return [{"form": form} for form in ("energy", "enstrophy", "arakawa_lamb")]
     if name in ("advect_momentum", "pv_flux"):
         return [{"form": form} for form in ("energy", "enstrophy", "blend")]
     if name == "reconstruct":
