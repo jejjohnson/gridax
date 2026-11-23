@@ -25,6 +25,7 @@ from pipekit_ops import Operator
 from pipekit_ops._base.operator import nested_config
 
 from gridax._src.pipekit.base import FVXOperator
+from gridax._src.pipekit.halo import graph_halo
 
 #: ``scheme -> step(state, rhs_fn, dt)``. ``dt`` may be a 0-d array (a
 #: leaf): the steps only multiply by it.
@@ -34,6 +35,10 @@ SCHEMES: dict[str, Callable[..., Any]] = {
     "rk3_ssp": rk3_ssp_step,
     "rk4": rk4_step,
 }
+
+
+#: ``scheme -> evaluations of the tendency``, each on the result of the last.
+STAGES = {"euler": 1, "heun": 2, "rk3_ssp": 3, "rk4": 4}
 
 
 class ExplicitStep(FVXOperator):
@@ -60,6 +65,11 @@ class ExplicitStep(FVXOperator):
             raise ValueError(
                 f"scheme {self.scheme!r} is not available; valid: {sorted(SCHEMES)}"
             )
+
+    @property
+    def halo(self) -> int:
+        """That of the tendency, once per stage of the scheme."""
+        return STAGES[self.scheme] * graph_halo(self.rhs)
 
     def _apply(self, state: dict[str, Any]) -> dict[str, Any]:
         return SCHEMES[self.scheme](state, lambda s: self.rhs(**s), self.dt)

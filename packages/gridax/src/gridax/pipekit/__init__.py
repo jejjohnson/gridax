@@ -38,6 +38,7 @@ from gridax._src.pipekit.diagnostics import (
     Strain,
     TotalEnergy,
 )
+from gridax._src.pipekit.halo import graph_halo
 from gridax._src.pipekit.stencils import (
     DIFFERENCES,
     GHOST_FILLERS,
@@ -61,6 +62,7 @@ __all__ = [
     # base
     "FVXOperator",
     "GridOperator",
+    "graph_halo",
     "over_leading",
     # stencils, interpolation, boundaries, masks
     "DIFFERENCES",

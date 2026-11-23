@@ -10,20 +10,20 @@ call on `[*batch, Ny, Nx]` fields. Requires the `pipekit` extra:
 
 | Tier-B operator | Tier-A counterpart | in → out |
 |---|---|---|
-| `Difference(axis, src, dst)` | `Difference2D.diff_{axis}_{src}_to_{dst}` | 1 → 1 |
-| `Divergence` | `Difference2D.divergence` | (U, V) → T |
-| `Curl` | `Difference2D.curl` | (U, V) → X |
-| `Laplacian` | `Difference2D.laplacian` | T → T |
-| `GradPerp` | `Difference2D.grad_perp` | X → (U, V) |
-| `Interp(src, dst)` | `Interpolation2D.{src}_to_{dst}` | 1 → 1 |
-| `Coriolis(f0, beta, y0)` | `geophysix.rotation.beta_plane` + `Coriolis2D` | (U, V) → (U, V) |
+| `Difference(axis, src, dst, scheme)` | `difference` | 1 → 1 |
+| `Divergence` | `divergence` | (U, V) → T |
+| `Curl` | `curl` | (U, V) → X |
+| `Laplacian` | `laplacian` | T → T |
+| `GradPerp` | `grad_perp` | T → (U, V) |
+| `Interp(src, dst, scheme)` | `interpolate` | 1 → 1 |
+| `Coriolis(f0, beta, y0)` | `geophysix.rotation.beta_plane` + `coriolis` | (U, V) → (U, V) |
 | `FillGhosts(kind)` | `enforce_periodic`, `zero_boundaries`, …, `wall_boundaries` | 1 → 1 |
 | `ApplyMask(mask, stagger)` | `jnp.where(mask.{h,u,v,xy_corner_strict}, x, 0)` | 1 → 1 |
-| `RelativeVorticity` | `Vorticity2D.relative_vorticity` | (U, V) → X |
+| `RelativeVorticity` | `curl` | (U, V) → X |
 | `PotentialVorticity` | `Vorticity2D.potential_vorticity` | (U, V, T, T) → X |
 | `Enstrophy` | `Vorticity2D.enstrophy` | (U, V) → X |
 | `QGPotentialVorticity(f0, beta, y0)` | `QGPotentialVorticity2D` | T → T |
-| `KineticEnergy` | `Energetics2D.kinetic_energy` | (U, V) → T |
+| `KineticEnergy` | `kinetic_energy` | (U, V) → T |
 | `AvailablePE(g_prime, H)` | `Energetics2D.available_potential_energy` | T → T |
 | `Strain(component)` | `Strain2D.shear` / `.tensor` / `.magnitude_squared` | (U, V) → X / T |
 | `OkuboWeiss` | `Strain2D.okubo_weiss` | (U, V) → T |
@@ -32,6 +32,22 @@ call on `[*batch, Ny, Nx]` fields. Requires the `pipekit` extra:
 | `ExplicitStep(rhs, dt, scheme)` | `integrix.march.euler_step` / `heun_step` / `rk3_ssp_step` / `rk4_step` | state → state |
 | `Pick(index)`, `LinComb(coeffs)` | — (graph plumbing) | |
 
+## Halos
+
+Every operator says how many cells around a point its result reads: `op.halo` is 1 for a one-cell stencil, 2 for `scheme=Centred(4)`, 0 for an operation point by point. `graph_halo(graph)` sums them along each path of a `Graph` or `Sequential` and returns the largest, which is the overlap a patch needs for its interior to have the values of the whole domain.
+
+```python
+from gridax.pipekit import Difference, Interp, graph_halo
+from gridax.schemes import Centred
+
+G = (64, 64, 1.0, 1.0)
+to_u = Interp(grid=G, src="T", dst="U", scheme=Centred(4))
+back = Difference(grid=G, axis="x", src="U", dst="T", scheme=Centred(4))
+graph_halo(to_u | back)  # 4
+```
+
+A reduction (`TotalEnergy`, `DomainMean`) reads the whole domain and has no halo, so `graph_halo` raises on it.
+
 ## Base classes and helpers
 
 ::: gridax.pipekit.FVXOperator
@@ -39,6 +55,8 @@ call on `[*batch, Ny, Nx]` fields. Requires the `pipekit` extra:
 ::: gridax.pipekit.GridOperator
 
 ::: gridax.pipekit.over_leading
+
+::: gridax.pipekit.graph_halo
 
 ::: gridax.pipekit.testing.check_operator
 
