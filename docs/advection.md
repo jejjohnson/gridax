@@ -409,8 +409,11 @@ for scheme in (Centred(2), Upwind(3), WENO(5), WENO(9), TVD("van_leer")):
   so mass is conserved exactly.
 - **`bc=`** on `gridax.advect`, instead of `wall=`: the ghost layers of `q` are
   filled from the conditions, as many as the scheme reads, so the full
-  interior is written with the widest stencil at the edges too. `Periodic`
-  faces give the periodic scheme with no halo to build, exactly conservative.
+  interior is written with the widest stencil at the edges too. On `Periodic`
+  faces the face velocity wraps too, so the two seam faces carry one flux: the
+  periodic scheme with no halo to build and no ghost face of `u` or `v` to fill,
+  exactly conservative. The axes are independent, `BC(x=Periodic(), y=Neumann())`
+  for a re-entrant channel. With a mask, wrap the ghost ring of the wet cells.
 - In 3-D the z axis is a batch axis: the horizontal reconstruction and
   divergence are applied to every level by array slicing (no `vmap`), and the
   ghost slabs `k = 0`, `Nz-1` stay zero.

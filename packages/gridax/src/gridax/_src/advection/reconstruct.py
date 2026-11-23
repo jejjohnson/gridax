@@ -19,6 +19,7 @@ import numpy as np
 from gridax._src.advection.flux import upwind_flux
 from gridax._src.api import grid_dispatch
 from gridax._src.backend import pad, set_at
+from gridax._src.boundary.atoms import Periodic
 from gridax._src.boundary.fill import (
     BC,
     extend,
@@ -188,9 +189,16 @@ def axis_flux(
         # at least one layer, so the wall on the low side is an interior face
         extra = max(halo - grid.ghost, 1)
         q = extend(q, grid, around, point_stagger("T"), [axis], extra)
-        widths = [(0, 0)] * u.ndim
-        widths[position] = (extra, extra)
-        u = pad(u, tuple(widths))
+        if isinstance(around.faces[axis][0], Periodic):
+            # the two seam faces are one: F[1/2] = F[N-3/2], whatever the
+            # caller's ghost face holds
+            u = extend(
+                u, grid, wrapping([axis]), point_stagger(_FACES[axis]), [axis], extra
+            )
+        else:
+            widths = [(0, 0)] * u.ndim
+            widths[position] = (extra, extra)
+            u = pad(u, tuple(widths))
         wet = None if wet is None else extend_wet(wet, grid, around, [axis], extra)
     if wet is not None and scheme.upwinded:
         if around is None:
