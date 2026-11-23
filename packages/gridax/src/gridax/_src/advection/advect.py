@@ -74,7 +74,8 @@ def advect(
         Any of `gridax.schemes`.
     mask : Mask1D, Mask2D or Mask3D, optional
         The wet cells. Dry values are not read, no flux crosses a dry face,
-        and the tendency is zero on dry cells.
+        and the tendency is zero on dry cells. Where ``bc`` is periodic the
+        ghost ring of the mask must wrap too.
     wall : {"closed", "open"}, default "closed"
         ``"closed"`` writes the cells that are two or more from the edge of
         the array, and takes no flux through the edge faces. ``"open"`` writes
@@ -84,9 +85,10 @@ def advect(
     bc : BC, optional
         The condition of ``q`` on every horizontal face, instead of ``wall``:
         as many ghost layers as the scheme reads are filled from it, so every
-        interior cell is written, with the widest tier at the edges too. The
-        velocity on the walls is read (zero for a solid one), so its ghost
-        ring must be filled.
+        interior cell is written, with the widest tier at the edges too. On
+        ``Periodic`` faces the velocity wraps as well, so its ghost faces are
+        not read; on the others the velocity on the wall is (zero for a solid
+        one), so its ghost ring must be filled.
 
     Returns
     -------
