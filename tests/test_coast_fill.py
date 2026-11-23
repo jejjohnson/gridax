@@ -93,7 +93,6 @@ def test_layers_of_a_line_of_water(atom: str, width: int) -> None:
         big,
         g.BC(x=ATOMS[atom]),
         g.Mask1D.from_mask(wet),
-        1,
         point_stagger("T"),
         layers=width,
     )

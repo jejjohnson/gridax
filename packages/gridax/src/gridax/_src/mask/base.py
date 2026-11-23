@@ -218,6 +218,34 @@ class CoastGhosts:
     offset: int = static_field()
 
 
+def _tiers(reach: Any, sizes: Sequence[int]) -> dict[int, Any]:
+    """The tiers of the counts of wet points on either side, itself included."""
+    ordered = _checked(sizes)
+    out = {}
+    for s, wider in zip(ordered, [*ordered[1:], None], strict=True):
+        fits = reach >= s // 2
+        out[s] = fits if wider is None else fits & (reach < wider // 2)
+    return {s: out[s] for s in sizes}
+
+
+def _checked(sizes: Sequence[int]) -> list[int]:
+    ordered = sorted(set(sizes))
+    if not ordered or any(s < 2 or s % 2 for s in ordered):
+        raise ValueError(f"sizes must be even and at least 2, got {tuple(sizes)}")
+    return ordered
+
+
+def tiers_of(wet: Any, position: int, sizes: Sequence[int]) -> dict[int, Any]:
+    """``MaskBase.tiers`` of an array of wet points, along one of its axes."""
+    xp = array_namespace(wet)
+    fits = wet
+    reach = xp.asarray(fits, dtype=xp.int8)
+    for k in range(1, _checked(sizes)[-1] // 2):
+        fits = fits & shifted(wet, position, k) & shifted(wet, position, -k)
+        reach = reach + xp.asarray(fits, dtype=xp.int8)
+    return _tiers(reach, sizes)
+
+
 class MaskBase:
     """What `Mask1D`, `Mask2D` and `Mask3D` derive from the arrays they store."""
 
@@ -285,36 +313,12 @@ class MaskBase:
         >>> tiers[2].astype(int).tolist(), tiers[4].astype(int).tolist()
         ([0, 1, 0, 0, 0, 1, 0], [0, 0, 1, 1, 1, 0, 0])
         """
-        ordered = sorted(set(sizes))
-        if not ordered or any(s < 2 or s % 2 for s in ordered):
-            raise ValueError(f"sizes must be even and at least 2, got {tuple(sizes)}")
-        reach = self._reach(axis, at, kind, ordered[-1] // 2)
-        out = {}
-        for s, wider in zip(ordered, [*ordered[1:], None], strict=True):
-            fits = reach >= s // 2
-            out[s] = fits if wider is None else fits & (reach < wider // 2)
-        return {s: out[s] for s in sizes}
-
-    def _reach(
-        self, axis: str, at: str | Stagger, kind: str, upto: int
-    ) -> Int[Array, "*grid"]:
-        """How many wet points there are on either side of each, itself included.
-
-        Counted up to at least ``upto``, as int8.
-        """
         position = self._position(axis)
         if not point_axes(at, self._axes) and kind == "default":
             counts = self.stencil_capability
             pos, neg = getattr(counts, f"{axis}_pos"), getattr(counts, f"{axis}_neg")
-            return array_namespace(pos, neg).minimum(pos, neg)
-        wet = self.wet(at=at, kind=kind)
-        xp = array_namespace(wet)
-        fits = wet
-        reach = xp.asarray(fits, dtype=xp.int8)
-        for k in range(1, upto):
-            fits = fits & shifted(wet, position, k) & shifted(wet, position, -k)
-            reach = reach + xp.asarray(fits, dtype=xp.int8)
-        return reach
+            return _tiers(array_namespace(pos, neg).minimum(pos, neg), sizes)
+        return tiers_of(self.wet(at=at, kind=kind), position, sizes)
 
     # ── coastal ghosts ────────────────────────────────────────────────────────
 

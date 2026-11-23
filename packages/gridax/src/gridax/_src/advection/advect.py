@@ -15,9 +15,10 @@ from typing import TYPE_CHECKING, Any, Literal
 from jaxtyping import Float
 import numpy as np
 
-from gridax._src.advection.reconstruct import check_scheme, face_flux, hierarchy_of
+from gridax._src.advection.reconstruct import axis_flux, check_scheme
 from gridax._src.api import grid_dispatch
 from gridax._src.backend import set_at
+from gridax._src.boundary.fill import BC
 from gridax._src.fields.located import located
 from gridax._src.grid import (
     CartesianCGrid1D,
@@ -51,6 +52,7 @@ def advect(
     scheme: Scheme,
     mask: Any = None,
     wall: Wall = "closed",
+    bc: BC | None = None,
 ) -> Float[Array, "..."]:
     """The finite-volume tendency of a tracer, ``-∇·(q u)``, at T.
 
@@ -78,6 +80,12 @@ def advect(
         every interior cell, with the edge faces first-order upwind of the
         ghost ring, which the caller has filled (periodic, inflow, outflow);
         not with a mask.
+    bc : BC, optional
+        The condition of ``q`` on every horizontal face, instead of ``wall``:
+        as many ghost layers as the scheme reads are filled from it, so every
+        interior cell is written, with the widest tier at the edges too. The
+        velocity on the walls is read (zero for a solid one), so its ghost
+        ring must be filled.
 
     Returns
     -------
@@ -88,6 +96,8 @@ def advect(
     ------
     TypeError
         If ``scheme`` is not a scheme, or ``v`` does not match the grid.
+    ValueError
+        If ``bc`` comes with an open wall, or lacks a face.
     NotImplementedError
         If the grid is not a C-grid, or for ``wall="open"`` with a mask.
 
@@ -102,7 +112,9 @@ def advect(
     """
     check_scheme(scheme)
     check_wall(wall, mask)
-    return advect._impl(grid, q, u, v, scheme=scheme, mask=mask, wall=wall)
+    if bc is not None and wall != "closed":
+        raise ValueError("bc= says what the walls are: leave wall= out")
+    return advect._impl(grid, q, u, v, scheme=scheme, mask=mask, wall=wall, bc=bc)
 
 
 def check_wall(wall: str, mask: object) -> None:
@@ -125,10 +137,10 @@ def _fluxes(
     scheme: Scheme,
     mask: Any,
     wall: str,
+    bc: BC | None,
 ) -> dict[str, Array]:
     """The flux through the faces along each horizontal axis, dry faces zeroed."""
     xp = array_namespace(q, *velocities.values())
-    rank = len(grid.axes)
     points = {"x": "U", "y": "V"}
     wet: dict[str, Any] = {}
     if mask is not None:
@@ -139,23 +151,12 @@ def _fluxes(
         velocities = {a: xp.where(wet[a], c, 0.0) for a, c in velocities.items()}
     out = {}
     for axis, velocity in velocities.items():
-        hierarchy = None
-        if mask is not None:
-            hierarchy = hierarchy_of(mask, axis, scheme)
-        flux = face_flux(
-            q,
-            velocity,
-            axis=grid.axes.index(axis) - rank,
-            scheme=scheme,
-            rank=rank,
-            hierarchy=hierarchy,
-            wet=None if mask is None else mask.wet(),
-        )
+        flux = axis_flux(grid, q, velocity, axis=axis, scheme=scheme, mask=mask, bc=bc)
         if mask is not None:
             # F[i+1/2] = 0 unless both cells of the face are wet
             flux = xp.where(wet[axis], flux, 0.0)
         if wall == "open":
-            flux = _open(flux, velocity, q, grid.axes.index(axis) - rank)
+            flux = _open(flux, velocity, q, grid.axes.index(axis) - len(grid.axes))
         out[axis] = flux
     return out
 
@@ -217,6 +218,7 @@ def _advect_cartesian(
     scheme: Scheme,
     mask: Any,
     wall: str,
+    bc: BC | None,
 ) -> Any:
     xp = array_namespace(q, u)
     fluxes = _fluxes(
@@ -226,8 +228,9 @@ def _advect_cartesian(
         scheme=scheme,
         mask=mask,
         wall=wall,
+        bc=bc,
     )
-    here = _written(grid, wall)
+    here = _written(grid, "closed" if bc is None and wall == "closed" else "open")
     terms = []
     for axis, flux in fluxes.items():
         position = grid.axes.index(axis) - len(grid.axes)
@@ -250,6 +253,7 @@ def _advect_spherical(
     scheme: Scheme,
     mask: Any,
     wall: str,
+    bc: BC | None,
 ) -> Any:
     xp = array_namespace(q, u)
     fluxes = _fluxes(
@@ -259,9 +263,10 @@ def _advect_spherical(
         scheme=scheme,
         mask=mask,
         wall=wall,
+        bc=bc,
     )
     fe, fn = fluxes["x"], fluxes["y"]
-    here = _written(grid, wall)
+    here = _written(grid, "closed" if bc is None and wall == "closed" else "open")
     plane = here[-2:]  # the cos(lat) arrays are 2-D
     cos_t = _metric_like(grid._cos_lat("T"), fe)[plane]
     cos_v = _metric_like(grid._cos_lat("V"), fn)
