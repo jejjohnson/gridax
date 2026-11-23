@@ -72,8 +72,8 @@ Every derivative and every face value in gridax comes from one stack of four lay
 |---|---|---|---|
 | 0, coefficients | offsets and exact weights, no arrays | $`(1, -27, 27, -1)/24`$, a fourth-order staggered first derivative | `gridax.stencils`: `difference_offsets`, `difference_coeffs`, `nonuniform_coeffs`, `weno_stencils`, `optimal_weights`, `smoothness_matrix` |
 | 1, raw stencils | index arithmetic, with no metric and no mask | $`h_{j,i+1} - h_{j,i}`$ | `gridax.stencils`: the 32 named stencils (`diff_x_fwd_2d`, `avg_xfwd_yfwd_2d`, …), `staggered_difference`, `staggered_average`, `interior` |
-| 2, functional helpers | scaled by the metric, with no mask | $`(h_{j,i+1} - h_{j,i}) / \Delta x`$ | `gridax.analysis` (`difference`, `gradient_2d`, `curl_2d`, `laplacian_2d`), `gridax.advection.reconstruct`, `diffusion_2d`, `arakawa_jacobian`, `kinetic_energy` |
-| 3, class operators | a grid and a mask, held as fields | $`\mathrm{d}\bar{q}_{j,i}/\mathrm{d}t`$ above, zero on the dry points | `Difference2D`, `Advection2D`, `Diffusion2D`, `Vorticity2D`, `SphericalDifference2D`, … |
+| 2, canonical functions | one per operation, scaled by the metric | $`(h_{j,i+1} - h_{j,i}) / \Delta x`$ | `gridax.analysis` (`difference`, `gradient_2d`, `curl_2d`, `laplacian_2d`), `gridax.advection.reconstruct`, `diffusion_2d`, `arakawa_jacobian`, `kinetic_energy` |
+| 3, bindings | a grid and a mask, held as fields | $`\mathrm{d}\bar{q}_{j,i}/\mathrm{d}t`$ above, zero on the dry points | `Difference2D`, `Advection2D`, `Diffusion2D`, `Vorticity2D`, `SphericalDifference2D`, … |
 
 Layer 0 is one solver. A stencil with offsets $`s_1, \dots, s_K`$, in units of the grid step, approximates the $`n`$-th derivative with coefficients $`c_1, \dots, c_K`$ that solve
 

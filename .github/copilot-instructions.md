@@ -15,7 +15,7 @@ The essentials, in case you only read this file:
     NE corner; backward operators read the BC-owned west / south ghost;
   - **operators** write only `[1:-1, 1:-1]` via `interior(...)`
     (advection `[2:-2, 2:-2]` with closed walls); Layer 1 raw stencils,
-    Layer 2 functional helpers (mask-free), Layer 3 `pytree_dataclass` classes
+    Layer 2 canonical functions (`grid` positional, `mask=` keyword; ADR 1), Layer 3 `pytree_dataclass` bindings
     holding `grid` and `mask`;
   - **masks** are built once with `Mask2D.from_mask` (numpy / scipy);
     outputs are zeroed on the dry points of their stagger; `mask=None` is

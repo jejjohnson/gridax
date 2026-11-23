@@ -119,6 +119,10 @@ project:
           children:
             - file: notebooks/pipekit_composition.ipynb
               title: Composing with pipekit
+    - title: Design decisions
+      children:
+        - file: design/adr/0001-canonical-functions.md
+          title: "ADR 1: canonical functions"
     - title: Research notes
       children:
         - file: design/research/stencil_performance_deep_dive.md
