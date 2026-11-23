@@ -67,3 +67,22 @@ pa.map_over(v, lambda item: combine(jnp.square, item), "member")  # one vmap
 ```
 
 `import gridax` never imports pipekit: the adapter registers itself the moment `pipekit_ops` is imported, whichever comes first.
+
+## With xarray and other models
+
+`to_xarray` writes a dataset with the coordinates of the grid and xgcm's attributes, so `xgcm.Grid` recovers the positions, and `CField.from_xarray` reads one back.
+
+```python
+ds = u.to_xarray(grid, "u")
+ds["u"].dims  # ("member", "y_c", "x_g")
+CField.from_xarray(ds["u"]).loc  # "U"
+```
+
+Output of a model that keeps its velocity on the left faces (MITgcm's U is on the west face) is a field with `stagger={"x": "left"}`. [`to_right`](xref:api#gridax.to_right) shifts it onto gridax's faces; the one index that shift leaves open, the face outside the domain, is filled from the boundary conditions.
+
+```python
+west = CField(jnp.ones(grid.shape), dims=("y", "x"), stagger={"x": "left"})
+gridax.to_right(west, grid, gridax.BC(x=gridax.Periodic())).loc  # "U"
+```
+
+[`to_dimarray`](xref:api#gridax.to_dimarray) drops the point and gives a `pipekit_array.DimArray`.

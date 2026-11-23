@@ -136,6 +136,7 @@ from gridax._src.diffusion.spherical_momentum import (
 from gridax._src.fields._hook import register_when_pipekit_loads as _register
 from gridax._src.fields.cfield import CField, StaggerMismatchError
 from gridax._src.fields.combine import combine
+from gridax._src.fields.convert import to_dimarray, to_right
 from gridax._src.grid import (
     ArakawaCGrid1D,
     ArakawaCGrid2D,
@@ -310,6 +311,8 @@ __all__ = [
     "CField",
     "combine",
     "StaggerMismatchError",
+    "to_dimarray",
+    "to_right",
     "t_point_coordinates",
     # Masks
     "Mask1D",
