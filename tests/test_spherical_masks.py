@@ -24,7 +24,6 @@ Per issue #209 Q2/Q3, the spherical operators accept a Cartesian
 
 from __future__ import annotations
 
-from gridax._src.operators.spherical_compound import geostrophic_velocity_sphere
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -40,6 +39,7 @@ from tests.fixtures.bindings import (
     SphericalLaplacian3D,
     SphericalVorticity2D,
     SphericalVorticity3D,
+    geostrophic_velocity_sphere,
 )
 from tests.fixtures.inputs import (
     make_f_field_2d,

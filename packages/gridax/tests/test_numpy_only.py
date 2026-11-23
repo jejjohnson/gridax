@@ -40,14 +40,14 @@ CHECKS = textwrap.dedent(
     gridax.smooth_clamp(h2, 3.0)
 
     g2 = gridax.CartesianCGrid2D.from_interior(4, 3, 1.0, 1.0)
-    gridax.Difference2D(grid=g2, mask=gridax.Mask2D.from_mask(np.ones((5, 6), bool))).laplacian(h2)
+    gridax.GridOps(g2, gridax.Mask2D.from_mask(np.ones((5, 6), bool))).laplacian(h2)
     g3 = gridax.CartesianCGrid3D.from_interior(4, 3, 2, 1.0, 1.0, 1.0)
-    gridax.Vorticity3D(grid=g3).relative_vorticity(np.stack([h2] * 4), np.stack([h2] * 4))
+    gridax.curl(np.stack([h2] * 4), np.stack([h2] * 4), g3)
 
     from gridax import analysis
 
     y, x = np.mgrid[0:6, 0:8].astype(float)
-    analysis.adaptive_laplacian_2d(x**2 + y**2, mask=h[:6])
+    analysis.difference(x**2 + y**2, axis=0)
     analysis.remap_axis(x, axis=-1, source_coords=np.arange(8.0), target_coords=np.array([1.5]))
 
     import sys

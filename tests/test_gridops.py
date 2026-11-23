@@ -21,23 +21,33 @@ RNG = np.random.default_rng(492)
 #: How each function is called: its field arguments, and its other keywords.
 CALLS: dict[str, tuple[int, dict[str, Any]]] = {
     "advect": (3, {"scheme": Upwind(3)}),
+    "advect_momentum": (2, {"form": "blend"}),
     "arakawa_jacobian": (2, {}),
     "area_mean": (1, {}),
     "area_sum": (1, {}),
+    "bernoulli_potential": (3, {"gravity": 9.0}),
     "biharmonic": (1, {"kappa4": 0.3}),
     "coriolis": (2, {"f": 1.2}),
     "curl": (2, {}),
     "difference": (1, {"axis": "x", "src": "T", "dst": "U"}),
     "diffuse": (1, {"kappa": 0.3}),
+    "diffusive_fluxes": (1, {"kappa": 0.3}),
     "divergence": (2, {}),
+    "geostrophic_velocity": (1, {"f": 1.2}),
     "grad_perp": (1, {}),
     "gradient": (1, {}),
     "interpolate": (1, {"src": "T", "dst": "U"}),
     "kinetic_energy": (2, {}),
     "laplacian": (1, {}),
+    "okubo_weiss_parameter": (2, {}),
+    "pv_flux": (3, {"form": "blend"}),
+    "qg_potential_vorticity": (1, {"f0": 0.7, "beta": 0.2}),
     "reconstruct": (2, {"axis": "x", "scheme": Upwind(3)}),
     "shear_strain": (2, {}),
+    "strain_rate_squared": (2, {}),
+    "sw_potential_vorticity": (4, {}),
     "tensor_strain": (2, {}),
+    "vertical_velocity": (2, {}),
     "volume_mean": (1, {}),
     "volume_sum": (1, {}),
 }
@@ -57,6 +67,8 @@ def call(name: str, grid: Any, lead: tuple[int, ...] = ()) -> tuple[list[Any], A
     ]
     if name == "advect" and len(grid.axes) == 1:
         fields[-1] = None
+    if name == "geostrophic_velocity":
+        kwargs = {**kwargs, "f": kwargs["f"] * jnp.ones(grid.shape)}
     if getattr(grid, "_collocated", False):
         kwargs = {k: v for k, v in kwargs.items() if k not in ("src", "dst")}
     return fields, dict(kwargs)

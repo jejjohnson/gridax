@@ -320,12 +320,9 @@ def _basin_mask_2d(n: int = 12) -> np.ndarray:
 
 def _biharmonic_cases():
     """(name, op, area weight [Ny, Nx], wet [Ny, Nx]) for the 2-D operators."""
-    from gridax import (
-        CartesianCGrid2D,
-        Mask2D,
-        SphericalBiharmonicDiffusion2D,
-        SphericalCGrid2D,
-    )
+    from gridax import CartesianCGrid2D, Mask2D, SphericalCGrid2D
+
+    from tests.fixtures.bindings import SphericalBiharmonicDiffusion2D
 
     m = _basin_mask_2d()
     mask = Mask2D.from_mask(m)
@@ -415,13 +412,10 @@ class TestMaskedBiharmonicNoFlux:
 
 def test_masked_biharmonic_3d_constant_and_conservation():
     """The 3-D operators apply the same masked ``Dm(Dm(h))`` per level."""
-    from gridax import (
-        CartesianCGrid3D,
-        Mask3D,
-        SphericalBiharmonicDiffusion3D,
-        SphericalCGrid3D,
-    )
+    from gridax import CartesianCGrid3D, Mask3D, SphericalCGrid3D
     import jax.numpy as jnp
+
+    from tests.fixtures.bindings import SphericalBiharmonicDiffusion3D
 
     m2 = _basin_mask_2d()
     m3 = np.stack([np.zeros_like(m2), m2, m2, m2, np.zeros_like(m2)])  # [Nz, Ny, Nx]

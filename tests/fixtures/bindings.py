@@ -596,6 +596,12 @@ def _grid(f: Any, dx: Any, dy: Any) -> Any:
     )
 
 
+def geostrophic_velocity_sphere(
+    h: Any, f: Any, grid: Any, gravity: float = 9.80665
+) -> tuple[Any, Any]:
+    return g.geostrophic_velocity(h, grid, f=f, gravity=gravity)
+
+
 def bernoulli_potential(h: Any, u: Any, v: Any, gravity: float = 9.80665) -> Any:
     return g.bernoulli_potential(h, u, v, _grid(h, 1.0, 1.0), gravity=gravity)
 

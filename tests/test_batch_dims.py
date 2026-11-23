@@ -16,6 +16,7 @@ import itertools
 
 import equinox as eqx
 import gridax as fvx
+from gridax._src.api import OPERATIONS, SUPPORT
 from gridax.stencils import interior
 import jax
 import jax.numpy as jnp
@@ -23,6 +24,7 @@ import numpy as np
 import pytest
 
 from tests.fixtures.inputs import make_grid_2d, make_mask_2d
+from tests.test_gridops import CALLS
 
 BATCH = (2, 3)
 GRID = make_grid_2d()
@@ -30,17 +32,13 @@ MASK = make_mask_2d()
 SCALAR = 0.7  # value for every float argument (dx, dy, g_prime, f0, …)
 
 # Modules whose 2-D entry points are annotated ``*batch Ny Nx``. Every
-# public function and class method there that carries the annotation is
-# tested below, so the annotation and the behaviour cannot drift apart.
+# public function there that carries the annotation is tested below, so the
+# annotation and the behaviour cannot drift apart. The canonical functions are
+# tested through `GridOps`, masked and not.
 MODULES = (
     "gridax._src.operators.stencils",
-    "gridax._src.operators.difference",
-    "gridax._src.operators.interpolation",
-    "gridax._src.operators.divergence",
     "gridax._src.operators.vorticity",
-    "gridax._src.operators.coriolis",
     "gridax._src.operators.diagnostics",
-    "gridax._src.operators.diagnostic_operators",
 )
 
 
@@ -59,23 +57,21 @@ def _params(fn: Callable) -> list[inspect.Parameter]:
     ]
 
 
-def _discover() -> tuple[list, list]:
-    functions, classes = [], []
+def _discover() -> list:
+    functions = []
     for name in MODULES:
         mod = importlib.import_module(name)
         for attr, obj in vars(mod).items():
             if attr.startswith("_") or getattr(obj, "__module__", None) != name:
                 continue
+            if attr in OPERATIONS:
+                continue
             if inspect.isfunction(obj) and _batched(obj):
                 functions.append(obj)
-            elif inspect.isclass(obj) and any(
-                _batched(m) for _, m in inspect.getmembers(obj, inspect.isfunction)
-            ):
-                classes.append(obj)
-    return functions, classes
+    return functions
 
 
-FUNCTIONS, CLASSES = _discover()
+FUNCTIONS = _discover()
 
 BCS = {
     "Dirichlet": fvx.BC(x=fvx.Dirichlet(1.5), y=fvx.Dirichlet(1.5)),
@@ -96,9 +92,18 @@ BCS = {
 }
 
 
+class _Fields:
+    """A function of ``n`` fields."""
+
+    def __init__(self, n: int, fn: Callable) -> None:
+        self.n, self.fn = n, fn
+
+
 def _array_params(fn: Callable) -> int | None:
     """Number of required array arguments, or ``None`` if an argument is
     neither an array nor a float."""
+    if isinstance(fn, _Fields):
+        return fn.n
     n = 0
     for p in inspect.signature(fn).parameters.values():
         if p.default is not inspect.Parameter.empty or p.name == "self":
@@ -114,6 +119,8 @@ def _array_params(fn: Callable) -> int | None:
 
 
 def _call(fn: Callable, fields: list) -> object:
+    if isinstance(fn, _Fields):
+        return fn.fn(*fields)
     it = iter(fields)
     args = []
     for p in inspect.signature(fn).parameters.values():
@@ -129,20 +136,18 @@ def _call(fn: Callable, fields: list) -> object:
 
 def _cases() -> list:
     cases = []
-    grid_classes = CLASSES
-    for cls in grid_classes:
-        assert "grid" in getattr(cls, "__dataclass_fields__", {}), (
-            f"{cls.__name__} is annotated *batch but has no constructor in this test"
-        )
-    for cls, masked in itertools.product(grid_classes, (False, True)):
-        obj = cls(grid=GRID, mask=MASK if masked else None)
-        tag = f"{cls.__name__}{'[mask]' if masked else ''}"
-        for name, _ in inspect.getmembers(cls, predicate=inspect.isfunction):
-            if name.startswith("_") and name != "__call__":
-                continue
-            method = getattr(obj, name)
-            if _batched(method) and _array_params(method):
-                cases.append(pytest.param(method, id=f"{tag}.{name}"))
+    for name, grids in SUPPORT.items():
+        if "CartesianCGrid2D" not in grids:
+            continue
+        n, kwargs = CALLS[name]
+        for masked in (False, True):
+            ops = fvx.GridOps(GRID, MASK if masked else None)
+
+            def call(*fields, ops=ops, name=name, kwargs=kwargs):
+                return getattr(ops, name)(*fields, **kwargs)
+
+            tag = f"{name}{'[mask]' if masked else ''}"
+            cases.append(pytest.param(_Fields(n, call), id=tag))
     for fn in FUNCTIONS:
         assert _array_params(fn), fn.__name__
         cases.append(pytest.param(fn, id=fn.__name__))

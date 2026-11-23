@@ -504,8 +504,9 @@ class TestAdvection2DRotationStability:
     @pytest.mark.slow
     def test_rotation_stays_finite(self, rotation_setup, method, min_peak):
         grid, q0, u, v, pbc, dt, nsteps, ng = rotation_setup
-        from gridax import Advection2D
         from integrix.march import rk3_ssp_step
+
+        from tests.fixtures.bindings import Advection2D
 
         advect = Advection2D(grid)
 
@@ -576,8 +577,9 @@ class TestNegativeFlowConvergence:
     @staticmethod
     def _run_1d_advection(n_interior, method, n_periods=1):
         """Advect sin(2π x) with u=-1 for *n_periods* on a periodic domain."""
-        from gridax import Advection1D
         from integrix.march import rk3_ssp_step
+
+        from tests.fixtures.bindings import Advection1D
 
         ng = 4
         Lx = 1.0
@@ -649,8 +651,9 @@ class TestAdvectionConservation:
         ["upwind1", "weno3", "weno5", "weno7", "weno9", "minmod", "van_leer"],
     )
     def test_1d_conservation(self, method):
-        from gridax import Advection1D
         from integrix.march import rk3_ssp_step
+
+        from tests.fixtures.bindings import Advection1D
 
         ng = 4
         n = 64

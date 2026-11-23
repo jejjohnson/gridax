@@ -6,7 +6,6 @@ from gridax import (
     SphericalCGrid3D,
 )
 from gridax._src.operators.reductions import area_weights
-from gridax._src.operators.spherical_compound import geostrophic_velocity_sphere
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -21,6 +20,7 @@ from tests.fixtures.bindings import (
     SphericalVorticity2D,
     SphericalVorticity3D,
     Vorticity2D,
+    geostrophic_velocity_sphere,
 )
 
 R = 1.0
