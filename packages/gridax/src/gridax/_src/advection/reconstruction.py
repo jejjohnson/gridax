@@ -21,29 +21,18 @@ from jaxtyping import Float
 import numpy as np
 
 from gridax._src.advection.reconstruct import reconstruct
-from gridax._src.advection.schemes import (
-    _LIMITERS,
-    _TVD_EPS_REL,
-    TVD,
-    WENO,
-    Centred,
-    Scheme,
-    Upwind,
-    _Ladder,
-    _slope_ratio,
-)
 from gridax._src.grid import ArakawaCGrid1D, ArakawaCGrid2D, ArakawaCGrid3D
 from gridax._src.mask import Mask2D
 from gridax._src.operators._ghost import interior
 from gridax._src.pytree import array_namespace, pytree_dataclass
+from gridax._src.schemes.base import Ladder, Scheme
+from gridax._src.schemes.linear import Centred, Upwind
+from gridax._src.schemes.nonlinear import TVD, WENO
 
 if TYPE_CHECKING:
     from jaxtyping import Array
 else:
     Array = np.ndarray
-
-# kept importable here for the tests that read them (#294)
-__all__ = ["_LIMITERS", "_TVD_EPS_REL", "_slope_ratio"]
 
 
 def _masked_columns(
@@ -56,7 +45,7 @@ def _masked_columns(
     with nested ``where``; a cell no tier supports gets first-order upwind.
     """
     xp = array_namespace(h, u)
-    tiers = scheme.tiers
+    tiers = scheme.tiers()
     sizes = tuple(sorted({tier.size for tier in tiers}))
     amasks = mask.get_adaptive_masks(
         direction="x" if axis == -1 else "y", stencil_sizes=sizes
@@ -69,11 +58,11 @@ def _masked_columns(
         if axis == -1
         else (None, slice(2, None), slice(1, -1))
     )
-    selected = reconstruct(h, u, axis=axis, scheme=_Ladder(tiers[-1:]))[inner]
+    selected = reconstruct(h, u, axis=axis, scheme=Ladder(tiers[-1:], scheme))[inner]
     for k in range(len(tiers) - 2, -1, -1):
         m = amasks[tiers[k].size]
         use = xp.where(pos_flow, m[None, 1:-1, 1:-1], m[shifted])
-        flux = reconstruct(h, u, axis=axis, scheme=_Ladder(tiers[k:]))
+        flux = reconstruct(h, u, axis=axis, scheme=Ladder(tiers[k:], scheme))
         selected = xp.where(use, flux[inner], selected)
     return interior(selected, h)
 

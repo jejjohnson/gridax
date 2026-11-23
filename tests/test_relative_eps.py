@@ -12,7 +12,8 @@ tiny downwind slope, and ``van_leer(inf)``.
 from __future__ import annotations
 
 import gridax as fvx
-from gridax._src.advection import limiters, reconstruction, weno
+from gridax._src.advection import limiters, weno
+from gridax._src.schemes import nonlinear
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -104,18 +105,18 @@ class TestFlatStencilGivesLinearWeights:
 class TestTvdGuard:
     def test_tiny_downwind_slope_keeps_its_sign(self):
         """#294: num = 1, den = -0.5e-8 must give r < 0 (phi = 0, upwind)."""
-        r = reconstruction._slope_ratio(jnp.asarray(1.0), jnp.asarray(-0.5e-8))
+        r = nonlinear._slope_ratio(jnp.asarray(1.0), jnp.asarray(-0.5e-8))
         assert float(r) < 0
         for name in TVD:
-            assert float(reconstruction._LIMITERS[name](r)) == 0.0
+            assert float(nonlinear._LIMITERS[name](r)) == 0.0
 
     def test_flat_stencil_ratio_is_zero(self):
-        r = reconstruction._slope_ratio(jnp.asarray(0.0), jnp.asarray(0.0))
+        r = nonlinear._slope_ratio(jnp.asarray(0.0), jnp.asarray(0.0))
         assert float(r) == 0.0
 
     def test_ratio_is_exact_to_eps_rel(self):
         num, den = jnp.asarray(0.3), jnp.asarray(0.7)
-        r = reconstruction._slope_ratio(num, den)
+        r = nonlinear._slope_ratio(num, den)
         # relative floor 1e-6 · |num| on |den| = 0.7: within ~1e-6 relative
         assert float(r) == pytest.approx(0.3 / 0.7, rel=2e-6)
 

@@ -72,6 +72,7 @@ nav:
       - Masks: masks.md
   - Stencils and operators:
       - Raw stencils: stencils.md
+      - Schemes: schemes.md
       - Difference: difference.md
       - Interpolation: interpolation.md
       - Divergence: divergence.md

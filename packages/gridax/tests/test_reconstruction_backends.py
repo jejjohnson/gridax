@@ -84,15 +84,15 @@ RECONSTRUCT_CASES = [
 
 
 def _reconstruct(q, u, method, num_pts):
-    # the old (method, num_pts) cases, as schemes of gridax.advection (#464)
-    import gridax.advection as gadv
+    # the old (method, num_pts) cases, as schemes of gridax.schemes (#464)
+    from gridax.schemes import WENO, Upwind
 
     if num_pts == 1:
-        scheme = gadv.Upwind(1)
+        scheme = Upwind(1)
     elif method == "linear":
-        scheme = gadv.Upwind(num_pts)
+        scheme = Upwind(num_pts)
     else:
-        scheme = gadv.WENO(num_pts, "z" if method == "wenoz" else "js")
+        scheme = WENO(num_pts, "z" if method == "wenoz" else "js")
     return gridax.reconstruct(q, u, axis=-1, scheme=scheme)
 
 

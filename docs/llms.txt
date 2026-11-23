@@ -17,6 +17,7 @@ Claude Code users can install the `finitevolx` plugin: `/plugin marketplace add 
 - [Building with agents](https://jejjohnson.github.io/gridax/agents/): the Claude Code plugin, this file, and rules to paste into your project's AGENTS.md
 - [C-grid discretization](https://jejjohnson.github.io/gridax/cgrid-discretization/): staggering, array shapes and the ghost-cell convention
 - [Raw stencils](https://jejjohnson.github.io/gridax/stencils/): the finite-volume derivation and the three operator layers
+- [Schemes](https://jejjohnson.github.io/gridax/schemes/): which values an operation reads, their weights, footprints and halos
 - [Masks](https://jejjohnson.github.io/gridax/masks/): land-sea masks, staggered masks and coastal stencil fallback
 
 ## Theory and usage
@@ -37,6 +38,7 @@ Claude Code users can install the `finitevolx` plugin: `/plugin marketplace add 
 - [Grids](https://jejjohnson.github.io/gridax/reference/grids/)
 - [Masks](https://jejjohnson.github.io/gridax/reference/masks/)
 - [Raw stencils](https://jejjohnson.github.io/gridax/reference/stencils/)
+- [Schemes](https://jejjohnson.github.io/gridax/reference/schemes/)
 - [Difference](https://jejjohnson.github.io/gridax/reference/difference/) and [interpolation](https://jejjohnson.github.io/gridax/reference/interpolation/)
 - [Advection](https://jejjohnson.github.io/gridax/reference/advection/) and [reconstruction](https://jejjohnson.github.io/gridax/reference/reconstruction/)
 - [Boundary conditions](https://jejjohnson.github.io/gridax/reference/boundary_conditions/)
