@@ -158,7 +158,8 @@ def laplacian(
         The point of a plain array, ``"T"`` by default. A `CField` has its
         own.
     mask : Mask1D, Mask2D or Mask3D, optional
-        Zeroes the dry points of ``at``; on a collocated grid as in
+        Zeroes the dry points of ``at``. No gradient crosses a coast of T points;
+        the dry points of another kind are zero. On a collocated grid as in
         :func:`divergence`.
 
     Returns

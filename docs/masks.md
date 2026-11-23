@@ -226,9 +226,19 @@ For a helper that takes no mask, apply it at the call site: `gridax.apply_mask(f
 
 ### What a dry point may hold
 
-The transport (`advect`, `reconstruct`, `diffuse`, `biharmonic`) and the diagnostics (`kinetic_energy`, `bernoulli_potential`, `shear_strain`, `tensor_strain`, `strain_rate_squared`, `okubo_weiss_parameter`, `qg_potential_vorticity`, `arakawa_jacobian`) zero every field on the dry points of its stagger before any stencil reads it, and mask the output with `where`, so a land value stored as `NaN` (e.g. from `Mask2D.from_center`) neither leaks into wet cells nor survives at dry ones. The ghost ring is BC-owned: it is passed through unchanged and must be finite.
+Anything, `NaN` too: no operation with a mask reads a dry value off the ghost ring, so land values reach neither the result nor its gradient (`tests/test_dry_inputs.py` checks every operation). Each kind of field has its rule for the stencils that reach across a coast:
 
-The moves and the calculus (`difference`, `interpolate`, `divergence`, `curl`, `laplacian`, …), `coriolis`, `advect_momentum`, `sw_potential_vorticity` and `geostrophic_velocity` mask their outputs but do not sanitize their inputs: the fields on land **must be finite** there. `geostrophic_velocity` only guards the division (it sets the face-averaged `f` to `1` on dry faces).
+| Field | Beyond the coast | Because |
+|---|---|---|
+| velocities and fluxes, at U, V or W | zero | nothing flows through a coast |
+| a tracer at T, in `advect`, `diffuse`, `biharmonic`, `laplacian` | no flux through the face | the coast is a closed wall |
+| ψ at T, in `grad_perp` | a corner is the mean of its wet cells | one value per corner, so the velocity stays non-divergent |
+| h, in `geostrophic_velocity` | the slope is the mean of the wet differences around the face | a uniform slope is kept |
+| a field at X | a corner is read if one of its cells is wet | corners on a coast hold boundary values |
+
+A velocity point next to land in `laplacian(u, grid, at="U", mask=mask)` reads zero on the dry points, which is right for the wall the component is normal to; a tangential wall needs `fill_ghosts(…, mask=mask)` first, on a scheme with `Adaptive(mask="none")`.
+
+`Adaptive(scheme, mask="none")` on `difference` and `interpolate` is the one way to read land: it masks the output only. The ghost ring is BC-owned: it is passed through unchanged, whatever the mask says there, and must be finite.
 
 ### Dimension → mask type
 
@@ -258,7 +268,7 @@ The X points use the **strict** 4-of-4 corner mask (`mask.wet(at="X", kind="stri
 
 The result is always "dry points of the output are exactly 0". How a function gets there depends on what its stencil reads:
 
-**Mask the output.** The moves, the calculus on one component, `coriolis` and the diagnostics compute as if every point were wet and then mask the output.  The diagnostics sanitize their inputs first and select with `where(wet, out, 0)` instead of multiplying, as above.
+**Mask the output.** The moves, the calculus on one component, `coriolis` and the diagnostics zero the dry values of their inputs, compute as if every point were wet, and then mask the output with `where(wet, out, 0)`.
 
 **Mask the intermediate fields.** `advect_momentum`, `sw_potential_vorticity`, `strain_rate_squared` and `okubo_weiss_parameter` mask the staggered fields they are built from before combining them, so a coastal T cell averages in zeros from its dry corners.
 
@@ -272,7 +282,7 @@ flux_y *= mask.wet(at="V")  # V faces
 tendency *= mask.wet()      # final output
 ```
 
-**Apply the masked harmonic operator twice.** The tendency of `biharmonic` is `−κ · Dm(Dm(h))`, where `Dm` is the masked no-flux `diffuse`.  Dry inputs are zeroed first, so land may hold `NaN` or a fill value.  Because the second pass also zeroes the wet→dry fluxes, the dry zeros of the intermediate `Dm(h)` are never read: the coast is a no-flux wall for both `h` and `∇²h`, exactly like the closed domain walls.  The result is conservative (`Σ_wet ∂h/∂t = 0`) and symmetric on the wet cells, and no land value reaches a wet cell.
+**Apply the masked harmonic operator twice.** The tendency of `biharmonic` is `−κ · Dm(Dm(h))`, where `Dm` is the masked no-flux `diffuse`.  Because the second pass also zeroes the wet→dry fluxes, the dry zeros of the intermediate `Dm(h)` are never read: the coast is a no-flux wall for both `h` and `∇²h`, exactly like the closed domain walls.  The result is conservative (`Σ_wet ∂h/∂t = 0`) and symmetric on the wet cells, and no land value reaches a wet cell.
 
 On a 3-D grid the functions act on the last two axes of the interior levels, with the 3-D masks, and pad a zero ghost slab.
 
