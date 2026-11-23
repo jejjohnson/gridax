@@ -20,11 +20,13 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Float
 
+from gridax._src.operators.calculus import curl
 from gridax._src.operators.diagnostic_operators import (
     Energetics2D,
     QGPotentialVorticity2D,
     Strain2D,
 )
+from gridax._src.operators.diagnostics import kinetic_energy
 from gridax._src.operators.reductions import area_mean, area_sum
 from gridax._src.operators.vorticity import Vorticity2D
 from gridax._src.pipekit.base import GridOperator, over_leading
@@ -37,7 +39,7 @@ class RelativeVorticity(GridOperator):
     """ζ = δₓv / Δx − δᵧu / Δy at X-points.  ``(U, V) → X``."""
 
     def _apply(self, u: Field, v: Field) -> Field:
-        return Vorticity2D(grid=self.grid).relative_vorticity(u, v)
+        return curl(u, v, self.grid)
 
 
 class PotentialVorticity(GridOperator):
@@ -88,7 +90,7 @@ class KineticEnergy(GridOperator):
     """½ (ū² + v̄²) at T-points (velocities averaged to T).  ``(U, V) → T``."""
 
     def _apply(self, u: Field, v: Field) -> Field:
-        return Energetics2D(grid=self.grid).kinetic_energy(u, v)
+        return kinetic_energy(u, v, self.grid)
 
 
 class AvailablePE(GridOperator):
