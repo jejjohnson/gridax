@@ -22,18 +22,19 @@ from gridax import (
     CartesianCGrid2D,
     CartesianCGrid3D,
 )
-from gridax._src.advection.advection import (
-    Advection1D,
-    Advection2D,
-    Advection3D,
-)
-from gridax._src.diffusion.diffusion import Diffusion2D, Diffusion3D
 from gridax.schemes import WENO, Upwind
 import jax.numpy as jnp
 import numpy as np
 import pytest
 
 from tests._schemes import SCHEMES
+from tests.fixtures.bindings import (
+    Advection1D,
+    Advection2D,
+    Advection3D,
+    Diffusion2D,
+    Diffusion3D,
+)
 
 
 # ── fixtures ────────────────────────────────────────────────────────────────

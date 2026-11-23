@@ -14,6 +14,8 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from tests.fixtures import bindings
+
 GOLDEN = np.load(Path(__file__).parent / "fixtures" / "golden" / "boundary_atoms.npz")
 DX, DY = (float(d) for d in GOLDEN["spacing"])
 GRID = g.CartesianCGrid2D.from_interior(7, 7, 7 * DX, 7 * DY)
@@ -291,7 +293,7 @@ class TestPoint:
         ones = jnp.ones(GRID.shape)
         u = fill_ghosts(ones, GRID, walls, stagger="U")
         v = fill_ghosts(ones, GRID, walls, stagger="V")
-        div = g.Difference2D(GRID).divergence(u, v)[1:-1, 1:-1]
+        div = bindings.Difference2D(GRID).divergence(u, v)[1:-1, 1:-1]
         assert abs(float(div.sum())) < 1e-12
 
     def test_the_point_of_a_field_is_its_own(self):

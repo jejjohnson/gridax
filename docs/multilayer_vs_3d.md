@@ -42,24 +42,25 @@ import jax.numpy as jnp
 import gridax as fvx
 
 grid = fvx.CartesianCGrid2D.from_interior(64, 64, 1e4, 1e4)
-diff2d = fvx.Difference2D(grid=grid)
+ops = fvx.GridOps(grid)
 
 nl = 3                                     # number of layers
 h = jnp.ones((nl, grid.Ny, grid.Nx))      # [nl, Ny, Nx]
 
-# Apply diff_x_T_to_U to every layer in one vectorised call
-dh_dx = jax.vmap(diff2d.diff_x_T_to_U)(h)   # shape [nl, Ny, Nx]
+# dh/dx at the U points of every layer in one vectorised call
+dh_dx = jax.vmap(lambda h: ops.difference(h, axis="x", src="T", dst="U"))(h)
+# shape [nl, Ny, Nx]
 ```
 
 For operators that take multiple arguments (e.g., `divergence`), pass the
-bound method directly — :func:`jax.vmap` batches each positional argument
+method of `GridOps` directly — `jax.vmap` batches each positional argument
 over the leading axis independently:
 
 ```python
 u = jnp.ones((nl, grid.Ny, grid.Nx))
 v = jnp.ones((nl, grid.Ny, grid.Nx))
 
-div = jax.vmap(diff2d.divergence)(u, v)
+div = jax.vmap(ops.divergence)(u, v)
 ```
 
 ### What `jax.vmap` does here
@@ -70,7 +71,7 @@ div = jax.vmap(diff2d.divergence)(u, v)
 
 ---
 
-## True 3D: `Difference3D`
+## True 3D: a 3-D grid
 
 ### Concept
 
@@ -83,12 +84,11 @@ layers are written by the stencil.
 
 ```python
 grid3d = fvx.CartesianCGrid3D.from_interior(64, 64, 10, 1e4, 1e4, 50.0)
-diff3d = fvx.Difference3D(grid=grid3d)
 
 # h has shape [Nz, Ny, Nx]; Nz = 12 total (10 interior + 2 ghost)
 h = jnp.ones((grid3d.Nz, grid3d.Ny, grid3d.Nx))
 
-dh_dx = diff3d.diff_x_T_to_U(h)
+dh_dx = fvx.difference(h, grid3d, axis="x", src="T", dst="U")
 # dh_dx[0]  = 0   ← ghost layer (k=0), not written
 # dh_dx[1:-1] ≠ 0 ← interior layers, written
 # dh_dx[-1] = 0   ← ghost layer (k=Nz-1), not written
@@ -98,7 +98,7 @@ dh_dx = diff3d.diff_x_T_to_U(h)
 
 ## Key Differences at a Glance
 
-| Property | `jax.vmap(fn)` | `Difference3D` |
+| Property | `jax.vmap(fn)` | a 3-D grid |
 |---|---|---|
 | Leading axis meaning | Layer / mode index | Vertical *z* dimension |
 | Ghost layers at k=0, k=N-1 | ❌ None — all slices are real | ✅ Required — top/bottom are ghost shells |
@@ -123,16 +123,17 @@ import gridax as fvx
 grid2d = fvx.CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
 grid3d = fvx.CartesianCGrid3D.from_interior(8, 8, 4, 1.0, 1.0, 1.0)
 
-diff2d = fvx.Difference2D(grid=grid2d)
-diff3d = fvx.Difference3D(grid=grid3d)
+def dh_dx(h, grid):
+    return fvx.difference(h, grid, axis="x", src="T", dst="U")
+
 
 Nz = grid3d.Nz   # 6 total (4 interior + 2 ghost)
 h = jnp.arange(Nz * grid3d.Ny * grid3d.Nx, dtype=float).reshape(
     Nz, grid3d.Ny, grid3d.Nx
 )
 
-ml_result = jax.vmap(diff2d.diff_x_T_to_U)(h)
-d3_result = diff3d.diff_x_T_to_U(h)
+ml_result = jax.vmap(lambda layer: dh_dx(layer, grid2d))(h)
+d3_result = dh_dx(h, grid3d)
 
 # Interior z-levels AND horizontal interior agree exactly
 np.testing.assert_allclose(
@@ -141,7 +142,7 @@ np.testing.assert_allclose(
 )
 
 # But the boundary layers differ:
-# Difference3D: k=0, k=5 are zero (ghost shells)
+# the 3-D grid: k=0, k=5 are zero (ghost shells)
 print(d3_result[0].max())    # 0.0
 print(d3_result[-1].max())   # 0.0
 
@@ -157,8 +158,8 @@ print(ml_result[-1].max())   # non-zero
 - Use **`jax.vmap(fn)`** when your leading axis indexes independent
   physical layers or modes.  Every layer is real; `jax.vmap` is the
   correct, efficient way to batch over them.
-- Use **`Difference3D`** when your leading axis is a spatial vertical
+- Use a **3-D grid** when your leading axis is a spatial vertical
   coordinate that requires top/bottom ghost shells for boundary conditions.
-- The two are **not interchangeable**.  Applying `Difference3D` to a true
-  multilayer field silently zeros out the top and bottom layers, which are
+- The two are **not interchangeable**.  Passing a true
+  multilayer field with a 3-D grid silently zeros out the top and bottom layers, which are
   physically real in that context.

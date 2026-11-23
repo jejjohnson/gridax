@@ -36,57 +36,8 @@ from gridax import (
     SphericalCGrid2D,
     SphericalCGrid3D,
 )
-from gridax._src.advection.advection import (
-    Advection1D,
-    Advection2D,
-    Advection3D,
-)
-from gridax._src.advection.spherical_advection import (
-    SphericalAdvection2D,
-    SphericalAdvection3D,
-)
-from gridax._src.diffusion.diffusion import (
-    BiharmonicDiffusion2D,
-    BiharmonicDiffusion3D,
-    Diffusion2D,
-    Diffusion3D,
-)
-from gridax._src.diffusion.spherical_diffusion import (
-    SphericalBiharmonicDiffusion2D,
-    SphericalBiharmonicDiffusion3D,
-    SphericalDiffusion2D,
-    SphericalDiffusion3D,
-)
-from gridax._src.operators.diagnostic_operators import QGPotentialVorticity2D
-from gridax._src.operators.diagnostics import (
-    potential_vorticity_multilayer,
-    stretching_term,
-)
-from gridax._src.operators.difference import (
-    Difference1D,
-    Difference2D,
-    Difference3D,
-)
-from gridax._src.operators.divergence import Divergence2D
-from gridax._src.operators.interpolation import (
-    Interpolation1D,
-    Interpolation2D,
-    Interpolation3D,
-)
+from gridax._src.operators.diagnostics import stretching_term
 from gridax._src.operators.jacobian import arakawa_jacobian
-from gridax._src.operators.spherical_compound import (
-    SphericalDivergence2D,
-    SphericalDivergence3D,
-    SphericalLaplacian2D,
-    SphericalLaplacian3D,
-    SphericalVorticity2D,
-    SphericalVorticity3D,
-)
-from gridax._src.operators.spherical_difference import (
-    SphericalDifference2D,
-    SphericalDifference3D,
-)
-from gridax._src.operators.vorticity import Vorticity2D, Vorticity3D
 from gridax._src.solvers.spectral import (
     solve_poisson_dst,
     solve_poisson_fft,
@@ -97,6 +48,40 @@ import numpy as np
 import pytest
 
 from tests._schemes import SCHEMES
+from tests.fixtures.bindings import (
+    Advection1D,
+    Advection2D,
+    Advection3D,
+    BiharmonicDiffusion2D,
+    BiharmonicDiffusion3D,
+    Difference1D,
+    Difference2D,
+    Difference3D,
+    Diffusion2D,
+    Diffusion3D,
+    Divergence2D,
+    Interpolation1D,
+    Interpolation2D,
+    Interpolation3D,
+    QGPotentialVorticity2D,
+    SphericalAdvection2D,
+    SphericalAdvection3D,
+    SphericalBiharmonicDiffusion2D,
+    SphericalBiharmonicDiffusion3D,
+    SphericalDifference2D,
+    SphericalDifference3D,
+    SphericalDiffusion2D,
+    SphericalDiffusion3D,
+    SphericalDivergence2D,
+    SphericalDivergence3D,
+    SphericalLaplacian2D,
+    SphericalLaplacian3D,
+    SphericalVorticity2D,
+    SphericalVorticity3D,
+    Vorticity2D,
+    Vorticity3D,
+    potential_vorticity_multilayer,
+)
 
 NX = NY = 16
 NZ = 4
@@ -903,8 +888,8 @@ class TestConstantsAudit:
         modules = list(_audited_modules())
         assert len(modules) > 20
         names = {p.name for p in modules}
-        assert "difference.py" in names
-        assert "spherical_diffusion.py" in names
+        assert "calculus.py" in names
+        assert "diffuse.py" in names
 
     def test_audit_detects_an_aliased_constant(self, tmp_path):
         """``STANDARD as g`` is the same constant under another name."""

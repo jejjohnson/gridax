@@ -1,17 +1,9 @@
-# Diffusion Operators
+# Diffusion
 
-Harmonic (∇²) and biharmonic (∇⁴) diffusion operators for C-grid staggered models.
+Harmonic (∇²) and biharmonic (∇⁴) diffusion on staggered C-grids.
 
 ::: gridax.diffuse
 
+::: gridax.diffusive_fluxes
+
 ::: gridax.biharmonic
-
-## The class forms
-
-::: gridax.Diffusion2D
-
-::: gridax.Diffusion3D
-
-::: gridax.BiharmonicDiffusion2D
-
-::: gridax.BiharmonicDiffusion3D

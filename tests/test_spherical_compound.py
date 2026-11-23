@@ -6,21 +6,22 @@ from gridax import (
     SphericalCGrid3D,
 )
 from gridax._src.operators.reductions import area_weights
-from gridax._src.operators.spherical_compound import (
+import jax
+import jax.numpy as jnp
+import numpy as np
+import pytest
+
+from tests.fixtures.bindings import (
+    SphericalDifference2D,
     SphericalDivergence2D,
     SphericalDivergence3D,
     SphericalLaplacian2D,
     SphericalLaplacian3D,
     SphericalVorticity2D,
     SphericalVorticity3D,
+    Vorticity2D,
     geostrophic_velocity_sphere,
 )
-from gridax._src.operators.spherical_difference import SphericalDifference2D
-from gridax._src.operators.vorticity import Vorticity2D
-import jax
-import jax.numpy as jnp
-import numpy as np
-import pytest
 
 R = 1.0
 NX_INT, NY_INT = 10, 8
@@ -117,8 +118,8 @@ class TestSphericalVorticity2D:
         # Forward values on wet corners equal the unguarded formula.
         pv = op.potential_vorticity(u, v, h, f)
         zeta = op.relative_vorticity(u, v)
-        num = zeta + op._interp.T_to_X(f)
-        den = op._interp.T_to_X(h)
+        num = zeta + op.ops.interpolate(f, src="T", dst="X")
+        den = op.ops.interpolate(h, src="T", dst="X")
         wet = np.asarray(mask.wet(at="X", kind="strict"))
         wet_int = wet.copy()
         wet_int[[0, -1], :] = False

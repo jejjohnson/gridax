@@ -11,11 +11,10 @@ Read contract 2 (the advection write region and `wall` modes), contract 3
 
 ## 1. Make sure it does not exist yet
 
-Search `docs/capabilities.md` and `Reconstruction2D`'s methods: `naive`,
-`upwind1/2/3`, `weno3/5/7/9`, `wenoz3/5`, `tvd` with `minmod` / `van_leer`
-/ `superbee` / `mc`, the functional `reconstruct` / `upwind_1pt` /
-`upwind_3pt` / `upwind_5pt`, the `weno_*pts*` and `linear_*pts*` stencil
-functions, and the face fluxes `uv_center_flux`, `uv_node_flux`,
+Search `docs/capabilities.md` and `gridax.schemes`: `Centred(k)`, `Upwind(k)`,
+`Biased(k, side)`, `WENO(k)` and `WENO(k, "z")`, `TVD` with `minmod` / `van_leer`
+/ `superbee` / `mc`; the `upwind_*pt`, `weno_*pts*` and `linear_*pts*` stencil
+functions of `gridax.advection.kernels`; `reconstruct`, `upwind_flux` and
 `rusanov_flux`. A different limiter for TVD is a new limiter, not a new
 scheme.
 
@@ -26,16 +25,16 @@ Everything here runs on any array backend: `xp = array_namespace(...)` and the h
 | Piece | File | Wire it into |
 |---|---|---|
 | Point stencil (`qm, q0, qp, … → q at the face`) | `weno.py` (nonlinear, left and `_right` variants), `linear.py` (polynomial) | `__init__.py` exports |
-| Limiter `φ(r)` | `limiters.py` | `_LIMITERS` in `_src/schemes/nonlinear.py` (then `TVD(limiter)` takes it, on every operator) |
-| Scheme (a ladder of tiers) | `gridax/_src/schemes/linear.py` or `nonlinear.py`: a frozen dataclass with `order` and `tiers()`, widest first, the last one always fitting; `upwinded` and `linear` as they are | `gridax/schemes.py` exports; every operator then takes it as `scheme=`, masked or not |
-| Coastal fallback | nothing: `face_flux` (`reconstruct.py`) picks the widest tier on wet cells, from `Tier.size` | a size above 10 is computed per call instead of being cached by the classes |
+| Limiter `φ(r)` | `limiters.py` | `_LIMITERS` in `_src/schemes/nonlinear.py` (then `TVD(limiter)` takes it, in every function) |
+| Scheme (a ladder of tiers) | `gridax/_src/schemes/linear.py` or `nonlinear.py`: a frozen dataclass with `order` and `tiers()`, widest first, the last one always fitting; `upwinded` and `linear` as they are | `gridax/schemes.py` exports; `advect`, `reconstruct` and the moves then take it as `scheme=`, masked or not |
+| Coastal fallback | nothing: `face_flux` (`reconstruct.py`) picks the widest tier on wet cells, from `Tier.size` | nothing |
 
 Rules:
 
 - The face value is upwinded on the sign of the face velocity
   (`jnp.where(u >= 0, left_biased, right_biased)`), and the flux is
   `h_face * u`, single-valued at each face so the divergence conserves mass.
-- Closed walls: the Cartesian operators write the tendency on `[2:-2]` /
+- Closed walls: `advect` writes the tendency on `[2:-2]` /
   `[2:-2, 2:-2]`; a stencil wider than the ghost ring must fall back near
   the walls (as `weno5` does) rather than read outside the array.
 - No absolute epsilon on a dimensional quantity: floor the WENO weights
@@ -51,16 +50,14 @@ Rules:
 
 `packages/gridax/src/gridax/__init__.py` (import + `__all__` group, e.g. `# WENO stencil
 functions`, `# Flux limiters`), the `docs/api/advection.md` /
-`docs/api/reconstruction.md` page, the method list in the `Advection*`
-docstrings and in `docs/advection.md` and `docs/schemes.md`, then `make capabilities`.
+`docs/api/reconstruction.md` page, the list of schemes in `docs/advection.md` and `docs/schemes.md`, then `make capabilities`.
 
 ## 4. Tests
 
 - Point stencils / limiters: `tests/test_weno.py` (constant fields, polynomial
   exactness, monotonicity near a step, symmetry), `tests/test_limiters.py`
   (TVD region, φ(1) = 1).
-- Grid methods: `tests/test_reconstruction.py` (`TestReconstruction1D/2D/3D`
-  and the `*Masked` classes); the method in the `test_all_methods_run`
+- On a grid: `tests/test_reconstruction.py`; the scheme in the `test_all_methods_run`
   lists of `tests/test_advection.py` and its name in `tests/_schemes.py`; conservation
   (`test_1d_conservation`).
 - Units: add the method to `LINEAR_METHODS`, `WENO_METHODS` or `TVD_METHODS`

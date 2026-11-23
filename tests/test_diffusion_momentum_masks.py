@@ -20,20 +20,18 @@ API on ``Mask2D`` / ``Mask3D`` class fields:
 from __future__ import annotations
 
 import equinox as eqx
-from gridax._src.diffusion.diffusion import (
-    BiharmonicDiffusion2D,
-    BiharmonicDiffusion3D,
-    Diffusion2D,
-    Diffusion3D,
-)
-from gridax._src.diffusion.momentum import (
-    MomentumAdvection2D,
-    MomentumAdvection3D,
-)
 import numpy as np
 import pytest
 
 from tests.fixtures._helpers import assert_matches_golden
+from tests.fixtures.bindings import (
+    BiharmonicDiffusion2D,
+    BiharmonicDiffusion3D,
+    Diffusion2D,
+    Diffusion3D,
+    MomentumAdvection2D,
+    MomentumAdvection3D,
+)
 from tests.fixtures.inputs import (
     make_grid_2d,
     make_grid_3d,
@@ -322,12 +320,9 @@ def _basin_mask_2d(n: int = 12) -> np.ndarray:
 
 def _biharmonic_cases():
     """(name, op, area weight [Ny, Nx], wet [Ny, Nx]) for the 2-D operators."""
-    from gridax import (
-        CartesianCGrid2D,
-        Mask2D,
-        SphericalBiharmonicDiffusion2D,
-        SphericalCGrid2D,
-    )
+    from gridax import CartesianCGrid2D, Mask2D, SphericalCGrid2D
+
+    from tests.fixtures.bindings import SphericalBiharmonicDiffusion2D
 
     m = _basin_mask_2d()
     mask = Mask2D.from_mask(m)
@@ -417,13 +412,10 @@ class TestMaskedBiharmonicNoFlux:
 
 def test_masked_biharmonic_3d_constant_and_conservation():
     """The 3-D operators apply the same masked ``Dm(Dm(h))`` per level."""
-    from gridax import (
-        CartesianCGrid3D,
-        Mask3D,
-        SphericalBiharmonicDiffusion3D,
-        SphericalCGrid3D,
-    )
+    from gridax import CartesianCGrid3D, Mask3D, SphericalCGrid3D
     import jax.numpy as jnp
+
+    from tests.fixtures.bindings import SphericalBiharmonicDiffusion3D
 
     m2 = _basin_mask_2d()
     m3 = np.stack([np.zeros_like(m2), m2, m2, m2, np.zeros_like(m2)])  # [Nz, Ny, Nx]

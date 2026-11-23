@@ -4,14 +4,12 @@ from gridax import (
     SphericalCGrid2D,
     SphericalCGrid3D,
 )
-from gridax._src.operators.spherical_difference import (
-    SphericalDifference2D,
-    SphericalDifference3D,
-)
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
+from tests.fixtures.bindings import SphericalDifference2D, SphericalDifference3D
 
 R = 1.0
 NX_INT, NY_INT = 10, 8
@@ -246,7 +244,7 @@ class TestSphericalDifference3D:
         key = jax.random.PRNGKey(0)
         h = jax.random.normal(key, (grid3d.Nz, grid3d.Ny, grid3d.Nx))
         result_3d = diff3d.diff_lon_T_to_U(h)
-        diff2d = diff3d._diff2d
+        diff2d = SphericalDifference2D(grid=grid3d.horizontal_grid())
         # Interior z-levels should match 2D; ghost slices (k=0, k=-1) are zeroed.
         for k in range(1, grid3d.Nz - 1):
             result_2d = diff2d.diff_lon_T_to_U(h[k])

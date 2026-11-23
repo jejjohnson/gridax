@@ -2,8 +2,8 @@
 Functional reconstruction dispatcher for upwind face-value computation.
 
 Provides a stateless, pure-function interface for computing upwind face
-fluxes on Arakawa C-grids.  This is the functional counterpart of the
-:class:`~gridax.Reconstruction2D` class — it requires no grid object
+fluxes on Arakawa C-grids: the kernels of :mod:`gridax.advection.kernels`.  It
+requires no grid object
 and works on raw arrays with ghost-cell convention.
 
 The axis-generic entry point is :func:`gridax.advection.reconstruct` (#464).

@@ -12,6 +12,8 @@ import numpy as np
 import pytest
 from scipy.ndimage import binary_dilation
 
+from tests.fixtures import bindings
+
 SIZES = (2, 4, 6, 8, 10)
 RNG = np.random.default_rng(506)
 
@@ -112,7 +114,7 @@ def test_the_binding_is_the_function(scheme: Any) -> None:
     mask = MASKS["2d"]
     q, u, v = RNG.normal(size=(3, *grid.shape))
     expected = gridax.advect(q, u, v, grid, scheme=scheme, mask=mask)
-    got = gridax.Advection2D(grid, mask)(q, u, v, scheme=scheme)
+    got = bindings.Advection2D(grid, mask)(q, u, v, scheme=scheme)
     np.testing.assert_array_equal(got, expected)
 
 
@@ -221,6 +223,6 @@ def test_a_mask_stores_nine_bytes_per_cell() -> None:
 
 def test_a_binding_stores_its_mask_once() -> None:
     grid = gridax.CartesianCGrid2D.from_interior(32, 28, 1.0, 1.0)
-    op = gridax.Advection2D(grid, MASKS["2d"])
+    op = bindings.Advection2D(grid, MASKS["2d"])
     extra = len(jax.tree.leaves(op)) - len(jax.tree.leaves(grid))
     assert extra == len(jax.tree.leaves(MASKS["2d"]))

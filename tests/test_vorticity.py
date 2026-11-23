@@ -1,10 +1,11 @@
 """Tests for Vorticity2D and Vorticity3D."""
 
 from gridax import CartesianCGrid2D, CartesianCGrid3D
-from gridax._src.operators.vorticity import Vorticity2D, Vorticity3D
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
+from tests.fixtures.bindings import Vorticity2D, Vorticity3D
 
 
 @pytest.fixture

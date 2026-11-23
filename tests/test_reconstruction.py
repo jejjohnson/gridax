@@ -6,14 +6,11 @@ from gridax import (
     CartesianCGrid3D,
     Mask2D,
 )
-from gridax._src.advection.reconstruction import (
-    Reconstruction1D,
-    Reconstruction2D,
-    Reconstruction3D,
-)
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
+from tests.fixtures.bindings import Reconstruction1D, Reconstruction2D, Reconstruction3D
 
 
 @pytest.fixture

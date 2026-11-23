@@ -77,11 +77,8 @@ import matplotlib
 
 matplotlib.use("Agg")
 from gridax import (
-    Advection2D,
     CartesianCGrid2D,
-    Difference2D,
-    Interpolation2D,
-    Vorticity2D,
+    GridOps,
     embed,
     interior,
 )
@@ -115,8 +112,7 @@ def to_wall_field(field: xr.DataArray) -> Array:
 
 def geostrophic_velocity_from_streamfunction(
     psi_field: Array,
-    diff: Difference2D,
-    interp: Interpolation2D,
+    ops: GridOps,
 ) -> tuple[Array, Array]:
     """Map a T-point streamfunction to face-centred geostrophic velocities.
 
@@ -130,19 +126,17 @@ def geostrophic_velocity_from_streamfunction(
     ----------
     psi_field : Array
         Streamfunction stored at T-points with one ghost-cell ring.
-    diff : Difference2D
-        Difference operators for the active grid.
-    interp : Interpolation2D
-        Interpolation operators for the active grid.
+    ops : GridOps
+        The operations on the active grid.
 
     Returns
     -------
     tuple[Array, Array]
         The zonal and meridional velocities on U and V points.
     """
-    psi_on_x = interp.T_to_X(psi_field)
-    u_field = -diff.diff_y_X_to_U(psi_on_x)
-    v_field = diff.diff_x_X_to_V(psi_on_x)
+    psi_on_x = ops.interpolate(psi_field, src="T", dst="X")
+    u_field = -ops.difference(psi_on_x, axis="y", src="X", dst="U")
+    v_field = ops.difference(psi_on_x, axis="x", src="X", dst="V")
     return u_field, v_field
 
 
@@ -403,10 +397,7 @@ def run_simulation(config: QuasiGeostrophicConfig | None = None) -> xr.Dataset:
     """
     config = config or QuasiGeostrophicConfig()
     grid = CartesianCGrid2D.from_interior(config.nx, config.ny, config.Lx, config.Ly)
-    diff = Difference2D(grid=grid)
-    interp = Interpolation2D(grid=grid)
-    adv = Advection2D(grid=grid)
-    vort = Vorticity2D(grid=grid)
+    ops = GridOps(grid)
     forcing = make_preprocessing_dataset(config, grid)
 
     q = to_wall_field(forcing["q0"])
@@ -463,19 +454,17 @@ def run_simulation(config: QuasiGeostrophicConfig | None = None) -> xr.Dataset:
         3. Linear drag acts on relative vorticity zeta = nabla^2 psi, not on q_a.
         """
         psi_field = invert_streamfunction(q_field)
-        u_field, v_field = geostrophic_velocity_from_streamfunction(
-            psi_field, diff, interp
-        )
+        u_field, v_field = geostrophic_velocity_from_streamfunction(psi_field, ops)
         # -div(u*q_a): advective tendency (writes to [2:-2, 2:-2])
-        q_rhs = adv(q_field, u_field, v_field, scheme=Upwind(1))
+        q_rhs = ops.advect(q_field, u_field, v_field, scheme=Upwind(1))
         # -v*beta: planetary-vorticity advection at T-points.
         # Add directly to q_rhs at the interior to avoid an extra allocation.
-        v_center = interp.V_to_T(v_field)
+        v_center = ops.interpolate(v_field, src="V", dst="T")
         q_rhs = q_rhs.at[1:-1, 1:-1].add(-beta * v_center[1:-1, 1:-1])
         # Linear drag on relative vorticity zeta = nabla^2 psi (not on q_a).
         # Dragging on q_a would add a spurious anti-damping +drag*psi/Ld^2 term.
-        zeta = diff.laplacian(psi_field)
-        q_rhs = q_rhs + wind_curl - drag * zeta + viscosity * diff.laplacian(q_field)
+        zeta = ops.laplacian(psi_field)
+        q_rhs = q_rhs + wind_curl - drag * zeta + viscosity * ops.laplacian(q_field)
         return q_rhs, psi_field, u_field, v_field
 
     def apply_bc(q_field: Array) -> Array:
@@ -492,13 +481,11 @@ def run_simulation(config: QuasiGeostrophicConfig | None = None) -> xr.Dataset:
         """Advance one Heun step and diagnose the balanced velocity field."""
         q_next = apply_bc(heun_step(q_field, pv_tendency, dt))
         psi_next = invert_streamfunction(q_next)
-        u_next, v_next = geostrophic_velocity_from_streamfunction(
-            psi_next, diff, interp
-        )
+        u_next, v_next = geostrophic_velocity_from_streamfunction(psi_next, ops)
         return q_next, psi_next, u_next, v_next
 
     psi = invert_streamfunction(q)
-    u, v = geostrophic_velocity_from_streamfunction(psi, diff, interp)
+    u, v = geostrophic_velocity_from_streamfunction(psi, ops)
 
     eta_scale = config.f0 / config.gravity
 
@@ -523,10 +510,10 @@ def run_simulation(config: QuasiGeostrophicConfig | None = None) -> xr.Dataset:
         q_np = np.asarray(jax.device_get(q_field[1:-1, 1:-1]))
         psi_np = np.asarray(jax.device_get(psi_field[1:-1, 1:-1]))
         eta_np = eta_scale * psi_np
-        u_center = interp.U_to_T(u_field)
-        v_center = interp.V_to_T(v_field)
-        zeta_corner = vort.relative_vorticity(u_field, v_field)
-        zeta_center = interp.X_to_T(zeta_corner)
+        u_center = ops.interpolate(u_field, src="U", dst="T")
+        v_center = ops.interpolate(v_field, src="V", dst="T")
+        zeta_corner = ops.curl(u_field, v_field)
+        zeta_center = ops.interpolate(zeta_corner, src="X", dst="T")
         u_np = np.asarray(jax.device_get(u_center[1:-1, 1:-1]))
         v_np = np.asarray(jax.device_get(v_center[1:-1, 1:-1]))
         zeta_np = np.asarray(jax.device_get(zeta_center[1:-1, 1:-1]))

@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 else:
     Array = np.ndarray
 
-__all__ = ["biharmonic", "diffuse", "face_fluxes"]
+__all__ = ["biharmonic", "diffuse", "diffusive_fluxes"]
 
 
 @grid_dispatch
@@ -130,6 +130,54 @@ def biharmonic(
     0.0
     """
     return biharmonic._impl(grid, f, kappa4=kappa4, mask=mask)
+
+
+@grid_dispatch
+@located(("U", "V"), f="T", kappa="T")
+def diffusive_fluxes(
+    f: Float[Array, "..."],
+    grid: Any,
+    *,
+    kappa: float | Float[Array, "..."],
+    mask: Any = None,
+    wall: Wall = "closed",
+) -> tuple[Float[Array, "..."], Float[Array, "..."]]:
+    """The fluxes whose divergence is :func:`diffuse`, ``κ δₓf`` and ``κ δᵧf``.
+
+    Parameters
+    ----------
+    f : CField or Float[Array, "*batch *grid"]
+        The tracer, at T.
+    grid : grid
+        A 2-D or 3-D C-grid.
+    kappa : float, CField or Float[Array, "*batch *grid"]
+        The diffusivity: a number, or a field at T.
+    mask : Mask2D or Mask3D, optional
+        The wet cells: no flux crosses a dry face.
+    wall : {"closed", "open"}, default "closed"
+        As in :func:`diffuse`.
+
+    Returns
+    -------
+    tuple
+        The fluxes at U and V, with the sign of the gradient, zero on the
+        faces :func:`diffuse` does not use.
+
+    Raises
+    ------
+    NotImplementedError
+        If the grid is not a 2-D or 3-D C-grid, or the wall is not available.
+
+    Examples
+    --------
+    >>> import gridax, numpy as np
+    >>> grid = gridax.CartesianCGrid2D.from_interior(4, 4, 4.0, 4.0)
+    >>> x = np.broadcast_to(grid.coords("x"), grid.shape)
+    >>> gridax.diffusive_fluxes(x, grid, kappa=0.5)[0][2].tolist()
+    [0.0, 0.5, 0.5, 0.5, 0.0, 0.0]
+    """
+    check_wall(wall, mask)
+    return diffusive_fluxes._impl(grid, f, kappa=kappa, mask=mask, wall=wall)
 
 
 # ----------------------------------------------------------------------
@@ -256,11 +304,15 @@ def _tendency(grid: Any, f: Any, kappa: Any, mask: Any, wall: str) -> Any:
     return out if mh is None else out * mh
 
 
-def face_fluxes(
-    f: Any, grid: Any, *, kappa: Any, mask: Any, wall: str
+@diffusive_fluxes.register(CartesianCGrid2D)
+@diffusive_fluxes.register(CartesianCGrid3D)
+@diffusive_fluxes.register(SphericalCGrid2D)
+@diffusive_fluxes.register(SphericalCGrid3D)
+def _diffusive_fluxes(
+    grid: Any, f: Any, *, kappa: Any, mask: Any, wall: str
 ) -> tuple[Any, Any]:
-    """The diffusive fluxes at U and V, on the whole array, zero elsewhere."""
-    check_wall(wall, mask)
+    if isinstance(grid, SphericalCGrid2D | SphericalCGrid3D):
+        _closed(wall)
     xp = array_namespace(f, kappa)
     _, mu, mv = _wet(mask, grid)
     h = _levels(grid, f)

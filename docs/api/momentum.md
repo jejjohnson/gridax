@@ -1,7 +1,5 @@
-# Momentum Advection Operators
+# Momentum Advection
 
-Energy-conserving momentum advection operators for C-grid shallow-water and QG models.
+The vector-invariant advection of momentum on a C-grid.
 
-::: gridax.MomentumAdvection2D
-
-::: gridax.MomentumAdvection3D
+::: gridax.advect_momentum

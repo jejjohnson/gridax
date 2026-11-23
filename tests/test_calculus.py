@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gridax as g
 from gridax import CField, StaggerMismatchError, analysis
+from gridax._src.analysis.differences import adaptive_difference
 from gridax._src.grid.points import POINT_AXES
 import jax
 import jax.numpy as jnp
@@ -125,63 +126,8 @@ class TestCGridIsExact:
             )
 
 
-class TestBindings:
-    """The classes are the functions, bit for bit, masked and not."""
-
-    @pytest.mark.parametrize("masked", [False, True])
-    def test_every_method(self, masked):
-        for name, grid in CGRIDS.items():
-            mask = wet_mask(grid) if masked else None
-            f, u, v = (field(grid, seed) for seed in range(3))
-            sphere, deep = name.startswith("s"), name.endswith("3")
-            rank = "3D" if deep else "2D"
-            pairs = []
-            if sphere:
-                pairs = [
-                    (getattr(g, f"SphericalDivergence{rank}")(grid, mask), "div"),
-                    (
-                        getattr(g, f"SphericalVorticity{rank}")(
-                            grid, mask
-                        ).relative_vorticity,
-                        "curl",
-                    ),
-                    (getattr(g, f"SphericalLaplacian{rank}")(grid, mask), "lap"),
-                ]
-            else:
-                diff = getattr(g, f"Difference{rank}")(grid, mask)
-                pairs = [
-                    (diff.divergence, "div"),
-                    (diff.laplacian, "lap"),
-                    (
-                        getattr(g, f"Vorticity{rank}")(grid, mask).relative_vorticity,
-                        "curl",
-                    ),
-                ]
-            want = {
-                "div": (g.divergence(u, v, grid, mask=mask), (u, v)),
-                "curl": (g.curl(u, v, grid, mask=mask), (u, v)),
-                "lap": (g.laplacian(f, grid, mask=mask), (f,)),
-            }
-            for method, kind in pairs:
-                out, args = want[kind]
-                np.testing.assert_array_equal(method(*args), out, err_msg=name)
-
-    def test_the_rest_of_difference_2d(self):
-        diff = g.Difference2D(C2, wet_mask(C2))
-        f, u, v = (field(C2, seed) for seed in range(3))
-        np.testing.assert_array_equal(
-            diff.curl(u, v), g.curl(u, v, C2, mask=wet_mask(C2))
-        )
-        for a, b in zip(
-            diff.grad_perp(f),
-            g.grad_perp(f, C2, at="T", mask=wet_mask(C2)),
-            strict=True,
-        ):
-            np.testing.assert_array_equal(a, b)
-        one = g.CartesianCGrid1D.from_interior(8, 1.0)
-        np.testing.assert_array_equal(
-            g.Difference1D(one).laplacian(field(one)), g.laplacian(field(one), one)
-        )
+class TestBatch:
+    """Leading axes, on every C-grid."""
 
     @pytest.mark.parametrize("name", sorted(CGRIDS))
     def test_leading_axes_are_batch_axes(self, name):
@@ -198,7 +144,7 @@ class TestBindings:
 
 
 class TestCollocated:
-    """The collocated calculus of ``gridax.analysis``, with max|Δ| = 0."""
+    """The collocated calculus on the kernels of ``gridax.analysis``, max|Δ| = 0."""
 
     @pytest.mark.parametrize("xp", [np, jnp], ids=["numpy", "jax"])
     @pytest.mark.parametrize("masked", [False, True])
@@ -206,28 +152,32 @@ class TestCollocated:
     def test_is_the_analysis_calculus(self, name, masked, xp):
         grid = AGRIDS[name]
         f, u, v = (field(grid, seed, xp) for seed in range(3))
-        dy, dx = grid.spacing("y"), grid.spacing("x")
-        kwargs = {"periodic_x": "x" in grid.periodic}
-        mask, pre = None, ""
+        mask = None
         if masked:
             wet = np.random.default_rng(3).random(grid.shape) > 0.2
-            mask, pre = g.Mask2D.from_grid(grid, wet), "adaptive_"
-            kwargs["mask"] = ~wet
+            mask = g.Mask2D.from_grid(grid, wet)
 
-        def old(what):
-            return getattr(analysis, f"{pre}{what}_2d")
+        def d(x, axis, derivative=1):
+            kwargs = {
+                "axis": grid.axes.index(axis) - 2,
+                "step": grid.spacing(axis),
+                "periodic": axis in grid.periodic,
+                "derivative": derivative,
+            }
+            if masked:
+                return adaptive_difference(x, mask=~wet, **kwargs)
+            return analysis.difference(x, **kwargs)
 
         np.testing.assert_array_equal(
-            g.divergence(u, v, grid, mask=mask),
-            old("divergence")(u, v, dy, dx, **kwargs),
+            g.divergence(u, v, grid, mask=mask), d(u, "x") + d(v, "y")
         )
         np.testing.assert_array_equal(
-            g.curl(u, v, grid, mask=mask), old("curl")(u, v, dy, dx, **kwargs)
+            g.curl(u, v, grid, mask=mask), d(v, "x") - d(u, "y")
         )
         np.testing.assert_array_equal(
-            g.laplacian(f, grid, mask=mask), old("laplacian")(f, dy, dx, **kwargs)
+            g.laplacian(f, grid, mask=mask), d(f, "y", 2) + d(f, "x", 2)
         )
-        d_y, d_x = old("gradient")(f, dy, dx, **kwargs)
+        d_y, d_x = d(f, "y"), d(f, "x")
         got = g.gradient(f, grid, mask=mask)
         np.testing.assert_array_equal(got[0], d_x)
         np.testing.assert_array_equal(got[1], d_y)
@@ -250,10 +200,10 @@ class TestCollocated:
             if masked:
                 wet = np.array([True, True, False, True, True, True, True])
                 out = g.laplacian(f, grid, mask=g.Mask1D.from_grid(grid, wet))
-                want = analysis.adaptive_laplacian_1d(f, mask=~wet, **kwargs)
+                want = adaptive_difference(f, mask=~wet, derivative=2, **kwargs)
             else:
                 out = g.laplacian(f, grid)
-                want = analysis.laplacian_1d(f, **kwargs)
+                want = analysis.difference(f, derivative=2, **kwargs)
             np.testing.assert_array_equal(out, want)
 
     def test_irregular_axes_and_levels(self):

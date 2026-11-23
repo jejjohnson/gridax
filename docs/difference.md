@@ -38,7 +38,7 @@ dh_dx = gridax.difference(h, grid, axis="x", src="T", dst="U")
 h_x = gridax.interpolate(h, grid, src="T", dst="X")
 ```
 
-The classes `Difference*`, `SphericalDifference*` and `Interpolation*` hold a grid and a mask and call these two functions.
+`GridOps(grid, mask)` has both as methods, with the grid and the mask filled in.
 
 ---
 
@@ -77,12 +77,12 @@ U \xrightarrow{\partial/\partial y} X, \qquad
 V \xrightarrow{\partial/\partial x} X
 $$
 
-| Operator | Stencil | Use case |
+| Move | Stencil | Use case |
 |----------|---------|----------|
-| `diff_x_T_to_U` | $(h_{i+1} - h_i)/\Delta x$ | Pressure gradient force, diffusion flux |
-| `diff_y_T_to_V` | $(h_{j+1} - h_j)/\Delta y$ | Pressure gradient force, diffusion flux |
-| `diff_y_U_to_X` | $(u_{j+1} - u_j)/\Delta y$ | Part of vorticity $\partial u / \partial y$ |
-| `diff_x_V_to_X` | $(v_{i+1} - v_i)/\Delta x$ | Part of vorticity $\partial v / \partial x$ |
+| ∂/∂x, T to U | $(h_{i+1} - h_i)/\Delta x$ | Pressure gradient force, diffusion flux |
+| ∂/∂y, T to V | $(h_{j+1} - h_j)/\Delta y$ | Pressure gradient force, diffusion flux |
+| ∂/∂y, U to X | $(u_{j+1} - u_j)/\Delta y$ | Part of vorticity $\partial u / \partial y$ |
+| ∂/∂x, V to X | $(v_{i+1} - v_i)/\Delta x$ | Part of vorticity $\partial v / \partial x$ |
 
 ### Backward differences
 
@@ -96,16 +96,16 @@ X \xrightarrow{\partial/\partial y} U, \qquad
 X \xrightarrow{\partial/\partial x} V
 $$
 
-| Operator | Stencil | Use case |
+| Move | Stencil | Use case |
 |----------|---------|----------|
-| `diff_x_U_to_T` | $(u_i - u_{i-1})/\Delta x$ | Divergence, tracer tendency from flux |
-| `diff_y_V_to_T` | $(v_j - v_{j-1})/\Delta y$ | Divergence, tracer tendency from flux |
-| `diff_y_X_to_U` | $(q_j - q_{j-1})/\Delta y$ | Coriolis & vorticity-flux term |
-| `diff_x_X_to_V` | $(q_i - q_{i-1})/\Delta x$ | Coriolis & vorticity-flux term |
+| ∂/∂x, U to T | $(u_i - u_{i-1})/\Delta x$ | Divergence, tracer tendency from flux |
+| ∂/∂y, V to T | $(v_j - v_{j-1})/\Delta y$ | Divergence, tracer tendency from flux |
+| ∂/∂y, X to U | $(q_j - q_{j-1})/\Delta y$ | Coriolis & vorticity-flux term |
+| ∂/∂x, X to V | $(q_i - q_{i-1})/\Delta x$ | Coriolis & vorticity-flux term |
 
 :::{tip} Forward → Backward pairs
 Every forward operator has a corresponding backward operator that reverses
-the shift.  Composing `diff_x_T_to_U` followed by `diff_x_U_to_T`
+the shift.  Composing ∂/∂x from T to U with ∂/∂x from U to T
 gives a second-order centred difference at T-points (i.e. the Laplacian
 in x), which is the basis for the diffusion operator.
 :::
@@ -123,8 +123,8 @@ $$
              + \frac{v_{j+\frac{1}{2},i} - v_{j-\frac{1}{2},i}}{\Delta y}
 $$
 
-This is the composition of two backward differences: `diff_x_U_to_T` + `diff_y_V_to_T`.
-It is `gridax.divergence(u, v, grid)`, which `Difference2D.divergence(u, v)` calls; without a grid object, write `interior(diff_x_bwd_2d(u) / dx + diff_y_bwd_2d(v) / dy, u)`.
+This is the sum of two backward differences, ∂/∂x from U to T and ∂/∂y from V to T.
+It is `gridax.divergence(u, v, grid)`; without a grid object, write `interior(diff_x_bwd_2d(u) / dx + diff_y_bwd_2d(v) / dy, u)`.
 
 ### Curl (Relative Vorticity)
 
@@ -136,7 +136,7 @@ $$
   - \frac{u_{j+1, i+\frac{1}{2}} - u_{j, i+\frac{1}{2}}}{\Delta y}
 $$
 
-This is `diff_x_V_to_X` − `diff_y_U_to_X`, available as `Difference2D.curl(u, v)`.
+This is ∂/∂x from V to X minus ∂/∂y from U to X, available as `gridax.curl(u, v, grid)`.
 
 ### Laplacian
 
@@ -148,7 +148,7 @@ $$
   + \frac{h_{j+1,i} - 2h_{j,i} + h_{j-1,i}}{\Delta y^2}
 $$
 
-Available as `Difference2D.laplacian(h)`.  Used directly in the diffusion and
+Available as `gridax.laplacian(h, grid)`.  Used directly in the diffusion and
 multigrid solver operators.
 
 ### Perpendicular Gradient (Geostrophic Velocity)
@@ -198,7 +198,7 @@ closed-wall BCs but wrong for periodic or open boundaries.
 
 ## 3-D Extension
 
-`Difference3D` applies the same 2-D horizontal stencils independently to each
+On a 3-D grid the functions apply the same 2-D horizontal stencils to each
 z-level.  Array shapes are `[Nz, Ny, Nx]` and only the interior
 `[1:-1, 1:-1, 1:-1]` is written.
 
@@ -208,30 +208,30 @@ z-level.  Array shapes are `[Nz, Ny, Nx]` and only the interior
 
 ```python
 import jax.numpy as jnp
-from gridax import CartesianCGrid2D, Difference2D
+from gridax import CartesianCGrid2D, GridOps
 
 grid = CartesianCGrid2D.from_interior(ny=64, nx=64, Ly=1e6, Lx=1e6)
-diff = Difference2D(grid=grid)
+ops = GridOps(grid)
 
 h  = jnp.ones((grid.Ny, grid.Nx))  # T-point field
 
 # Forward difference: h at T-points → pressure gradient at U-points
-dh_dx = diff.diff_x_T_to_U(h)   # shape [Ny, Nx], values at U-points
+dh_dx = ops.difference(h, axis="x", src="T", dst="U")  # shape [Ny, Nx], values at U-points
 
 # Backward difference: u at U-points → divergence contribution at T-points
 u = jnp.zeros((grid.Ny, grid.Nx))
 v = jnp.zeros((grid.Ny, grid.Nx))
-div = diff.divergence(u, v)      # shape [Ny, Nx], values at T-points
+div = ops.divergence(u, v)       # shape [Ny, Nx], values at T-points
 
 # Curl: relative vorticity at X-points
-zeta = diff.curl(u, v)           # shape [Ny, Nx], values at X-points
+zeta = ops.curl(u, v)            # shape [Ny, Nx], values at X-points
 
 # Laplacian: ∇²h at T-points
-lap_h = diff.laplacian(h)        # shape [Ny, Nx], values at T-points
+lap_h = ops.laplacian(h)         # shape [Ny, Nx], values at T-points
 
 # Geostrophic velocity from streamfunction
 psi = jnp.zeros((grid.Ny, grid.Nx))
-u_geo, v_geo = diff.grad_perp(psi)  # u at U-points, v at V-points
+u_geo, v_geo = ops.grad_perp(psi, at="T")  # u at U-points, v at V-points
 ```
 
 ---
@@ -241,33 +241,33 @@ u_geo, v_geo = diff.grad_perp(psi)  # u at U-points, v at V-points
 ```
 What derivative do you need?
 │
-├── ∂(·)/∂x from T-points → diff_x_T_to_U  (result at U-points)
-├── ∂(·)/∂y from T-points → diff_y_T_to_V  (result at V-points)
-├── ∂(·)/∂y from U-points → diff_y_U_to_X  (result at X-points)
-├── ∂(·)/∂x from V-points → diff_x_V_to_X  (result at X-points)
+├── ∂(·)/∂x from T-points → difference(axis="x", src="T", dst="U")  (result at U-points)
+├── ∂(·)/∂y from T-points → difference(axis="y", src="T", dst="V")  (result at V-points)
+├── ∂(·)/∂y from U-points → difference(axis="y", src="U", dst="X")  (result at X-points)
+├── ∂(·)/∂x from V-points → difference(axis="x", src="V", dst="X")  (result at X-points)
 │
-├── ∂(·)/∂x from U-points → diff_x_U_to_T  (result at T-points)
-├── ∂(·)/∂y from V-points → diff_y_V_to_T  (result at T-points)
-├── ∂(·)/∂y from X-points → diff_y_X_to_U  (result at U-points)
-├── ∂(·)/∂x from X-points → diff_x_X_to_V  (result at V-points)
+├── ∂(·)/∂x from U-points → difference(axis="x", src="U", dst="T")  (result at T-points)
+├── ∂(·)/∂y from V-points → difference(axis="y", src="V", dst="T")  (result at T-points)
+├── ∂(·)/∂y from X-points → difference(axis="y", src="X", dst="U")  (result at U-points)
+├── ∂(·)/∂x from X-points → difference(axis="x", src="X", dst="V")  (result at V-points)
 │
-├── ∇·(u, v) at T-points  → diff.divergence(u, v)
-├── ζ = ∇×(u, v) at X-pts → diff.curl(u, v)
-├── ∇²h at T-points       → diff.laplacian(h)
-└── geostrophic u, v      → diff.grad_perp(psi)
+├── ∇·(u, v) at T-points  → divergence(u, v, grid)
+├── ζ = ∇×(u, v) at X-pts → curl(u, v, grid)
+├── ∇²h at T-points       → laplacian(h, grid)
+└── geostrophic u, v      → grad_perp(psi, grid, at="T")
 ```
 
-The functions `gridax.divergence`, `curl`, `laplacian`, `gradient` and `grad_perp` take any grid. On a [collocated grid](https://jejjohnson.github.io/gridax/reference/grids/) (every component on the same points, as in model output on a lat-lon grid) they run the collocated stencils, so one call serves both. On bare arrays without a grid those stencils are `gridax.analysis`, with the Layer 0 coefficients of `gridax.stencils` underneath:
+The functions `gridax.divergence`, `curl`, `laplacian`, `gradient` and `grad_perp` take any grid. On a [collocated grid](https://jejjohnson.github.io/gridax/reference/grids/) (every component on the same points, as in model output on a lat-lon grid) they run the collocated stencils, so one call serves both. The Layer 0 coefficients of `gridax.stencils` are underneath:
 
-| Quantity | Staggered C-grid (`Difference2D`) | Collocated (`gridax.analysis`) |
+| Quantity | On a C-grid | On a collocated grid |
 |---|---|---|
-| ∂h/∂x | `diff_x_T_to_U(h)` (at U) | `difference(h, axis=-1, step=dx)` |
-| ∇·(u, v) | `divergence(u, v)` (at T) | `divergence_2d(u, v, dy, dx)` |
-| ∇×(u, v) | `curl(u, v)` (at X) | `curl_2d(u, v, dy, dx)` |
-| ∇²h | `laplacian(h)` (at T) | `laplacian_2d(h, dy, dx)` |
-| Fourth-order ∂h/∂x | `gridax.difference(h, grid, axis="x", src="T", dst="U", scheme=Centred(4))` | `difference(h, axis=-1, step=dx, accuracy=3)` |
+| ∂h/∂x | `difference(h, grid, axis="x", src="T", dst="U")` | `difference(h, grid, axis="x")` |
+| ∇·(u, v) | `divergence(u, v, grid)` (at T) | `divergence(u, v, grid)` |
+| ∇×(u, v) | `curl(u, v, grid)` (at X) | `curl(u, v, grid)` (at T) |
+| ∇²h | `laplacian(h, grid)` (at T) | `laplacian(h, grid)` |
+| Fourth-order ∂h/∂x | `difference(h, grid, axis="x", src="T", dst="U", scheme=Centred(4))` | `difference(h, grid, axis="x", scheme=Centred(4))` |
 
-Note the order of the steps in `gridax.analysis` (`dy` before `dx`); without a grid object, the C-grid divergence is `interior(diff_x_bwd_2d(u) / dx + diff_y_bwd_2d(v) / dy, u)`.
+Without a grid object, the derivative along one axis of a collocated array is `gridax.analysis.difference(h, axis=-1, step=dx)`, and the C-grid divergence is `interior(diff_x_bwd_2d(u) / dx + diff_y_bwd_2d(v) / dy, u)`.
 
 ---
 

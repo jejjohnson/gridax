@@ -8,6 +8,8 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from tests.fixtures import bindings
+
 xr = pytest.importorskip("xarray")
 
 GRIDS = {
@@ -107,7 +109,7 @@ class TestXgcm:
         ds = f.to_xarray(GRID, "q")
         grid = self.xgcm.Grid(ds)
         theirs = grid.interp(ds["q"], axis, padding="fill", fill_value=0.0)
-        ours = getattr(g.Interpolation2D(grid=GRID), method)(f.data)
+        ours = getattr(bindings.Interpolation2D(grid=GRID), method)(f.data)
         dst = method.rsplit("_", 1)[1]
         back = CField.from_xarray(theirs)
         assert back.loc == dst

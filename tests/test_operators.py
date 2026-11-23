@@ -9,13 +9,12 @@ from __future__ import annotations
 
 from geophysix.constants import STANDARD
 from gridax import CartesianCGrid2D
-from gridax._src.operators.diagnostics import (
-    bernoulli_potential,
-    kinetic_energy,
-)
+from gridax._src.operators.diagnostics import kinetic_energy
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
+from tests.fixtures.bindings import bernoulli_potential
 
 
 @pytest.fixture()
@@ -227,7 +226,7 @@ class TestOperatorIdentities:
         v =  ∂ψ/∂x  (from X-point via diff_x_X_to_V)
         div(u, v) = ∂u/∂x + ∂v/∂y = -∂²ψ/∂x∂y + ∂²ψ/∂x∂y = 0
         """
-        from gridax._src.operators.difference import Difference2D
+        from tests.fixtures.bindings import Difference2D
 
         diff = Difference2D(grid=grid2d)
         x = jnp.arange(grid2d.Nx, dtype=float)
@@ -253,7 +252,7 @@ class TestOperatorIdentities:
         [1:-1, 1:-1], so reading their ghost ring gives 0 instead of the
         physical value).
         """
-        from gridax._src.operators.difference import Difference2D
+        from tests.fixtures.bindings import Difference2D
 
         diff = Difference2D(grid=grid2d)
         x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
@@ -274,7 +273,7 @@ class TestOperatorIdentities:
         laplacian = diff_x_U_to_T(diff_x_T_to_U(h)) + diff_y_V_to_T(diff_y_T_to_V(h))
         This must match calling diff.laplacian(h) directly at the deep interior.
         """
-        from gridax._src.operators.difference import Difference2D
+        from tests.fixtures.bindings import Difference2D
 
         diff = Difference2D(grid=grid2d)
         x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")

@@ -9,10 +9,9 @@ Staggering is carried by configuration, not checked on the carrier::
     Difference(grid=G, axis="x", src="T", dst="U")      δₓ : T → U
     Interp(grid=G, src="U", dst="T")                     U → T (two-point mean)
 
-The valid ``(axis, src, dst)`` and ``(src, dst)`` sets are read off the
-Tier-A method names (``Difference2D.diff_x_T_to_U``,
-``Interpolation2D.U_to_T``) at import, so a Tier-A method added or renamed
-changes Tier B with it.
+The valid ``(axis, src, dst)`` and ``(src, dst)`` sets are those of Tier A
+(``difference``, ``interpolate``), so a move added there changes Tier B with
+it.
 """
 
 from __future__ import annotations

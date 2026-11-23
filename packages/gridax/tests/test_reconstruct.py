@@ -1,7 +1,7 @@
 """One axis-generic upwind reconstruction (#464).
 
-Every ``Reconstruction1D/2D/3D`` method (including the masked ones and the four
-TVD limiters) and the old ``reconstruct(q, u, dim, method, num_pts)`` call,
+Every ``Reconstruction1D/2D/3D`` method (including the masked 2-D ones and the
+four TVD limiters) and the old ``reconstruct(q, u, dim, method, num_pts)`` call,
 now ``reconstruct(q, u, axis=, scheme=)``, were recorded before the rewrite in ``data/reconstruction_frozen.npz``; they must
 still return the recorded arrays bit for bit.
 """
@@ -26,7 +26,8 @@ RECORDED = sorted(name for name in CALLS if name in FROZEN.files)
 
 
 def test_every_recorded_call_still_exists() -> None:
-    assert set(FROZEN.files) <= set(CALLS)
+    gone = {n for n in FROZEN.files if n.startswith("3d.") and "_masked" in n}
+    assert set(FROZEN.files) - gone <= set(CALLS)
     assert len(FROZEN.files) == 110
 
 
@@ -37,20 +38,13 @@ def test_calls_equal_the_record(name: str) -> None:
 
 
 @pytest.mark.parametrize("order", [2, 3])
-@pytest.mark.parametrize("axis", ["x", "y"])
-def test_reconstruction3d_gains_upwind2_and_upwind3(order: int, axis: str) -> None:
-    # new in #464: on every z-level they equal the 2-D methods
+@pytest.mark.parametrize("axis", [-1, -2])
+def test_three_dimensions_are_levels(order: int, axis: int) -> None:
     rng = np.random.default_rng(order)
     h, u = rng.standard_normal((2, 5, 10, 12))
-    r3 = gridax.Reconstruction3D(
-        grid=gridax.CartesianCGrid3D.from_interior(10, 8, 3, 1.0, 1.0, 1.0)
-    )
-    r2 = gridax.Reconstruction2D(
-        grid=gridax.CartesianCGrid2D.from_interior(10, 8, 1.0, 1.0)
-    )
-    got = getattr(r3, f"upwind{order}_{axis}")(h, u)
+    got = cases.flux(h, u, axis=axis, scheme=Upwind(order))
     for level in range(1, 4):
-        want = getattr(r2, f"upwind{order}_{axis}")(h[level], u[level])
+        want = cases.flux(h[level], u[level], axis=axis, scheme=Upwind(order))
         np.testing.assert_array_equal(got[level], want)
     np.testing.assert_array_equal(got[[0, -1]], 0.0)
 

@@ -20,6 +20,8 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from tests.fixtures import bindings
+
 AWAY_FROM_WALLS = (slice(2, -2), slice(2, -2))
 INTERIOR = (slice(1, -1), slice(1, -1))
 # float64 rounding of a few-term sum, relative to the field's largest Laplacian
@@ -58,7 +60,7 @@ def spherical():
 @pytest.mark.parametrize("backend", [0, 1])
 def test_cartesian_laplacian_is_the_divergence_of_the_gradient(cartesian, backend):
     grid, h = cartesian
-    diff = gridax.Difference2D(grid=grid)
+    diff = bindings.Difference2D(grid=grid)
 
     def div_grad(h):
         return diff.divergence(diff.diff_x_T_to_U(h), diff.diff_y_T_to_V(h))
@@ -70,8 +72,8 @@ def test_cartesian_laplacian_is_the_divergence_of_the_gradient(cartesian, backen
 @pytest.mark.parametrize("backend", [0, 1])
 def test_cartesian_laplacian_is_diffusion_with_unit_diffusivity(cartesian, backend):
     grid, h = cartesian
-    laplacian = _backends(gridax.Difference2D(grid=grid).laplacian)[backend](h)
-    diffusion = gridax.Diffusion2D(grid=grid)
+    laplacian = _backends(bindings.Difference2D(grid=grid).laplacian)[backend](h)
+    diffusion = bindings.Diffusion2D(grid=grid)
 
     def unit(h):
         return diffusion(h, kappa=1.0)
@@ -82,8 +84,8 @@ def test_cartesian_laplacian_is_diffusion_with_unit_diffusivity(cartesian, backe
 def test_cartesian_laplacian_and_diffusion_differ_at_the_closed_walls(cartesian):
     # the wall cells read the ghost ring in one and a zero wall flux in the other
     grid, h = cartesian
-    laplacian = np.asarray(gridax.Difference2D(grid=grid).laplacian(h))
-    diffusion = np.asarray(gridax.Diffusion2D(grid=grid)(h, kappa=1.0))
+    laplacian = np.asarray(bindings.Difference2D(grid=grid).laplacian(h))
+    diffusion = np.asarray(bindings.Diffusion2D(grid=grid)(h, kappa=1.0))
     wall_row = laplacian[1, 2:-2] - diffusion[1, 2:-2]
     assert np.abs(wall_row).max() > 1e-3 * np.abs(laplacian).max()
 
@@ -91,8 +93,8 @@ def test_cartesian_laplacian_and_diffusion_differ_at_the_closed_walls(cartesian)
 @pytest.mark.parametrize("backend", [0, 1])
 def test_spherical_laplacian_is_diffusion_with_unit_diffusivity(spherical, backend):
     grid, h = spherical
-    laplacian = _backends(gridax.SphericalLaplacian2D(grid=grid))[backend](h)
-    diffusion = gridax.SphericalDiffusion2D(grid=grid)
+    laplacian = _backends(bindings.SphericalLaplacian2D(grid=grid))[backend](h)
+    diffusion = bindings.SphericalDiffusion2D(grid=grid)
 
     def unit(h):
         return diffusion(h, kappa=1.0)
@@ -102,8 +104,8 @@ def test_spherical_laplacian_is_diffusion_with_unit_diffusivity(spherical, backe
 
 def test_spherical_laplacian_is_its_two_terms_bit_for_bit(spherical):
     grid, h = spherical
-    laplacian = np.asarray(gridax.SphericalLaplacian2D(grid=grid)(h))
-    diff = gridax.SphericalDifference2D(grid=grid)
+    laplacian = np.asarray(bindings.SphericalLaplacian2D(grid=grid)(h))
+    diff = bindings.SphericalDifference2D(grid=grid)
     terms = np.asarray(diff.diff2_lon(h)) + np.asarray(diff.laplacian_merid(h))
     np.testing.assert_array_equal(laplacian[INTERIOR], terms[INTERIOR])
 
@@ -111,7 +113,7 @@ def test_spherical_laplacian_is_its_two_terms_bit_for_bit(spherical):
 def test_3d_laplacian_is_diffusion_with_unit_diffusivity_on_every_level():
     grid = gridax.CartesianCGrid3D.from_interior(16, 12, 4, 32.0e3, 24.0e3, 400.0)
     h = np.random.default_rng(3).standard_normal((grid.Nz, grid.Ny, grid.Nx))
-    laplacian = np.asarray(gridax.Difference3D(grid=grid).laplacian(h))
-    diffusion = np.asarray(gridax.Diffusion3D(grid=grid)(h, kappa=1.0))
+    laplacian = np.asarray(bindings.Difference3D(grid=grid).laplacian(h))
+    diffusion = np.asarray(bindings.Diffusion3D(grid=grid)(h, kappa=1.0))
     for level in range(1, grid.Nz - 1):
         _close(laplacian[level], diffusion[level], AWAY_FROM_WALLS)

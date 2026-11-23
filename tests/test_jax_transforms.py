@@ -11,24 +11,24 @@ from gridax import (
     CartesianCGrid2D,
     CartesianCGrid3D,
 )
-from gridax._src.advection.reconstruction import Reconstruction1D, Reconstruction2D
 from gridax._src.diffusion.diffuse import diffuse
-from gridax._src.diffusion.diffusion import Diffusion2D
-from gridax._src.operators.difference import (
-    Difference1D,
-    Difference2D,
-    Difference3D,
-)
-from gridax._src.operators.divergence import Divergence2D
-from gridax._src.operators.interpolation import (
-    Interpolation1D,
-    Interpolation2D,
-)
-from gridax._src.operators.vorticity import Vorticity2D
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
+from tests.fixtures.bindings import (
+    Difference1D,
+    Difference2D,
+    Difference3D,
+    Diffusion2D,
+    Divergence2D,
+    Interpolation1D,
+    Interpolation2D,
+    Reconstruction1D,
+    Reconstruction2D,
+    Vorticity2D,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures

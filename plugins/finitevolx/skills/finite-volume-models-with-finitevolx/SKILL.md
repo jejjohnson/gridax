@@ -37,13 +37,13 @@ Poisson solver or an RK loop, look it up:
 |---|---|
 | A grid | `fvx.CartesianCGrid1D/2D/3D.from_interior(...)`, `fvx.SphericalCGrid2D/3D.from_interior(...)`; arrays are `[Ny, Nx]` including one ghost ring, interior `[1:-1, 1:-1]` |
 | Raw shifted differences / averages | `fvx.diff_x_fwd_2d`, `fvx.diff_y_bwd_2d`, `fvx.avg_xfwd_yfwd_2d`, … (+ `_1d` / `_3d`); pad back with `interior(values, like)` of `gridax.stencils` |
-| Gradients, divergence, curl, Laplacian | `fvx.Difference1D/2D/3D` (`diff_x_T_to_U`, `divergence`, `curl`, `laplacian`, `grad_perp`), `fvx.Divergence2D`, `fvx.Vorticity2D`; on the sphere `fvx.SphericalDifference2D`, `fvx.SphericalDivergence2D`, `fvx.SphericalLaplacian2D`, `fvx.SphericalVorticity2D` |
-| Moving fields between T / U / V / X points | `fvx.Interpolation1D/2D/3D` (`T_to_U`, `U_to_T`, `T_to_X`, …) |
-| Tracer advection | `fvx.Advection1D/2D/3D(grid, mask)(q, u, v, scheme=WENO(5))`, or `fvx.advect(q, u, v, grid, scheme=..., mask=...)`, with a scheme of `gridax.schemes`: `Upwind(k)`, `Centred(k)`, `WENO(k)`, `TVD(limiter)`; `fvx.SphericalAdvection2D` |
-| Diffusion, momentum advection, Coriolis | `fvx.diffuse`, `fvx.biharmonic`, `fvx.coriolis` (the grid positional, `mask=`), or `fvx.Diffusion2D/3D`, `fvx.BiharmonicDiffusion2D/3D`, `fvx.MomentumAdvection2D/3D`, `fvx.Coriolis2D/3D` |
+| Gradients, divergence, curl, Laplacian | `fvx.difference(h, grid, axis="x", src="T", dst="U")`, `fvx.gradient`, `fvx.divergence`, `fvx.curl`, `fvx.laplacian`, `fvx.grad_perp`, on any grid (1-D to 3-D, Cartesian or spherical); `fvx.GridOps(grid, mask)` has them as methods |
+| Moving fields between T / U / V / X points | `fvx.interpolate(f, grid, src="T", dst="U")` |
+| Tracer advection | `fvx.advect(q, u, v, grid, scheme=WENO(5), mask=mask)`, with a scheme of `gridax.schemes`: `Upwind(k)`, `Centred(k)`, `WENO(k)`, `TVD(limiter)` |
+| Diffusion, momentum advection, Coriolis | `fvx.diffuse`, `fvx.biharmonic`, `fvx.advect_momentum`, `fvx.coriolis` (the grid positional, `mask=`) |
 | Land and coasts | `fvx.Mask2D.from_mask(wet)` → `mask.wet(at="T" / "U" / "V" / "X")`; pass `mask=` to an operator |
 | Ghost cells | `fvx.fill_ghosts(u, grid, fvx.BC(x=fvx.Dirichlet(0.0), y=fvx.Neumann()), stagger="U")`, with the presets `fvx.BC.periodic()`, `fvx.BC.no_flux()`, `fvx.BC.zero()`, `fvx.BC.wall_normal()`, `fvx.BC.wall_tangential(slip="no")` (joined with `\|`) |
-| Diagnostics | `fvx.Energetics2D`, `fvx.Strain2D`, `fvx.QGPotentialVorticity2D`, `fvx.ArakawaJacobian2D`; `fvx.kinetic_energy`, `fvx.okubo_weiss`, `fvx.arakawa_jacobian`, … |
+| Diagnostics | `fvx.kinetic_energy`, `fvx.bernoulli_potential`, `fvx.shear_strain`, `fvx.okubo_weiss_parameter`, `fvx.sw_potential_vorticity`, `fvx.qg_potential_vorticity`, `fvx.arakawa_jacobian`, … |
 | Integrals and means | `fvx.area_sum`, `fvx.area_mean`, `fvx.volume_mean`, `fvx.masked_mean` |
 | Poisson / Helmholtz | `gs.solve_helmholtz_dst` / `_dct` / `_fft` on a rectangle (slice the unknowns, embed the result in zeros); the one-call wrappers `streamfunction_from_vorticity`, `pressure_from_divergence` and `pv_inversion` moved to `sesmax_core.gfd`; `gaussx.linear_solve_with_info` with `gaussx.CGSolver` (CG is gaussx's, with `gaussx.NystromPreconditioner` for a low-rank preconditioner and `gs.make_spectral_preconditioner` for a spectral one), `gs.build_capacitance_solver`, `gs.build_multigrid_solver(...).as_preconditioner()` or `gs.multigrid_levels` for gaussx's multigrid |
 | The Laplacian as a linear operator (GP / DA priors, log-determinants, sampling) | `gs.helmholtz_operator(shape, dx, dy, lambda_, bc)` (a `gaussx.DiagonalizedOperator`: `gaussx.solve` / `logdet` / `sqrt` / `inv`), `gs.masked_helmholtz_operator(mask, dx, dy, lambda_)` (a `gaussx.MaskedOperator`, capacitance solve); an SPDE / Matérn precision `τ²(κ² − ∇²)^α` from its eigenvalues; `gs.build_multigrid_solver(...).as_preconditioner()` for `gaussx.CGSolver` |
@@ -60,20 +60,20 @@ as a structured operator (never a dense matrix).
 ## The rules your code must keep
 
 - **Same-index staggering.** `T[j, i]` is the cell centre, `U[j, i]` its
-  east face, `V[j, i]` its north face, `X[j, i]` its NE corner. Use the
-  operator whose name says the mapping (`diff_x_T_to_U`, `U_to_T`) instead
-  of writing the slice.
+  east face, `V[j, i]` its north face, `X[j, i]` its NE corner. Name the
+  move (`difference(h, grid, axis="x", src="T", dst="U")`,
+  `interpolate(u, grid, src="U", dst="T")`) instead of writing the slice.
 - **The caller owns the ghost ring.** Operators write only the interior
-  and leave the ghost ring zero; fill ghosts (`fill_ghosts` with a `BC`,
-  `fill_ghosts` with a `BC`, …) on every field before the next operator reads
+  and leave the ghost ring zero; fill ghosts (`fill_ghosts` with a `BC`) on every field before the next operator reads
   it, including inside the RHS of a time stepper. Backward operators (U→T,
   V→T) read the west / south ghost that nothing else fills.
-- **Masks are built once and passed to the operator.** `Mask2D.from_mask`
-  runs NumPy / SciPy eagerly; give it to the operator as `mask=` so the
+- **Masks are built once and passed to the functions.** `Mask2D.from_mask`
+  runs NumPy / SciPy eagerly; give it to the function as `mask=` (or to
+  `GridOps(grid, mask)`) so the
   output is zero on land and advection falls back to narrower stencils at
   the coast. Never store `NaN` on land unless the operator documents that
   it sanitises its inputs.
-- **Closed walls by default.** `Advection1D/2D` and `Diffusion2D/3D` take
+- **Closed walls by default.** `advect` and `diffuse` take
   `wall="closed"` (no flux through the outer walls); use `wall="open"`
   with filled ghosts for periodic or open boundaries (the flux through the
   wall then comes from the ghost ring and mass is conserved exactly).
@@ -108,27 +108,24 @@ X, Y = jnp.meshgrid(xc, yc)  # [Ny, Nx] T-point coordinates
 
 # 2. Streamfunction at T-points → non-divergent velocities on the faces
 psi = jnp.sin(2 * jnp.pi * X) * jnp.sin(2 * jnp.pi * Y)  # [Ny, Nx]
-diff = fvx.Difference2D(grid=grid)
-u, v = diff.grad_perp(psi)  # u at U-points (east faces), v at V-points (north faces)
+ops = fvx.GridOps(grid)
+u, v = ops.grad_perp(psi, at="T")  # u at U-points (east faces), v at V-points (north faces)
 around = fvx.BC.periodic()  # the caller owns the ghosts
 u = fvx.fill_ghosts(u, grid, around, stagger="U")
 v = fvx.fill_ghosts(v, grid, around, stagger="V")
-div = diff.divergence(u, v)  # [Ny, Nx] at T-points
+div = ops.divergence(u, v)  # [Ny, Nx] at T-points
 
 # 3. Invert the discrete Laplacian back to ψ with the periodic (FFT) solver
-lap = diff.laplacian(psi)  # ∇²ψ at T-points, zero ghost ring
+lap = ops.laplacian(psi)  # ∇²ψ at T-points, zero ghost ring
 psi_rec = jnp.zeros_like(lap).at[1:-1, 1:-1].set(
     gs.solve_helmholtz_fft(lap[1:-1, 1:-1], grid.spacing("x"), grid.spacing("y"))
 )  # slice the T interior, solve (zero-mean), embed in zeros
 inv_err = jnp.max(jnp.abs(psi_rec[1:-1, 1:-1] - psi[1:-1, 1:-1]))
 
 # 4. Advect a tracer with WENO5 fluxes and SSP-RK3, periodic and conservative
-adv = fvx.Advection2D(grid=grid)
-
-
 def rhs(q):
     q = fvx.fill_ghosts(q, grid, around)  # fill the ghost ring before every stencil
-    return adv(q, u, v, scheme=WENO(5), wall="open")  # -∇·(q u) at T-points
+    return ops.advect(q, u, v, scheme=WENO(5), wall="open")  # -∇·(q u) at T-points
 
 
 q0 = jnp.exp(-((X - 0.3) ** 2 + (Y - 0.5) ** 2) / 0.005)  # [Ny, Nx]
@@ -144,7 +141,7 @@ wet = np.ones((grid.Ny, grid.Nx), dtype=bool)
 wet[0, :] = wet[-1, :] = wet[:, 0] = wet[:, -1] = False
 wet[28:38, 28:38] = False
 mask = fvx.Mask2D.from_mask(wet)
-dq = fvx.Advection2D(grid=grid, mask=mask)(q0, u, v, scheme=WENO(5))
+dq = fvx.advect(q0, u, v, grid, scheme=WENO(5), mask=mask)
 land_max = jnp.max(jnp.abs(jnp.where(mask.wet(), 0.0, dq)))
 ```
 
@@ -158,25 +155,25 @@ tendency is exactly zero on every land cell.
 
 | Don't write… | Use |
 |---|---|
-| `(h[1:-1, 2:] - h[1:-1, 1:-1]) / dx` into a zeroed array | `fvx.Difference2D(grid=grid).diff_x_T_to_U(h)` or `interior(fvx.diff_x_fwd_2d(h) / dx, h)` with `from gridax.stencils import interior` |
-| `0.5 * (u[:, 1:] + u[:, :-1])` to move u to cell centres | `fvx.Interpolation2D(grid=grid).U_to_T(u)` |
-| An upwind / WENO face reconstruction and flux divergence | `fvx.Advection2D(grid=grid)(q, u, v, scheme=WENO(5))` |
+| `(h[1:-1, 2:] - h[1:-1, 1:-1]) / dx` into a zeroed array | `fvx.difference(h, grid, axis="x", src="T", dst="U")` or `interior(fvx.diff_x_fwd_2d(h) / dx, h)` with `from gridax.stencils import interior` |
+| `0.5 * (u[:, 1:] + u[:, :-1])` to move u to cell centres | `fvx.interpolate(u, grid, src="U", dst="T")` |
+| An upwind / WENO face reconstruction and flux divergence | `fvx.advect(q, u, v, grid, scheme=WENO(5))` |
 | `q[:, 0] = q[:, -2]` (periodic ghosts) and friends | `fvx.fill_ghosts(q, grid, fvx.BC.periodic())` |
-| A wet-face mask `wet[:, :-1] & wet[:, 1:]` | `fvx.Mask2D.from_mask(wet).u` |
+| A wet-face mask `wet[:, :-1] & wet[:, 1:]` | `fvx.Mask2D.from_mask(wet).wet(at="U")` |
 | `scipy.fft.dstn` Poisson solver | `gs.solve_helmholtz_dst` (or `sesmax_core.gfd.streamfunction_from_vorticity` for the full-array one-call form) |
 | A conjugate-gradient loop on a masked basin | `gaussx.linear_solve_with_info(gaussx.as_linear_operator(matvec, shape=(n, n), negative_definite=True), rhs.ravel(), solver=gaussx.CGSolver(), preconditioner=gs.build_multigrid_solver(...).as_preconditioner())` |
 | A dense `(N, N)` Laplacian matrix for a prior covariance, its Cholesky or log-determinant | `gs.helmholtz_operator` / `gs.masked_helmholtz_operator` with `gaussx.solve`, `gaussx.logdet`, `gaussx.sqrt` |
 | A Thomas algorithm for vertical diffusion | `gs.solve_tridiagonal` |
 | A hand-written RK3 / AB2 / leapfrog loop | `integrix.march.rk3_ssp_step`, `integrix.march.ab2_step`, `integrix.march.leapfrog_raf_step`, or `integrix.march.RK3SSP` with `sesmax_core.solve_pde.solve_ocean_pde` |
 | `jnp.sum(q * dx * dy)` | `fvx.area_sum(q, grid)` (excludes the ghost ring; `mask=` drops land) |
-| Kinetic energy / PV / Okubo–Weiss by hand | `fvx.Energetics2D`, `fvx.Vorticity2D`, `fvx.Strain2D` |
-| A `vmap` over layers | `sesmax_core.vertical.multilayer(diff.laplacian)(psi_layers)` |
+| Kinetic energy / PV / Okubo–Weiss by hand | `fvx.kinetic_energy`, `fvx.sw_potential_vorticity`, `fvx.okubo_weiss_parameter` |
+| A `vmap` over layers | `sesmax_core.vertical.multilayer(ops.laplacian)(psi_layers)` |
 
 ## Self-check before you finish
 
 - Every field read by a stencil has its ghost ring filled for the boundary
   condition you mean (periodic, wall, open), at every RHS evaluation.
-- Each operator maps the stagger you think: T fields into `*_T_to_*`,
+- Each move has the stagger you think: T fields into `src="T"`,
   velocities on U / V faces, vorticity on X corners.
 - The total of a conserved tracer (`fvx.area_sum`) is constant over a run
   with periodic or closed boundaries.

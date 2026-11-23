@@ -49,7 +49,7 @@ already depends on (see "Boundaries" in `AGENTS.md`).
 
 ### NumPy-Style Docstrings
 ```python
-def diff_x_T_to_U(self, h: Float[Array, "Nx"]) -> Float[Array, "Nx"]:
+def east_difference(h: Float[Array, "Nx"], grid: CartesianCGrid1D) -> Float[Array, "Nx"]:
     """Forward difference in x: T-point -> U-point.
 
     dh_dx[i+1/2] = (h[i+1] - h[i]) / dx
@@ -69,13 +69,14 @@ def diff_x_T_to_U(self, h: Float[Array, "Nx"]) -> Float[Array, "Nx"]:
 ### JAX Type Hints
 - Use `jaxtyping` for array shapes: `Float[Array, "Ny Nx"]` (documentation
   only: nothing checks them at run time)
-- All operators inherit from `equinox.Module`
+- A function of a grid is declared with `@grid_dispatch` over `@located`
+  (`AGENTS.md`, contract 2); what holds arrays is a `pytree_dataclass`
 
 ### Stencil Comments
 Every stencil operation must include the half-index formula:
 ```python
 # dh_dx[j, i+1/2] = (h[j, i+1] - h[j, i]) / dx
-out = out.at[1:-1, 1:-1].set((h[1:-1, 2:] - h[1:-1, 1:-1]) / self.grid.dx)
+out = interior((h[1:-1, 2:] - h[1:-1, 1:-1]) / dx, h)
 ```
 
 ### Ghost-Cell Rules for All Staggered Types
@@ -103,10 +104,10 @@ BC-owned ghost *output-type* cells for the first interior cell — the caller
 
 ### Advection Write Region
 
-With the default `wall="closed"`, advection operators use `[2:-2]` /
+With the default `wall="closed"`, `advect` uses `[2:-2]` /
 `[2:-2, 2:-2]` (not `[1:-1]`) to avoid reading ghost flux cells
-(`wall="open"` on `Advection1D/2D` writes the full interior and computes the
-wall faces from the ghost ring).  `Advection3D` uses `[1:-1, 2:-2, 2:-2]` since
+(`wall="open"` writes the full interior and computes the
+wall faces from the ghost ring).  In 3-D it uses `[1:-1, 2:-2, 2:-2]` since
 the z-axis is independent.  Never change this to `[1:-1, ...]` for the
 horizontal dimensions.
 

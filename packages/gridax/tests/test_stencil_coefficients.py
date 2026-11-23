@@ -3,14 +3,13 @@
 The coefficients solve the Taylor conditions sum_k c_k s_k^m = n! delta_mn,
 m = 0..K-1, in rational arithmetic and round once; these tests compare them
 with an independent rational solve, pin the staggered offset rule and its
-orders, and check that the old `gridax.analysis` names still resolve.
+orders, and check that the old `gridax.analysis` names are gone.
 """
 
 from __future__ import annotations
 
 from fractions import Fraction
 import math
-import warnings
 
 import gridax.analysis
 import gridax.stencils as gs
@@ -171,16 +170,9 @@ def test_collocated_difference_rejects_the_staggered_method() -> None:
         "nonuniform_coeffs",
     ],
 )
-def test_the_old_analysis_names_warn_and_resolve(name: str) -> None:
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        old = getattr(gridax.analysis, name)
-    assert old is getattr(gs, name)
-    assert any(
-        issubclass(w.category, DeprecationWarning)
-        and "gridax.stencils" in str(w.message)
-        for w in caught
-    )
+def test_the_old_analysis_names_are_gone(name: str) -> None:
+    assert not hasattr(gridax.analysis, name)
+    assert hasattr(gs, name)
 
 
 def test_the_named_stencils_are_re_exported() -> None:

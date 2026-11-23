@@ -5,8 +5,7 @@ q[i+1/2] u[i+1/2]`` on the faces along ``axis`` of a C-grid array with one
 ghost ring, on bare arrays. The face value comes from the widest tier of
 ``scheme`` that fits: inside the array, and with ``mask`` on wet cells too.
 Upwind reconstructions narrow at a wall rather than shift, so they never read a
-cell downwind of the face. Every ``Reconstruction1D/2D/3D`` method, and
-:func:`reconstruct` and :func:`~gridax.advect`, are calls of this function.
+cell downwind of the face. :func:`reconstruct` and :func:`~gridax.advect` call this function.
 """
 
 from __future__ import annotations

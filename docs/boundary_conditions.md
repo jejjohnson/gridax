@@ -101,7 +101,7 @@ walls = gridax.BC(x=gridax.Dirichlet(0.0), y=gridax.Dirichlet(0.0))
 u = gridax.fill_ghosts(u, grid, walls, stagger="U")  # u = 0 on the W/E faces, no-slip on S/N
 v = gridax.fill_ghosts(v, grid, walls, stagger="V")  # v = 0 on the S/N faces, no-slip on W/E
 print(u[3, 0], u[3, -2], v[0, 3], v[-2, 3])
-# Difference2D(grid).divergence(u, v) now integrates to zero over the basin.
+# gridax.divergence(u, v, grid) now integrates to zero over the basin.
 ```
 
 ### `Neumann`

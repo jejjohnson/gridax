@@ -28,7 +28,7 @@ in `AGENTS.md`.
      `advection/reconstruction._get_limiter`; `mask/utils.py` (`pool_bool`,
      `h_from_pooled`, `dilate_mask`, `count_contiguous`, `make_sponge`);
      `operators/calculus.py` (`gridax.divergence`, `curl`, `laplacian`, `gradient`, `grad_perp`);
-     `diffusion/diffusion._diffusion_2d_impl`; `solvers/elliptic.py`
+     `diffusion/diffuse.py`; `solvers/elliptic.py`
      (`_resolve_mask_arr`, `_resolve_bc`); `solvers/inhomogeneous.py`
      (`lift_rhs`, `reconstruct_from_lift`); and, in tests,
      `tests/fixtures/inputs.py` and `tests/fixtures/_helpers.py`;
@@ -36,19 +36,19 @@ in `AGENTS.md`.
 3. Also flag, wherever they appear in the diff:
    - a shifted-slice difference or average (`h[1:-1, 2:] - h[1:-1, 1:-1]`,
      `0.25 * (h[1:-1, 1:-1] + h[2:, 1:-1] + ...)`) → the raw stencils
-     `diff_x_fwd_2d`, `avg_xfwd_yfwd_2d`, … or an `Interpolation*` / `Difference*`
-     method;
+     `diff_x_fwd_2d`, `avg_xfwd_yfwd_2d`, … or
+     `gridax.interpolate` / `gridax.difference`;
    - `jnp.zeros_like(x).at[1:-1, 1:-1].set(...)` → `interior(values, x)`;
    - a hand-filled ghost ring (`.at[0, :].set(...)` on a field) →
      `gridax.fill_ghosts` with a `gridax.BC` (`BC.periodic()`, `BC.no_flux()`,
      `BC.wall_normal()`, …);
    - a wet-face mask computed by hand (`h[:, :-1] & h[:, 1:]`) →
-     `Mask2D.from_mask(...).u` / `.v` / `.xy_corner_strict`;
+     `Mask2D.from_mask(...).wet(at="U")`;
    - `np.sum(field * dx * dy)`, a cos-latitude-weighted mean → `area_sum`,
-     `area_mean`, `masked_mean`, the `spherical_*` reductions;
+     `area_mean`, `masked_mean`;
    - kinetic energy, vorticity, PV, strain, Okubo–Weiss, an Arakawa
-     Jacobian written inline → `Energetics2D`, `Vorticity2D`, `Strain2D`,
-     `QGPotentialVorticity2D`, `arakawa_jacobian`, …;
+     Jacobian written inline → `kinetic_energy`, `curl`, `sw_potential_vorticity`,
+     `okubo_weiss_parameter`, `qg_potential_vorticity`, `arakawa_jacobian`, …;
    - `scipy.fft.dst` / `dct`, `jnp.fft` eigenvalue arrays, a hand-written
      spectral Poisson / Helmholtz solve → the spectraldiffx re-exports
      (`dst`, `dct`, `solve_helmholtz_dst`, `dst1_eigenvalues`, …) or, in

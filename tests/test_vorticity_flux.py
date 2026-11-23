@@ -8,11 +8,6 @@ from __future__ import annotations
 
 from gridax import (
     CartesianCGrid2D,
-    SphericalCGrid2D,
-    SphericalVorticity2D,
-    Vorticity2D,
-    pv_flux_arakawa_lamb,
-    pv_flux_blend,
     vorticity_flux_upwind,
 )
 from gridax._src.operators._ghost import interior
@@ -21,6 +16,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
+from tests.fixtures.bindings import Vorticity2D, pv_flux_blend
 
 
 @pytest.fixture()
@@ -153,7 +150,7 @@ class TestPVFluxForms:
         Before #284 the first interior row / column read a zero ghost corner
         and came out exactly halved.
         """
-        from gridax import Interpolation2D
+        from tests.fixtures.bindings import Interpolation2D
 
         g, q, u, v = fields
         interp = Interpolation2D(g)
@@ -164,7 +161,7 @@ class TestPVFluxForms:
         np.testing.assert_allclose(qv, ref_qv, rtol=0, atol=1e-14)
 
     def test_enstrophy_is_average_then_multiply(self, fields):
-        from gridax import Interpolation2D
+        from tests.fixtures.bindings import Interpolation2D
 
         g, q, u, v = fields
         interp = Interpolation2D(g)
@@ -179,7 +176,7 @@ class TestPVFluxForms:
         the south / west ghost corners are zero, which is what the old
         interior()-intermediate assumed: the result equals that composition.
         """
-        from gridax import Interpolation2D
+        from tests.fixtures.bindings import Interpolation2D
 
         g, q, u, v = fields
         q0 = interior(q[1:-1, 1:-1], q)
@@ -197,25 +194,3 @@ class TestPVFluxForms:
         ref = Vorticity2D(g).pv_flux_blend(q, u, v, alpha=0.25)
         np.testing.assert_allclose(qu, ref[0], rtol=0, atol=1e-14)
         np.testing.assert_allclose(qv, ref[1], rtol=0, atol=1e-14)
-
-
-class TestArakawaLambDeprecatedAliases:
-    """The old "Arakawa-Lamb" names warn and return the blend (#283)."""
-
-    def test_free_function(self, grid):
-        q, u, v = (_rand(s, (grid.Ny, grid.Nx)) for s in (9, 10, 11))
-        with pytest.warns(DeprecationWarning, match="pv_flux_blend"):
-            old = pv_flux_arakawa_lamb(q, u, v, alpha=0.25)
-        new = pv_flux_blend(q, u, v, alpha=0.25)
-        np.testing.assert_array_equal(old[0], new[0])
-        np.testing.assert_array_equal(old[1], new[1])
-
-    def test_methods(self, grid):
-        q, u, v = (_rand(s, (grid.Ny, grid.Nx)) for s in (12, 13, 14))
-        sgrid = SphericalCGrid2D.from_interior(8, 8, (0.0, 40.0), (-20.0, 20.0))
-        for op in (Vorticity2D(grid=grid), SphericalVorticity2D(grid=sgrid)):
-            with pytest.warns(DeprecationWarning, match="not the Arakawa-Lamb"):
-                old = op.pv_flux_arakawa_lamb(q, u, v)
-            new = op.pv_flux_blend(q, u, v)
-            np.testing.assert_array_equal(old[0], new[0])
-            np.testing.assert_array_equal(old[1], new[1])

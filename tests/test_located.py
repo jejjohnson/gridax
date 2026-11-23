@@ -63,6 +63,10 @@ def keywords(name, grid):
     """The keyword arguments of each call an operation is checked on."""
     if name == "advect":
         return [{"scheme": Upwind(3)}, {"scheme": Centred(4)}]
+    if name == "qg_potential_vorticity":
+        return [{"f0": 0.7, "beta": 0.2}]
+    if name in ("advect_momentum", "pv_flux"):
+        return [{"form": form} for form in ("energy", "enstrophy", "blend")]
     if name == "reconstruct":
         return [{"axis": axis, "scheme": WENO(5)} for axis in grid.axes]
     if getattr(grid, "_collocated", False):

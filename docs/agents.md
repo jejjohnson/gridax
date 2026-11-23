@@ -63,15 +63,15 @@ search the capability index
 
 - Arrays are `[Ny, Nx]` with one ghost ring; `T[j, i]` is a cell centre,
   `U[j, i]` its east face, `V[j, i]` its north face, `X[j, i]` its NE
-  corner. Use the operator that names the mapping
-  (`Difference2D.diff_x_T_to_U`, `Interpolation2D.U_to_T`) instead of
-  writing the slice.
+  corner. Name the move
+  (`difference(h, grid, axis="x", src="T", dst="U")`,
+  `interpolate(u, grid, src="U", dst="T")`) instead of writing the slice.
 - Operators write only the interior. Fill every field's ghost ring
   (`fill_ghosts` with a `BC`) before the next operator
   reads it, including inside the time stepper's right-hand side.
 - Build a `Mask2D.from_mask(wet)` once and pass it as `mask=` to the
-  operators; don't multiply by a mask afterwards or keep `NaN` on land.
-- Advect with `Advection2D(...)(q, u, v, scheme=WENO(5))`; invert with
+  functions (or hold both in `GridOps(grid, mask)`); don't multiply by a mask afterwards or keep `NaN` on land.
+- Advect with `advect(q, u, v, grid, scheme=WENO(5), mask=mask)`; invert with
   `sesmax_core.gfd`'s `streamfunction_from_vorticity` / `pv_inversion`
   (or the spectral solvers here); step with `integrix.march.rk3_ssp_step` or a
   finitevolX diffrax solver.

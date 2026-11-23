@@ -46,7 +46,7 @@ list grouped by module, plus spectraldiffx and gaussx.
 2. Flag, wherever they appear:
    - shifted-slice differences or averages on a staggered grid
      (`(h[1:-1, 2:] - h[1:-1, 1:-1]) / dx`, `0.5 * (u[:, 1:] + u[:, :-1])`)
-     → `gridax.Difference2D` / `Interpolation2D` methods or the raw
+     → `gridax.difference` / `gridax.interpolate` or the raw
      stencils `gridax.diff_x_fwd_2d`, `gridax.avg_x_fwd_2d`, … with
      `interior` of `gridax.stencils`;
    - ghost-cell fills (`q.at[:, 0].set(q[:, -2])`, `jnp.pad(..., mode="wrap")`)
@@ -55,14 +55,14 @@ list grouped by module, plus spectraldiffx and gaussx.
      `gridax.Neumann` / `gridax.Periodic` conditions;
    - wet-face masks computed by hand → `gridax.Mask2D.from_mask`;
    - an upwind, WENO or flux-limited advection scheme →
-     `gridax.Advection2D(grid, mask)(q, u, v, method=...)`,
-     `gridax.Reconstruction2D`, `gridax.upwind_flux`;
+     `gridax.advect(q, u, v, grid, scheme=..., mask=...)`,
+     `gridax.reconstruct`, `gridax.upwind_flux`;
    - Laplacian diffusion, biharmonic viscosity, Coriolis, momentum
-     advection → `gridax.Diffusion2D`, `gridax.BiharmonicDiffusion2D`,
-     `gridax.Coriolis2D`, `gridax.MomentumAdvection2D`;
+     advection → `gridax.diffuse`, `gridax.biharmonic`,
+     `gridax.coriolis`, `gridax.advect_momentum`;
    - vorticity, divergence, kinetic energy, PV, strain, Okubo–Weiss, an
-     Arakawa Jacobian → `gridax.Vorticity2D`, `gridax.Divergence2D`,
-     `gridax.Energetics2D`, `gridax.Strain2D`,
+     Arakawa Jacobian → `gridax.curl`, `gridax.divergence`,
+     `gridax.kinetic_energy`, `gridax.okubo_weiss_parameter`,
      `gridax.arakawa_jacobian`;
    - `jnp.sum(field * dx * dy)` or a cos-latitude-weighted mean →
      `gridax.area_sum`, `gridax.area_mean`, `gridax.masked_mean`;

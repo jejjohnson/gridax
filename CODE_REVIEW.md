@@ -68,14 +68,14 @@ order); review what they cannot see.
   chained operator that reads a west / south ghost no forward operator sets
   is documented, or the BC is applied.
 - 3-D operators leave the `k = 0` / `k = Nz-1` slabs alone; multilayer code
-  uses `jax.vmap` over a 2-D operator, not a `3D` operator.
+  uses `jax.vmap` over a 2-D grid, not a 3-D grid.
 - Spherical operators use the `SphericalCGrid*` metric and guard `cos(lat)`
   near the poles.
 
 ### 3. Masks
 
-- A class operator's mask zeroes the output on the dry points of the
-  **output** stagger (`h` / `u` / `v` / `xy_corner_strict`); `mask=None`
+- A function's `mask=` zeroes the output on the dry points of the
+  **output** stagger (`mask.wet(at=…)`, `kind="strict"` at X); `mask=None`
   leaves the unmasked result bit for bit unchanged.
 - Inputs that may hold `NaN` on land are zeroed with `jnp.where` before a
   stencil reads them, and outputs are masked with `jnp.where`, not a float
@@ -83,7 +83,7 @@ order); review what they cannot see.
 - `if mask is not None:`, never `if mask:`; mask construction stays eager
   (numpy / scipy), and no irregular-boundary index array is used under
   `jit`.
-- The operator has golden entries (unmasked, masked) in
+- The function has golden entries (unmasked, masked) in
   `tests/fixtures/_gen_golden.py` and a `tests/test_*_masks.py` test.
 
 ### 4. Boundary conditions and solvers
@@ -156,7 +156,7 @@ order); review what they cannot see.
 # ❌ Labelled T → U (east face), but this is the backward (west-face) difference
 dh_dx = jnp.zeros_like(h).at[1:-1, 1:-1].set((h[1:-1, 1:-1] - h[1:-1, :-2]) / dx)
 
-# ✅ dh_dx[j, i+1/2] = (h[j, i+1] - h[j, i]) / dx — equal to Difference2D.diff_x_T_to_U
+# ✅ dh_dx[j, i+1/2] = (h[j, i+1] - h[j, i]) / dx — equal to fvx.difference(h, grid, axis="x", src="T", dst="U")
 dh_dx = interior(fvx.diff_x_fwd_2d(h) / dx, h)
 ```
 

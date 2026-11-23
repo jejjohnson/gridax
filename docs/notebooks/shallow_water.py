@@ -87,7 +87,7 @@ IMG_DIR.mkdir(parents=True, exist_ok=True)
 # | **Momentum advection** | absent | $-(\mathbf{u} \cdot \nabla) u$, $-(\mathbf{u} \cdot \nabla) v$ |
 # | **Pressure gradient** | $-g\,\partial_x \eta$ | $-g\,\partial_x \eta$ (same -- see note below) |
 # | **Coriolis, drag, diffusion** | unchanged | unchanged |
-# | **New operator** | -- | `Advection2D` (upwind flux reconstruction) |
+# | **New operator** | -- | `advect` (upwind flux reconstruction) |
 #
 # **Note on the pressure gradient**: the nonlinear model uses the same
 # $-g\,\partial_x \eta$ as the linear model, *not* the full Bernoulli
@@ -195,35 +195,32 @@ print(
 # %% [markdown]
 # ## 4. The Advection Operator
 #
-# The key new ingredient is `Advection2D`.  It computes the advective flux
+# The key new ingredient is `advect`.  It computes the advective flux
 # divergence $-\nabla \cdot (h\,\mathbf{u})$ at T-points using upwind
 # flux reconstruction.
 #
 # ```python
-# adv_op = fvx.Advection2D(grid=grid)
-# tendency = adv_op(h, u, v, scheme=Upwind(1))
+# ops = fvx.GridOps(grid)
+# tendency = ops.advect(h, u, v, scheme=Upwind(1))
 # ```
 #
 # - `h` is the scalar field being advected (at T-points).
 # - `u`, `v` are the advecting velocities (at U- and V-points).
 # - `scheme=Upwind(1)` selects first-order upwind reconstruction; higher
-#   orders (`"weno3"`, `"weno5"`, etc.) are also available.
+#   orders (`WENO(3)`, `WENO(5)`, etc.) are also available.
 #
 # The operator returns the tendency $-\nabla \cdot (h\,\mathbf{u})$,
 # which is exactly what appears in the continuity equation.
 
 # %%
-diff = fvx.Difference2D(grid=grid)
-interp = fvx.Interpolation2D(grid=grid)
-adv = fvx.Advection2D(grid=grid)
-vort = fvx.Vorticity2D(grid=grid)
+ops = fvx.GridOps(grid)
 
 # Quick demonstration: advect a test field
 test_h = pad_to_full(np.sin(np.pi * x_2d / Lx) * np.sin(np.pi * y_2d / Ly))
 test_u = pad_to_full(0.01 * np.ones_like(x_2d))
 test_v = jnp.zeros_like(test_h)
 
-adv_tendency = adv(test_h, test_u, test_v, scheme=Upwind(1))
+adv_tendency = ops.advect(test_h, test_u, test_v, scheme=Upwind(1))
 print(f"Advection tendency shape: {adv_tendency.shape}")
 print(f"max |tendency|: {float(jnp.abs(adv_tendency[1:-1, 1:-1]).max()):.4e}")
 
@@ -251,8 +248,8 @@ print(f"max |tendency|: {float(jnp.abs(adv_tendency[1:-1, 1:-1]).max()):.4e}")
 #
 # ```python
 # layer_depth = mean_depth + eta
-# eta_rhs = adv(layer_depth, u, v, scheme=Upwind(1))  # -div((H+eta)*u)
-# eta_rhs = eta_rhs + viscosity * diff.laplacian(eta)  # + nu * lap(eta)
+# eta_rhs = ops.advect(layer_depth, u, v, scheme=Upwind(1))  # -div((H+eta)*u)
+# eta_rhs = eta_rhs + viscosity * ops.laplacian(eta)  # + nu * lap(eta)
 # ```
 #
 # **Stability note**: when $\eta$ becomes large and negative, $H + \eta$
@@ -262,11 +259,11 @@ print(f"max |tendency|: {float(jnp.abs(adv_tendency[1:-1, 1:-1]).max()):.4e}")
 # %%
 # Demonstrate the nonlinear continuity tendency
 layer_depth = mean_depth + eta
-eta_rhs_nonlinear = adv(layer_depth, u, v, scheme=Upwind(1))
-eta_rhs_nonlinear = eta_rhs_nonlinear + viscosity * diff.laplacian(eta)
+eta_rhs_nonlinear = ops.advect(layer_depth, u, v, scheme=Upwind(1))
+eta_rhs_nonlinear = eta_rhs_nonlinear + viscosity * ops.laplacian(eta)
 
 # Compare with the linear version
-eta_rhs_linear = -mean_depth * diff.divergence(u, v) + viscosity * diff.laplacian(eta)
+eta_rhs_linear = -mean_depth * ops.divergence(u, v) + viscosity * ops.laplacian(eta)
 
 print(
     f"Nonlinear eta_rhs max: {float(jnp.abs(eta_rhs_nonlinear[1:-1, 1:-1]).max()):.4e}"
@@ -317,22 +314,28 @@ print(f"Linear    eta_rhs max: {float(jnp.abs(eta_rhs_linear[1:-1, 1:-1]).max())
 
 def centered_gradients(field):
     """Centred gradients at T-points via difference + re-averaging."""
-    df_dx = interp.U_to_T(diff.diff_x_T_to_U(field))
-    df_dy = interp.V_to_T(diff.diff_y_T_to_V(field))
+    df_dx = ops.interpolate(
+        ops.difference(field, axis="x", src="T", dst="U"), src="U", dst="T"
+    )
+    df_dy = ops.interpolate(
+        ops.difference(field, axis="y", src="T", dst="V"), src="V", dst="T"
+    )
     return df_dx, df_dy
 
 
 # Interpolate velocities to T-points
-u_on_t = interp.U_to_T(u)
-v_on_t = interp.V_to_T(v)
+u_on_t = ops.interpolate(u, src="U", dst="T")
+v_on_t = ops.interpolate(v, src="V", dst="T")
 
 # Gradients of u and v at T-points
 du_dx, du_dy = centered_gradients(u_on_t)
 dv_dx, dv_dy = centered_gradients(v_on_t)
 
 # Advection: -(u . grad) u at U-points, -(u . grad) v at V-points
-u_adv = interp.T_to_U(u_on_t * du_dx + v_on_t * du_dy)  # -> U-points
-v_adv = interp.T_to_V(u_on_t * dv_dx + v_on_t * dv_dy)  # -> V-points
+# -> U-points
+u_adv = ops.interpolate(u_on_t * du_dx + v_on_t * du_dy, src="T", dst="U")
+# -> V-points
+v_adv = ops.interpolate(u_on_t * dv_dx + v_on_t * dv_dy, src="T", dst="V")
 
 print(f"u_adv shape: {u_adv.shape}  (at U-points)")
 print(f"v_adv shape: {v_adv.shape}  (at V-points)")
@@ -353,43 +356,49 @@ def tendency(eta_field, u_field, v_field):
     """
     # --- Continuity: d(eta)/dt = -div((H+eta)*u) + nu*lap(eta) ---
     layer_depth = mean_depth + eta_field  # H + eta         [Ny, Nx]
-    eta_rhs = adv(
+    eta_rhs = ops.advect(
         layer_depth,
         u_field,
         v_field,  # -div((H+eta)*u) [Ny, Nx]
         scheme=Upwind(1),
     )
-    eta_rhs = eta_rhs + viscosity * diff.laplacian(eta_field)  # + nu*lap(eta)
+    eta_rhs = eta_rhs + viscosity * ops.laplacian(eta_field)  # + nu*lap(eta)
 
     # --- Momentum advection: -(u . grad) u, -(u . grad) v ---
-    u_on_t = interp.U_to_T(u_field)  # u at T-points   [Ny, Nx]
-    v_on_t = interp.V_to_T(v_field)  # v at T-points   [Ny, Nx]
+    u_on_t = ops.interpolate(u_field, src="U", dst="T")  # u at T-points   [Ny, Nx]
+    v_on_t = ops.interpolate(v_field, src="V", dst="T")  # v at T-points   [Ny, Nx]
 
     du_dx, du_dy = centered_gradients(u_on_t)  # grad(u) at T    [Ny, Nx]
     dv_dx, dv_dy = centered_gradients(v_on_t)  # grad(v) at T    [Ny, Nx]
-    u_adv = interp.T_to_U(u_on_t * du_dx + v_on_t * du_dy)  # -> U  [Ny, Nx]
-    v_adv = interp.T_to_V(u_on_t * dv_dx + v_on_t * dv_dy)  # -> V  [Ny, Nx]
+    # -> U  [Ny, Nx]
+    u_adv = ops.interpolate(u_on_t * du_dx + v_on_t * du_dy, src="T", dst="U")
+    # -> V  [Ny, Nx]
+    v_adv = ops.interpolate(u_on_t * dv_dx + v_on_t * dv_dy, src="T", dst="V")
 
     # --- Coriolis: f*v at U-points, -f*u at V-points ---
-    v_on_u = interp.V_to_U(v_field)  # v at U-points   [Ny, Nx]
-    u_on_v = interp.U_to_V(u_field)  # u at V-points   [Ny, Nx]
-    coriolis_on_u = interp.T_to_U(coriolis)  # f at U-points   [Ny, Nx]
-    coriolis_on_v = interp.T_to_V(coriolis)  # f at V-points   [Ny, Nx]
+    v_on_u = ops.interpolate(v_field, src="V", dst="U")  # v at U-points   [Ny, Nx]
+    u_on_v = ops.interpolate(u_field, src="U", dst="V")  # u at V-points   [Ny, Nx]
+    # f at U-points   [Ny, Nx]
+    coriolis_on_u = ops.interpolate(coriolis, src="T", dst="U")
+    # f at V-points   [Ny, Nx]
+    coriolis_on_v = ops.interpolate(coriolis, src="T", dst="V")
 
     # --- u-momentum: -g*d(eta)/dx - adv + f*v + F_x - r*u + nu*lap(u) ---
-    u_rhs = -gravity * diff.diff_x_T_to_U(eta_field)  # pressure grad
+    # pressure grad
+    u_rhs = -gravity * ops.difference(eta_field, axis="x", src="T", dst="U")
     u_rhs = u_rhs - u_adv  # - (u . grad) u
     u_rhs = u_rhs + coriolis_on_u * v_on_u  # + f*v
     u_rhs = u_rhs + wind_u  # + F_x
     u_rhs = u_rhs - drag * u_field  # - r*u
-    u_rhs = u_rhs + viscosity * diff.laplacian(u_field)  # + nu*lap(u)
+    u_rhs = u_rhs + viscosity * ops.laplacian(u_field, at="U")  # + nu*lap(u)
 
     # --- v-momentum: -g*d(eta)/dy - adv - f*u - r*v + nu*lap(v) ---
-    v_rhs = -gravity * diff.diff_y_T_to_V(eta_field)  # pressure grad
+    # pressure grad
+    v_rhs = -gravity * ops.difference(eta_field, axis="y", src="T", dst="V")
     v_rhs = v_rhs - v_adv  # - (u . grad) v
     v_rhs = v_rhs - coriolis_on_v * u_on_v  # - f*u
     v_rhs = v_rhs - drag * v_field  # - r*v
-    v_rhs = v_rhs + viscosity * diff.laplacian(v_field)  # + nu*lap(v)
+    v_rhs = v_rhs + viscosity * ops.laplacian(v_field, at="V")  # + nu*lap(v)
 
     return eta_rhs, u_rhs, v_rhs
 
@@ -458,11 +467,11 @@ print(f"Minimum total depth: {min_depth:.1f} m  (must stay > 0)")
 
 # %%
 # Compute diagnostics on the interior
-u_center = interp.U_to_T(u)
-v_center = interp.V_to_T(v)
+u_center = ops.interpolate(u, src="U", dst="T")
+v_center = ops.interpolate(v, src="V", dst="T")
 
-zeta_corner = vort.relative_vorticity(u, v)
-zeta_center = interp.X_to_T(zeta_corner)
+zeta_corner = ops.curl(u, v)
+zeta_center = ops.interpolate(zeta_corner, src="X", dst="T")
 
 # --- Coordinate grids ---
 # Full interior [1:-1, 1:-1] for native T-point fields (eta, total depth)
@@ -577,7 +586,7 @@ plt.show()
 # #   Lx, Ly = 5.12e6, 5.12e6
 # #   dt = 200 s, spinup = 150000 steps, record = 15000 steps
 # #   Same physics: g=9.81, H=500, f0=9.375e-5, beta=1.754e-11
-# #   New: Advection2D for continuity, centered advection for momentum
+# #   New: advect for continuity, centered advection for momentum
 # ```
 #
 # ![Nonlinear shallow-water double gyre](../images/shallow_water/shallow_water_double_gyre.gif)
@@ -593,7 +602,7 @@ plt.show()
 # | Momentum advection | none | $-(\mathbf{u}\cdot\nabla)\mathbf{u}$ |
 # | Pressure gradient | $-g\,\nabla\eta$ | $-g\,\nabla\eta$ |
 # | Stability concern | unconditional (linear) | min depth $H+\eta > 0$ required |
-# | New operator | -- | `Advection2D` |
+# | New operator | -- | `advect` |
 # | Computational cost | lower | higher (advection + gradients) |
 #
 # ### gridax API Reference
@@ -601,9 +610,9 @@ plt.show()
 # | Class / Function | Role in this notebook |
 # |-----------------|----------------------|
 # | `CartesianCGrid2D.from_interior` | Build the C-grid with ghost ring |
-# | `Difference2D` | Finite differences, Laplacian, divergence |
-# | `Interpolation2D` | Stagger-point averaging (T/U/V/X) |
-# | `Advection2D` | Upwind flux advection $-\nabla\cdot(h\,\mathbf{u})$ |
-# | `Vorticity2D` | Relative vorticity at corner (X) points |
+# | `difference`, `laplacian`, `divergence` | Finite differences, Laplacian, divergence |
+# | `interpolate` | Stagger-point averaging (T/U/V/X) |
+# | `advect` | Upwind flux advection $-\nabla\cdot(h\,\mathbf{u})$ |
+# | `curl` | Relative vorticity at corner (X) points |
 # | `heun_step` | Heun/RK2 time integrator |
 # | `embed`, `interior` | Re-apply ghost-cell boundary conditions |

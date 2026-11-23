@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from gridax import CartesianCGrid2D, CartesianCGrid3D, diffuse
-from gridax._src.diffusion.diffusion import Diffusion2D, Diffusion3D
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
+from tests.fixtures.bindings import Diffusion2D, Diffusion3D
 
 
 @pytest.fixture
@@ -324,7 +325,7 @@ class TestDiffusion3DClass:
 class TestBiharmonicDiffusion2D:
     def test_constant_field_zero_tendency(self, grid):
         """Constant h -> nabla^4 h = 0 -> zero tendency everywhere."""
-        from gridax._src.diffusion.diffusion import BiharmonicDiffusion2D
+        from tests.fixtures.bindings import BiharmonicDiffusion2D
 
         op = BiharmonicDiffusion2D(grid=grid)
         h = jnp.ones((grid.Ny, grid.Nx))
@@ -333,7 +334,7 @@ class TestBiharmonicDiffusion2D:
 
     def test_ghost_ring_is_zero(self, grid):
         """Ghost cells must remain zero (interior-point idiom)."""
-        from gridax._src.diffusion.diffusion import BiharmonicDiffusion2D
+        from tests.fixtures.bindings import BiharmonicDiffusion2D
 
         op = BiharmonicDiffusion2D(grid=grid)
         h = jnp.ones((grid.Ny, grid.Nx))
@@ -345,7 +346,7 @@ class TestBiharmonicDiffusion2D:
 
     def test_output_shape(self, grid):
         """Output shape must equal input shape."""
-        from gridax._src.diffusion.diffusion import BiharmonicDiffusion2D
+        from tests.fixtures.bindings import BiharmonicDiffusion2D
 
         op = BiharmonicDiffusion2D(grid=grid)
         h = jnp.zeros((grid.Ny, grid.Nx))
@@ -353,7 +354,7 @@ class TestBiharmonicDiffusion2D:
 
     def test_kappa_scales_linearly(self, grid):
         """Doubling kappa doubles the magnitude of the tendency."""
-        from gridax._src.diffusion.diffusion import BiharmonicDiffusion2D
+        from tests.fixtures.bindings import BiharmonicDiffusion2D
 
         op = BiharmonicDiffusion2D(grid=grid)
         ix = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
@@ -372,12 +373,8 @@ class TestBiharmonicDiffusion2D:
         field is periodic so ghost cells are filled before calling the
         operator; results are compared in the deep interior [2:-2, 2:-2].
         """
-        from gridax._src.diffusion.diffusion import (
-            BiharmonicDiffusion2D,
-            Diffusion2D,
-        )
-
         from tests.fixtures._helpers import periodic
+        from tests.fixtures.bindings import BiharmonicDiffusion2D, Diffusion2D
 
         op = BiharmonicDiffusion2D(grid=grid)
         harm = Diffusion2D(grid=grid)
@@ -417,9 +414,8 @@ class TestBiharmonicDiffusion2D:
         The eigenvalue ratio mu_k4^2 / mu_k1^2 approx (k4/k1)^4 for well-resolved
         modes (k*dx << 1), demonstrating scale-selective dissipation.
         """
-        from gridax._src.diffusion.diffusion import BiharmonicDiffusion2D
-
         from tests.fixtures._helpers import periodic
+        from tests.fixtures.bindings import BiharmonicDiffusion2D
 
         N_int = 64
         Lx = 2.0 * float(jnp.pi)
@@ -470,12 +466,8 @@ class TestBiharmonicDiffusion2D:
         For k*dx << 1: |mu_k| approx k^2 and mu_k^2 approx k^4, so with
         kappa_h = kappa_bi and k > 1/dx, biharmonic damps more (k^4 > k^2).
         """
-        from gridax._src.diffusion.diffusion import (
-            BiharmonicDiffusion2D,
-            Diffusion2D,
-        )
-
         from tests.fixtures._helpers import periodic
+        from tests.fixtures.bindings import BiharmonicDiffusion2D, Diffusion2D
 
         N_int = 64
         Lx = 2.0 * float(jnp.pi)
@@ -513,7 +505,7 @@ class TestBiharmonicDiffusion2D:
 class TestBiharmonicDiffusion3D:
     def test_constant_field_zero_tendency(self, grid3d):
         """Constant h -> nabla^4 h = 0 -> zero tendency."""
-        from gridax._src.diffusion.diffusion import BiharmonicDiffusion3D
+        from tests.fixtures.bindings import BiharmonicDiffusion3D
 
         op = BiharmonicDiffusion3D(grid=grid3d)
         h = jnp.ones((grid3d.Nz, grid3d.Ny, grid3d.Nx))
@@ -522,7 +514,7 @@ class TestBiharmonicDiffusion3D:
 
     def test_ghost_ring_is_zero(self, grid3d):
         """Ghost cells must remain zero."""
-        from gridax._src.diffusion.diffusion import BiharmonicDiffusion3D
+        from tests.fixtures.bindings import BiharmonicDiffusion3D
 
         op = BiharmonicDiffusion3D(grid=grid3d)
         h = jnp.ones((grid3d.Nz, grid3d.Ny, grid3d.Nx))
@@ -536,7 +528,7 @@ class TestBiharmonicDiffusion3D:
 
     def test_output_shape(self, grid3d):
         """Output shape must equal input shape."""
-        from gridax._src.diffusion.diffusion import BiharmonicDiffusion3D
+        from tests.fixtures.bindings import BiharmonicDiffusion3D
 
         op = BiharmonicDiffusion3D(grid=grid3d)
         h = jnp.zeros((grid3d.Nz, grid3d.Ny, grid3d.Nx))
@@ -544,7 +536,7 @@ class TestBiharmonicDiffusion3D:
 
     def test_kappa_scales_linearly(self, grid3d):
         """Doubling kappa doubles the magnitude of the tendency."""
-        from gridax._src.diffusion.diffusion import BiharmonicDiffusion3D
+        from tests.fixtures.bindings import BiharmonicDiffusion3D
 
         op = BiharmonicDiffusion3D(grid=grid3d)
         ix = jnp.arange(grid3d.Nx, dtype=float) * grid3d.spacing("x")

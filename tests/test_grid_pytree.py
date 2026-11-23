@@ -16,18 +16,21 @@ from gridax import (
     CartesianCGrid1D,
     CartesianCGrid2D,
     CartesianCGrid3D,
-    Difference1D,
-    Difference2D,
-    Difference3D,
     SphericalCGrid2D,
     SphericalCGrid3D,
-    SphericalDifference2D,
-    SphericalDifference3D,
 )
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
+from tests.fixtures.bindings import (
+    Difference1D,
+    Difference2D,
+    Difference3D,
+    SphericalDifference2D,
+    SphericalDifference3D,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 

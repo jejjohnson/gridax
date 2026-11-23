@@ -45,11 +45,8 @@ import matplotlib
 
 matplotlib.use("Agg")
 from gridax import (
-    Advection2D,
     CartesianCGrid2D,
-    Difference2D,
-    Interpolation2D,
-    Vorticity2D,
+    GridOps,
     embed,
     interior,
 )
@@ -316,10 +313,7 @@ def run_simulation(config: ShallowWaterConfig | None = None) -> xr.Dataset:
     """
     config = config or ShallowWaterConfig()
     grid = CartesianCGrid2D.from_interior(config.nx, config.ny, config.Lx, config.Ly)
-    diff = Difference2D(grid=grid)
-    interp = Interpolation2D(grid=grid)
-    adv = Advection2D(grid=grid)
-    vort = Vorticity2D(grid=grid)
+    ops = GridOps(grid)
     forcing = make_preprocessing_dataset(config, grid)
 
     eta = to_wall_field(forcing["eta0"])
@@ -349,8 +343,12 @@ def run_simulation(config: ShallowWaterConfig | None = None) -> xr.Dataset:
         field: Array,
     ) -> tuple[Array, Array]:
         """Return centre-point gradients by differentiating and re-averaging."""
-        dfield_dx = interp.U_to_T(diff.diff_x_T_to_U(field))
-        dfield_dy = interp.V_to_T(diff.diff_y_T_to_V(field))
+        dfield_dx = ops.interpolate(
+            ops.difference(field, axis="x", src="T", dst="U"), src="U", dst="T"
+        )
+        dfield_dy = ops.interpolate(
+            ops.difference(field, axis="y", src="T", dst="V"), src="V", dst="T"
+        )
         return dfield_dx, dfield_dy
 
     def tendency(
@@ -370,34 +368,34 @@ def run_simulation(config: ShallowWaterConfig | None = None) -> xr.Dataset:
         full Bernoulli B = g*eta + 0.5*speed^2 together with the advection term.
         """
         layer_depth = mean_depth + eta_field
-        eta_rhs = adv(layer_depth, u_field, v_field, scheme=Upwind(1))
-        eta_rhs = eta_rhs + viscosity * diff.laplacian(eta_field)
+        eta_rhs = ops.advect(layer_depth, u_field, v_field, scheme=Upwind(1))
+        eta_rhs = eta_rhs + viscosity * ops.laplacian(eta_field)
 
-        u_on_t = interp.U_to_T(u_field)
-        v_on_t = interp.V_to_T(v_field)
+        u_on_t = ops.interpolate(u_field, src="U", dst="T")
+        v_on_t = ops.interpolate(v_field, src="V", dst="T")
 
         du_dx, du_dy = centered_gradients(u_on_t)
         dv_dx, dv_dy = centered_gradients(v_on_t)
-        u_adv = interp.T_to_U(u_on_t * du_dx + v_on_t * du_dy)
-        v_adv = interp.T_to_V(u_on_t * dv_dx + v_on_t * dv_dy)
+        u_adv = ops.interpolate(u_on_t * du_dx + v_on_t * du_dy, src="T", dst="U")
+        v_adv = ops.interpolate(u_on_t * dv_dx + v_on_t * dv_dy, src="T", dst="V")
 
-        # Coriolis: use the 4-point bilinear cross-face averages V_to_U / U_to_V
+        # Coriolis: the 4-point cross-face averages, V to U and U to V
         # directly, rather than routing through T-points (V->T->U double-average).
         # Direct cross-face interpolation is more accurate (one averaging step)
         # and consistent with the linear script.
-        v_on_u = interp.V_to_U(v_field)
-        u_on_v = interp.U_to_V(u_field)
-        coriolis_on_u = interp.T_to_U(coriolis)
-        coriolis_on_v = interp.T_to_V(coriolis)
+        v_on_u = ops.interpolate(v_field, src="V", dst="U")
+        u_on_v = ops.interpolate(u_field, src="U", dst="V")
+        coriolis_on_u = ops.interpolate(coriolis, src="T", dst="U")
+        coriolis_on_v = ops.interpolate(coriolis, src="T", dst="V")
 
         # Pressure gradient only (no KE term) — advection handles the rest.
-        u_rhs = -gravity * diff.diff_x_T_to_U(eta_field)
+        u_rhs = -gravity * ops.difference(eta_field, axis="x", src="T", dst="U")
         u_rhs = u_rhs - u_adv + coriolis_on_u * v_on_u + wind_u
-        u_rhs = u_rhs - drag * u_field + viscosity * diff.laplacian(u_field)
+        u_rhs = u_rhs - drag * u_field + viscosity * ops.laplacian(u_field, at="U")
 
-        v_rhs = -gravity * diff.diff_y_T_to_V(eta_field)
+        v_rhs = -gravity * ops.difference(eta_field, axis="y", src="T", dst="V")
         v_rhs = v_rhs - v_adv - coriolis_on_v * u_on_v
-        v_rhs = v_rhs - drag * v_field + viscosity * diff.laplacian(v_field)
+        v_rhs = v_rhs - drag * v_field + viscosity * ops.laplacian(v_field, at="V")
         return eta_rhs, u_rhs, v_rhs
 
     def apply_bc(state: tuple[Array, ...]) -> tuple[Array, ...]:
@@ -430,10 +428,10 @@ def run_simulation(config: ShallowWaterConfig | None = None) -> xr.Dataset:
     ) -> None:
         """Convert a sampled state into ``xarray``-ready NumPy arrays."""
         eta_np = np.asarray(jax.device_get(eta_field[1:-1, 1:-1]))
-        u_center = interp.U_to_T(u_field)
-        v_center = interp.V_to_T(v_field)
-        zeta_corner = vort.relative_vorticity(u_field, v_field)
-        zeta_center = interp.X_to_T(zeta_corner)
+        u_center = ops.interpolate(u_field, src="U", dst="T")
+        v_center = ops.interpolate(v_field, src="V", dst="T")
+        zeta_corner = ops.curl(u_field, v_field)
+        zeta_center = ops.interpolate(zeta_corner, src="X", dst="T")
         u_np = np.asarray(jax.device_get(u_center[1:-1, 1:-1]))
         v_np = np.asarray(jax.device_get(v_center[1:-1, 1:-1]))
         zeta_np = np.asarray(jax.device_get(zeta_center[1:-1, 1:-1]))

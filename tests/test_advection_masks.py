@@ -38,12 +38,6 @@ from gridax import (
     Mask3D,
     SphericalCGrid2D,
 )
-from gridax._src.advection.advection import (
-    Advection1D,
-    Advection2D,
-    Advection3D,
-)
-from gridax._src.advection.spherical_advection import SphericalAdvection2D
 from gridax._src.operators.reductions import area_weights
 from gridax.schemes import WENO
 import jax
@@ -53,6 +47,12 @@ import pytest
 
 from tests._schemes import SCHEMES
 from tests.fixtures._helpers import assert_matches_golden
+from tests.fixtures.bindings import (
+    Advection1D,
+    Advection2D,
+    Advection3D,
+    SphericalAdvection2D,
+)
 from tests.fixtures.inputs import (
     make_grid_1d,
     make_grid_2d,

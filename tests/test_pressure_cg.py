@@ -15,6 +15,8 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from tests.fixtures import bindings
+
 N = 34
 
 
@@ -91,7 +93,7 @@ class TestNeumannOperator:
         lap = gs.masked_neumann_laplacian(
             p, mask.wet().astype(p.dtype), g.spacing("x"), g.spacing("y")
         )
-        diff = fvx.Diffusion2D(g, mask=mask)(p, 1.0)
+        diff = bindings.Diffusion2D(g, mask=mask)(p, 1.0)
         wet = np.asarray(mask.wet()) > 0.5
         np.testing.assert_allclose(
             np.asarray(lap)[wet], np.asarray(diff)[wet], atol=1e-10

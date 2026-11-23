@@ -1,11 +1,5 @@
-# Coriolis Operators
+# Coriolis
 
-Coriolis force operators for rotating-frame geophysical models on C-grids.
+The Coriolis force on a C-grid.
 
 ::: gridax.coriolis
-
-## The class forms
-
-::: gridax.Coriolis2D
-
-::: gridax.Coriolis3D

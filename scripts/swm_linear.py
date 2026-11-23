@@ -44,9 +44,7 @@ import matplotlib
 matplotlib.use("Agg")
 from gridax import (
     CartesianCGrid2D,
-    Difference2D,
-    Interpolation2D,
-    Vorticity2D,
+    GridOps,
     embed,
     interior,
 )
@@ -341,9 +339,7 @@ def run_simulation(config: LinearShallowWaterConfig | None = None) -> xr.Dataset
     """
     config = config or LinearShallowWaterConfig()
     grid = CartesianCGrid2D.from_interior(config.nx, config.ny, config.Lx, config.Ly)
-    diff = Difference2D(grid=grid)
-    interp = Interpolation2D(grid=grid)
-    vort = Vorticity2D(grid=grid)
+    ops = GridOps(grid)
     forcing = make_preprocessing_dataset(config, grid)
 
     eta = to_wall_field(forcing["eta0"])
@@ -375,21 +371,23 @@ def run_simulation(config: LinearShallowWaterConfig | None = None) -> xr.Dataset
         v_field: Float[Array, "Ny Nx"],
     ) -> tuple[Float[Array, "Ny Nx"], Float[Array, "Ny Nx"], Float[Array, "Ny Nx"]]:
         """Compute the linear shallow-water tendencies on the C-grid."""
-        eta_rhs = -mean_depth * diff.divergence(u_field, v_field)
-        eta_rhs = eta_rhs + viscosity * diff.laplacian(eta_field)
+        eta_rhs = -mean_depth * ops.divergence(u_field, v_field)
+        eta_rhs = eta_rhs + viscosity * ops.laplacian(eta_field)
 
-        v_on_u = interp.V_to_U(v_field)
-        u_on_v = interp.U_to_V(u_field)
-        coriolis_on_u = interp.T_to_U(coriolis)
-        coriolis_on_v = interp.T_to_V(coriolis)
+        v_on_u = ops.interpolate(v_field, src="V", dst="U")
+        u_on_v = ops.interpolate(u_field, src="U", dst="V")
+        coriolis_on_u = ops.interpolate(coriolis, src="T", dst="U")
+        coriolis_on_v = ops.interpolate(coriolis, src="T", dst="V")
 
-        u_rhs = -gravity * diff.diff_x_T_to_U(eta_field)
+        u_rhs = -gravity * ops.difference(eta_field, axis="x", src="T", dst="U")
         u_rhs = u_rhs + coriolis_on_u * v_on_u
-        u_rhs = u_rhs + wind_u - drag * u_field + viscosity * diff.laplacian(u_field)
+        u_rhs = (
+            u_rhs + wind_u - drag * u_field + viscosity * ops.laplacian(u_field, at="U")
+        )
 
-        v_rhs = -gravity * diff.diff_y_T_to_V(eta_field)
+        v_rhs = -gravity * ops.difference(eta_field, axis="y", src="T", dst="V")
         v_rhs = v_rhs - coriolis_on_v * u_on_v
-        v_rhs = v_rhs - drag * v_field + viscosity * diff.laplacian(v_field)
+        v_rhs = v_rhs - drag * v_field + viscosity * ops.laplacian(v_field, at="V")
         return eta_rhs, u_rhs, v_rhs
 
     def apply_bc(
@@ -431,10 +429,10 @@ def run_simulation(config: LinearShallowWaterConfig | None = None) -> xr.Dataset
     ) -> None:
         """Convert a sampled state into ``xarray``-ready NumPy arrays."""
         eta_np = np.asarray(jax.device_get(eta_field[1:-1, 1:-1]))
-        u_center = interp.U_to_T(u_field)
-        v_center = interp.V_to_T(v_field)
-        zeta_corner = vort.relative_vorticity(u_field, v_field)
-        zeta_center = interp.X_to_T(zeta_corner)
+        u_center = ops.interpolate(u_field, src="U", dst="T")
+        v_center = ops.interpolate(v_field, src="V", dst="T")
+        zeta_corner = ops.curl(u_field, v_field)
+        zeta_center = ops.interpolate(zeta_corner, src="X", dst="T")
         u_np = np.asarray(jax.device_get(u_center[1:-1, 1:-1]))
         v_np = np.asarray(jax.device_get(v_center[1:-1, 1:-1]))
         zeta_np = np.asarray(jax.device_get(zeta_center[1:-1, 1:-1]))

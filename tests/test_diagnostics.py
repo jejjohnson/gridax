@@ -3,25 +3,28 @@
 from gridax import CartesianCGrid2D, CartesianCGrid3D, Mask3D, area_sum
 from gridax._src.operators.diagnostics import (
     available_potential_energy,
-    bernoulli_potential,
     enstrophy,
     kinetic_energy,
     okubo_weiss,
     potential_enstrophy,
     potential_vorticity,
-    qg_potential_vorticity,
     shear_strain,
     strain_magnitude_squared,
     stretching_term,
     tensor_strain,
-    vertical_velocity,
 )
-from gridax._src.operators.difference import Difference2D
 from gridax._src.operators.jacobian import arakawa_jacobian
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
+from tests.fixtures.bindings import (
+    Difference2D,
+    bernoulli_potential,
+    qg_potential_vorticity,
+    vertical_velocity,
+)
 
 
 @pytest.fixture
@@ -610,23 +613,6 @@ class TestVerticalVelocity:
             ).sum()
         )(u)
         assert bool(jnp.all(jnp.isfinite(grad)))
-
-    def test_float_mask_is_deprecated(self, grid3d):
-        """A raw float mask still zeroes the divergence, with a DeprecationWarning."""
-        x = jnp.arange(grid3d.Nx, dtype=float) * grid3d.spacing("x")
-        u = jnp.broadcast_to(x, (grid3d.Nz, grid3d.Ny, grid3d.Nx))
-        v = jnp.zeros((grid3d.Nz, grid3d.Ny, grid3d.Nx))
-        mask = jnp.zeros((grid3d.Nz, grid3d.Ny, grid3d.Nx))
-        with pytest.warns(DeprecationWarning, match="Mask3D"):
-            w = vertical_velocity(
-                u,
-                v,
-                grid3d.spacing("x"),
-                grid3d.spacing("y"),
-                grid3d.spacing("z"),
-                mask=mask,
-            )
-        np.testing.assert_allclose(w, 0.0, atol=1e-10)
 
 
 # ======================================================================

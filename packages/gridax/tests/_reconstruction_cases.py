@@ -14,7 +14,7 @@ import itertools
 from pathlib import Path
 
 import gridax
-from gridax.schemes import WENO, Upwind
+from gridax.schemes import TVD, WENO, Centred, Scheme, Upwind
 import numpy as np
 
 FROZEN = Path(__file__).parent / "data" / "reconstruction_frozen.npz"
@@ -43,56 +43,46 @@ def flux(q, u, *, axis: int, scheme, mask=None):
     return gridax.reconstruct(q, u, grid, axis=name, scheme=scheme, mask=mask)
 
 
+#: ``name -> scheme`` of the methods the Reconstruction classes had.
+METHODS: dict[str, Scheme] = {
+    "naive": Centred(),
+    "upwind1": Upwind(1),
+    "upwind2": Upwind(2),
+    "upwind3": Upwind(3),
+    "weno3": WENO(3),
+    "wenoz3": WENO(3, "z"),
+    "weno5": WENO(5),
+    "wenoz5": WENO(5, "z"),
+    "weno7": WENO(7),
+    "weno9": WENO(9),
+    **{f"tvd.{limiter}": TVD(limiter) for limiter in LIMITERS},
+}
+
+
 def cases() -> Iterator[tuple[str, Callable[[], np.ndarray]]]:
-    """``(name, call)`` for every method of Reconstruction1D/2D/3D and the old reconstruct."""
-    setups = {
-        1: (
-            gridax.Reconstruction1D(
-                grid=gridax.CartesianCGrid1D.from_interior(18, 1.0)
-            ),
-            (20,),
-        ),
-        2: (
-            gridax.Reconstruction2D(
-                grid=gridax.CartesianCGrid2D.from_interior(16, 12, 1.0, 1.0)
-            ),
-            (14, 18),
-        ),
-        3: (
-            gridax.Reconstruction3D(
-                grid=gridax.CartesianCGrid3D.from_interior(12, 10, 4, 1.0, 1.0, 1.0)
-            ),
-            (6, 12, 14),
-        ),
-    }
-    masks = {2: _mask_2d(14, 18), 3: _mask_2d(12, 14)}
-    for ndim, (recon, shape) in setups.items():
+    """``(name, call)`` of every recorded call, named for the method it was.
+
+    The records of the masked 3-D methods are left out: those took a 2-D mask,
+    and `gridax.reconstruct` takes a mask of the grid's rank.
+    """
+    shapes = {1: (20,), 2: (14, 18), 3: (6, 12, 14)}
+    for ndim, shape in shapes.items():
         h, u = _fields(shape, ndim)
-        mask = masks.get(ndim)
-        for name in sorted(
-            n for n in dir(recon) if n[:1] != "_" and callable(getattr(recon, n))
+        mask = _mask_2d(14, 18) if ndim == 2 else None
+        for (method, scheme), k in itertools.product(
+            METHODS.items(), range(min(ndim, 2))
         ):
-            method = getattr(recon, name)
-            if name.startswith("tvd"):
-                for limiter in LIMITERS:
-                    if name.endswith("_masked"):
-                        yield (
-                            f"{ndim}d.{name}.{limiter}",
-                            lambda m=method, lim=limiter, h=h, u=u, k=mask: m(
-                                h, u, k, limiter=lim
-                            ),
-                        )
-                    else:
-                        yield (
-                            f"{ndim}d.{name}.{limiter}",
-                            lambda m=method, lim=limiter, h=h, u=u: m(
-                                h, u, limiter=lim
-                            ),
-                        )
-            elif name.endswith("_masked"):
-                yield f"{ndim}d.{name}", lambda m=method, h=h, u=u, k=mask: m(h, u, k)
-            else:
-                yield f"{ndim}d.{name}", lambda m=method, h=h, u=u: m(h, u)
+            family, _, limiter = method.partition(".")
+            end = f".{limiter}" if limiter else ""
+            for suffix, given in (("", None), ("_masked", mask)):
+                if suffix and mask is None:
+                    continue
+                yield (
+                    f"{ndim}d.{family}_{'xy'[k]}{suffix}{end}",
+                    lambda h=h, u=u, axis=-1 - k, scheme=scheme, given=given: flux(
+                        h, u, axis=axis, scheme=scheme, mask=given
+                    ),
+                )
     h, u = _fields((14, 18), 9)
     for dim, (method, variant) in itertools.product(
         (0, 1), {"weno": "js", "wenoz": "z", "linear": None}.items()

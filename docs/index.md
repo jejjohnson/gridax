@@ -47,13 +47,10 @@ uv sync --all-extras
 
 ```python
 import jax.numpy as jnp
-from gridax import Advection2D, CartesianCGrid2D
+from gridax import CartesianCGrid2D, advect
 
 # Create a 2D Arakawa C-grid
 grid = CartesianCGrid2D.from_interior(64, 64, 1.0, 1.0)
-
-# Initialize advection operator
-advection = Advection2D(grid=grid)
 
 # Create velocity and scalar fields (including one ghost-cell ring)
 u = jnp.zeros((66, 66))
@@ -61,7 +58,7 @@ v = jnp.zeros((66, 66))
 h = jnp.ones((66, 66))
 
 # Compute the advective tendency -div(h * u_vec)
-dh_dt = advection(h, u, v)
+dh_dt = advect(h, u, v, grid)
 ```
 
 ## Precision

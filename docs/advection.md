@@ -137,9 +137,8 @@ Every reconstruction is upwinded on the sign of the face velocity: with
 $u_{i+1/2} \ge 0$ it uses a left-biased stencil (upwind cell $i$), otherwise
 the mirrored right-biased one (upwind cell $i+1$),
 `h_face = jnp.where(u >= 0, left_biased, right_biased)`, and the flux is
-`h_face * u`.  The `Reconstruction1D/2D/3D` methods (`upwind1_x`,
-`weno5_y`, `tvd_x(h, u, limiter=...)`, …) return that flux as a full
-`[Ny, Nx]` array with a zero ghost ring.
+`h_face * u`.  `gridax.reconstruct(h, u, grid, axis="x", scheme=WENO(5))`
+returns that flux as a full `[Ny, Nx]` array with a zero ghost ring.
 
 `upwind_flux(q, u, dim, rec_funcs, mask_hierarchy)` is the **coastal
 tier blender**, not a two-state flux: it evaluates every reconstruction in
@@ -148,20 +147,25 @@ the one whose stencil size the mask hierarchy assigns to the upwind cell:
 
 ```python
 import jax.numpy as jnp
-from gridax import CartesianCGrid2D, Mask2D, Reconstruction2D, upwind_flux
+from functools import partial
+
+from gridax import CartesianCGrid2D, Mask2D, reconstruct, upwind_flux
+from gridax.schemes import WENO, Upwind
 
 grid = CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
-recon = Reconstruction2D(grid=grid)
 mask = Mask2D.from_dimensions(grid.Ny, grid.Nx)
 hier = mask.tiers("x", sizes=(2, 4, 6))
-rec_funcs = {2: recon.upwind1_x, 4: recon.weno3_x, 6: recon.weno5_x}
+rec_funcs = {
+    size: partial(reconstruct, grid=grid, axis="x", scheme=scheme)
+    for size, scheme in {2: Upwind(1), 4: WENO(3), 6: WENO(5)}.items()
+}
 q = jnp.ones((grid.Ny, grid.Nx))
 u = jnp.ones((grid.Ny, grid.Nx))
 fe = upwind_flux(q, u, dim=1, rec_funcs=rec_funcs, mask_hierarchy=hier)
 # fe: [Ny, Nx] east-face flux, ghost ring zero
 ```
 
-The advection operators build these dictionaries themselves; call it
+`advect` and `reconstruct` build these dictionaries themselves; call it
 directly only to compose a custom tier ladder.
 
 ---
@@ -169,7 +173,7 @@ directly only to compose a custom tier ladder.
 ## Reconstruction Schemes
 
 The key design choice is how to estimate the face value $\hat{q}$ from
-the cell averages. It is a [scheme](schemes.md), the same object for every operator and every grid; the operators' default is `Upwind(1)`.
+the cell averages. It is a [scheme](schemes.md), the same object for every function and every grid; the default is `Upwind(1)`.
 
 | Scheme | Nominal order | Measured order L∞ / L1 | Cells read per face | Mask tier (fallback) | Non-oscillatory |
 |--------|---|---|---|---|---|
@@ -189,12 +193,12 @@ cell averages ($N = 128 \to 256$), a smooth field *with extrema*.  At smooth
 extrema the TVD limiters clip to first order (hence L∞ 1, L1 2), and the
 Jiang–Shu weights of WENO3 and WENO7 degrade (WENO3-JS is first order in
 L∞ there, WENO7-JS fifth); WENO-Z does not.  Every
-operator takes every scheme, along any axis.
+function takes every scheme, along any axis.
 
 ### Total Variation Diminishing (TVD)
 
 TVD schemes add a **flux limiter** $\phi(r)$ to a first-order upwind base.
-For $u_{i+1/2} \ge 0$ the code (`Reconstruction*.tvd_x`) evaluates
+For $u_{i+1/2} \ge 0$ the code (`TVD`) evaluates
 
 $$
 \hat{q}_{i+\frac{1}{2}} = \bar{q}_i + \tfrac{1}{2}\,\phi(r)\,(\bar{q}_{i+1} - \bar{q}_i),
@@ -296,12 +300,12 @@ within noise; gradient about +25 % for weno5, unchanged for weno9, and
 Solid-body rotation of a Gaussian, $q_0 = e^{-r^2 / 2\sigma^2}$ with
 $\sigma = 0.05$ centred at $(\tfrac12, \tfrac34)$, rotated once about
 $(\tfrac12, \tfrac12)$ on $[0, 1]^2$ by $(u, v) = 2\pi(\tfrac12 - y, x - \tfrac12)$;
-$N = 64$, cell-average initial condition, `Advection2D` (closed walls,
+$N = 64$, cell-average initial condition, `advect` in 2-D (closed walls,
 no mask), `rk3_ssp_step` at CFL 0.25 (805 steps), float64.  `rel-L2` is
 $\lVert\bar q(1) - \bar q_0\rVert_2 / \lVert\bar q_0\rVert_2$; min / max are
 over the interior after one revolution (initially 0 and 0.968).  `ms` is the
 fastest of 50 jitted forward tendencies on a $256^2$ grid (one
-`Advection2D.__call__`), measured on a shared 2-vCPU Intel Xeon @ 2.10 GHz VM
+call of `advect`), measured on a shared 2-vCPU Intel Xeon @ 2.10 GHz VM
 (JAX 0.10.1, CPU): indicative only.  Regenerate with
 `uv run python scripts/benchmark_advection.py --part benchmark`.
 
@@ -340,12 +344,8 @@ What it says:
 (masks-land-safe-advection)=
 ## Masks: Land-Safe Advection
 
-Every scheme of `Advection1D/2D/3D` and `SphericalAdvection2D/3D` is
-land-safe when the operator is constructed with a mask.  The mask is a
-**constructor field** (`Advection2D(grid=grid, mask=mask)`), not a
-`__call__` argument: `__init__` pre-builds the adaptive stencil hierarchy
-`(2, 4, 6, 8, 10)` in both horizontal directions once, and every call
-reuses it.
+`advect(q, u, v, grid, scheme=…, mask=mask)` is land-safe with every scheme, on every C-grid.  The
+tiers of the stencils come from the counts the mask stores (`mask.tiers`), so nothing is built ahead of the call.
 
 - **Dry inputs are zeroed** with `jnp.where` before any stencil reads them
   (`h` on dry T-cells, `u` on dry U-faces, `v` on dry V-faces), so `NaN` or
@@ -359,7 +359,7 @@ reuses it.
   `Centred(2)` reads only the two cells beside the face and needs no ladder.
 - **No flux through a dry face.**  The face fluxes on every face with
   `mask.wet(at="U")` / `mask.wet(at="V")` false are zeroed before the divergence, as in
-  `Diffusion2D`, so no mass crosses the coastline: in a closed basin
+  `diffuse`, so no mass crosses the coastline: in a closed basin
   $\sum A\,\partial_t\bar q = 0$ to rounding.
 - **Dry output is exactly zero** (`jnp.where(mask.wet(), out, 0)`), and an
   all-ocean mask reproduces `mask=None` bit for bit.
@@ -368,7 +368,7 @@ reuses it.
 ```python
 import jax.numpy as jnp
 import numpy as np
-from gridax import Advection2D, CartesianCGrid2D, Mask2D
+from gridax import CartesianCGrid2D, Mask2D, advect
 from gridax.schemes import TVD, WENO, Centred, Upwind
 
 grid = CartesianCGrid2D.from_interior(16, 16, 1.0, 1.0)
@@ -376,13 +376,12 @@ wet = np.ones((grid.Ny, grid.Nx), dtype=bool)
 wet[:2, :] = wet[-2:, :] = wet[:, :2] = wet[:, -2:] = False  # land walls
 wet[7:11, 7:11] = False  # an island
 mask = Mask2D.from_mask(wet)
-adv = Advection2D(grid=grid, mask=mask)  # hierarchy built once, here
 
 h = jnp.where(mask.wet(), 1.0, jnp.nan)  # NaN on land is fine
 u = jnp.ones((grid.Ny, grid.Nx))  # [Ny, Nx] U-points
 v = 0.5 * jnp.ones((grid.Ny, grid.Nx))  # [Ny, Nx] V-points
 for scheme in (Centred(2), Upwind(3), WENO(5), WENO(9), TVD("van_leer")):
-    dh = adv(h, u, v, scheme=scheme)  # [Ny, Nx]
+    dh = advect(h, u, v, grid, scheme=scheme, mask=mask)  # [Ny, Nx]
     assert bool(jnp.isfinite(dh).all())
     assert abs(float(dh.sum())) < 1e-10  # no mass crosses the coastline
 ```
@@ -392,13 +391,13 @@ for scheme in (Centred(2), Upwind(3), WENO(5), WENO(9), TVD("van_leer")):
 (walls-write-region-and-periodic-halos)=
 ## Walls, Write Region and Periodic Halos
 
-All advection operators take `wall="closed"` (default) or `wall="open"`.
+`advect` takes `wall="closed"` (default) or `wall="open"` on every C-grid.
 
-| Operator | `wall="closed"` writes | `wall="open"` writes |
+| Grid | `wall="closed"` writes | `wall="open"` writes |
 |---|---|---|
-| `Advection1D` | `[2:-2]` | `[1:-1]` |
-| `Advection2D`, `SphericalAdvection2D` | `[2:-2, 2:-2]` | `[1:-1, 1:-1]` |
-| `Advection3D`, `SphericalAdvection3D` | `[1:-1, 2:-2, 2:-2]` | `[1:-1, 1:-1, 1:-1]` |
+| 1-D | `[2:-2]` | `[1:-1]` |
+| 2-D, Cartesian or spherical | `[2:-2, 2:-2]` | `[1:-1, 1:-1]` |
+| 3-D, Cartesian or spherical | `[1:-1, 2:-2, 2:-2]` | `[1:-1, 1:-1, 1:-1]` |
 
 - **Closed** treats the domain walls as no-flux and never reads the ghost
   flux cells: the outermost row / column of physical cells gets no tendency
@@ -421,7 +420,7 @@ periodic scheme's (full-order stencils across the seam, not the boundary
 fallbacks), build the grid with $H - 1$ extra cells on each periodic side,
 fill the outer $H$ cells of every field by wrapping, and keep the physical
 cells `[H:-H]`.  Measured minimum $H$, the same for the Cartesian and the
-spherical operators:
+spherical grids:
 
 | Scheme | $H$ (`wall="open"`) | $H$ (`wall="closed"`) |
 |---|---|---|
@@ -440,8 +439,8 @@ fallbacks).
 
 ## Spherical Advection
 
-`SphericalAdvection2D/3D` reuse the Cartesian reconstructions (they read no
-metric) and change only the divergence:
+On a spherical grid `advect` uses the Cartesian reconstructions (they read no
+metric) and changes only the divergence:
 
 $$
 \frac{\partial \bar{q}}{\partial t} = -\frac{1}{R\cos\varphi}
@@ -462,13 +461,13 @@ seam.  Mask semantics are the Cartesian ones.
 ## Transports and Other Fluxes
 
 **Transports instead of velocities.**  The face value depends on the
-velocity only through its sign, so the operators are linear in `u`, `v`.
+velocity only through its sign, so `advect` is linear in `u`, `v`.
 Passing positively weighted transports, e.g. `U = h_u * u`, `V = h_v * v`
 with a layer thickness interpolated to the faces, therefore returns
 $-\nabla\cdot(q\,\mathbf{U})$, the tendency of the thickness-weighted
 tracer $h q$ (thickness-weighted advection).  There is no dedicated API for
-it: compute the face thickness yourself (e.g. `Interpolation2D.T_to_U` /
-`T_to_V`), and divide by the updated thickness if you need $q$.
+it: compute the face thickness yourself (`interpolate` from T to U and
+from T to V), and divide by the updated thickness if you need $q$.
 
 **`rusanov_flux`** (local Lax–Friedrichs,
 $F = \tfrac12 a (q_L + q_R) - \tfrac12\lvert a\rvert_\varepsilon (q_R - q_L)$)

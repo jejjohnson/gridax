@@ -24,7 +24,15 @@ Per issue #209 Q2/Q3, the spherical operators accept a Cartesian
 
 from __future__ import annotations
 
-from gridax._src.operators.spherical_compound import (
+import jax
+import jax.numpy as jnp
+import numpy as np
+import pytest
+
+from tests.fixtures._helpers import assert_matches_golden
+from tests.fixtures.bindings import (
+    SphericalDifference2D,
+    SphericalDifference3D,
     SphericalDivergence2D,
     SphericalDivergence3D,
     SphericalLaplacian2D,
@@ -33,16 +41,6 @@ from gridax._src.operators.spherical_compound import (
     SphericalVorticity3D,
     geostrophic_velocity_sphere,
 )
-from gridax._src.operators.spherical_difference import (
-    SphericalDifference2D,
-    SphericalDifference3D,
-)
-import jax
-import jax.numpy as jnp
-import numpy as np
-import pytest
-
-from tests.fixtures._helpers import assert_matches_golden
 from tests.fixtures.inputs import (
     make_f_field_2d,
     make_h_field_2d,

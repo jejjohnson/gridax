@@ -2,8 +2,8 @@
 
 Two tiers, as in geotoolz::
 
-    Tier A  finitevolX primitives        Difference2D(grid).diff_x_T_to_U(h)
-            arrays in, arrays out;       eqx.Module / pure function
+    Tier A  finitevolX primitives        difference(h, G, axis="x", src="T", dst="U")
+            arrays in, arrays out;       pure function
             no config, no carrier
                     │
                     ▼
