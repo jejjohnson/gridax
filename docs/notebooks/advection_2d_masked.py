@@ -207,7 +207,7 @@ fig.savefig(IMG_DIR / "stencil_capability.png", dpi=150, bbox_inches="tight")
 # %% [markdown]
 # ## Step 3: Adaptive Masks — Which Scheme Runs Where?
 #
-# `get_adaptive_masks()` builds **mutually-exclusive** boolean masks that
+# `mask.tiers()` builds **mutually-exclusive** boolean masks that
 # assign exactly one reconstruction scheme to each wet cell:
 #
 # - **Size 6** → WENO5 (5th-order, needs 3 wet cells on each side)
@@ -218,8 +218,8 @@ fig.savefig(IMG_DIR / "stencil_capability.png", dpi=150, bbox_inches="tight")
 
 # %%
 # Build adaptive masks for x-direction
-adaptive_x = mask.get_adaptive_masks(direction="x", stencil_sizes=(2, 4, 6))
-adaptive_y = mask.get_adaptive_masks(direction="y", stencil_sizes=(2, 4, 6))
+adaptive_x = mask.tiers("x", sizes=(2, 4, 6))
+adaptive_y = mask.tiers("y", sizes=(2, 4, 6))
 
 for label, adaptive in [("x", adaptive_x), ("y", adaptive_y)]:
     for sz, msk in sorted(adaptive.items()):
@@ -432,19 +432,17 @@ fig.savefig(IMG_DIR / "comparison.png", dpi=150, bbox_inches="tight")
 # v_field = velocity_y * ocean_jnp
 # ```
 #
-# ### Tip 3: Choose the right stencil_sizes
+# ### Tip 3: Look at the tiers of your scheme
 #
-# By default `get_adaptive_masks` checks sizes `(2, 4, 6, 8, 10)`.  If
-# you only use WENO5 (size 6), pass `stencil_sizes=(2, 4, 6)` to skip
-# unnecessary work:
+# By default `mask.tiers` has the sizes `(2, 4, 6, 8, 10)`.  If you only
+# use WENO5 (size 6), pass `sizes=(2, 4, 6)`, so the cells with room for
+# more count as size 6:
 #
 # ```python
-# mask.get_adaptive_masks(direction='x', stencil_sizes=(2, 4, 6))
+# mask.tiers('x', sizes=(2, 4, 6))
 # ```
 #
-# When you construct `Advection2D(grid, mask=mask)`, this is handled
-# automatically — the operator pre-builds `(2, 4, 6)` at `__init__`
-# time and narrows it at dispatch for whichever scheme you request.
+# `Advection2D(grid, mask=mask)` does so for the scheme of each call.
 #
 # ### Tip 4: Inspect stencil assignment before running
 #

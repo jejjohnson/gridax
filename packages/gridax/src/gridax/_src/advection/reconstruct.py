@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 from jaxtyping import Float
 import numpy as np
 
-from gridax._src.advection.flux import narrow_mask_hierarchy, upwind_flux
+from gridax._src.advection.flux import upwind_flux
 from gridax._src.api import grid_dispatch
 from gridax._src.fields.located import located
 from gridax._src.grid import (
@@ -39,7 +39,7 @@ __all__ = ["face_flux", "reconstruct"]
 
 _DIRECTIONS = {-1: "x", -2: "y", -3: "z"}
 
-#: ``{size: mask}``, the output of ``mask.get_adaptive_masks``.
+#: ``{size: mask}``, the output of ``mask.tiers``.
 type Hierarchy = dict[int, Any]
 
 
@@ -127,17 +127,11 @@ def check_scheme(scheme: Any) -> None:
         )
 
 
-def hierarchy_of(
-    mask: Any, axis: str, scheme: Scheme, cached: Hierarchy | None = None
-) -> Hierarchy | None:
-    """The adaptive masks of the tiers of ``scheme``, from a cached set if it holds them."""
+def hierarchy_of(mask: Any, axis: str, scheme: Scheme) -> Hierarchy | None:
+    """The cells of each tier of an upwinded scheme (``mask.tiers``)."""
     if not scheme.upwinded:
         return None
-    sizes = tuple(sorted({tier.size for tier in scheme.tiers()}))
-    if cached is not None and set(sizes) <= set(cached):
-        return narrow_mask_hierarchy(cached, sizes)
-    direction = {} if mask.wet().ndim == 1 else {"direction": axis}
-    return mask.get_adaptive_masks(stencil_sizes=sizes, **direction)
+    return mask.tiers(axis, sizes=[tier.size for tier in scheme.tiers()])
 
 
 def face_flux(

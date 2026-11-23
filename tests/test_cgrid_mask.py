@@ -452,28 +452,28 @@ class TestClassification:
 
 class TestAdaptiveMasks:
     def test_all_sizes_present(self, all_ocean):
-        masks = all_ocean.get_adaptive_masks(direction="x", source="h")
+        masks = all_ocean.tiers("x")
         for s in (2, 4, 6, 8, 10):
             assert s in masks
 
     def test_mutually_exclusive(self, all_ocean):
-        masks = all_ocean.get_adaptive_masks(direction="x", source="h")
+        masks = all_ocean.tiers("x")
         total = sum(np.asarray(m).astype(int) for m in masks.values())
         assert bool(np.all(total <= 1))
 
     def test_large_domain_large_stencil(self):
         m = Mask2D.from_dimensions(20, 20)
-        masks = m.get_adaptive_masks(direction="x", source="h")
+        masks = m.tiers("x")
         # Centre cell has ≥10 wet cells in each direction → stencil 10
         assert bool(masks[10][10, 10])
 
     def test_invalid_direction_raises(self, all_ocean):
-        with pytest.raises(ValueError, match="direction"):
-            all_ocean.get_adaptive_masks(direction="z")
+        with pytest.raises(ValueError, match="axis"):
+            all_ocean.tiers("z")
 
     def test_invalid_source_raises(self, all_ocean):
-        with pytest.raises(ValueError, match="source"):
-            all_ocean.get_adaptive_masks(source="xyz")
+        with pytest.raises(ValueError, match="at="):
+            all_ocean.tiers("x", at="xyz")
 
     def test_near_border_limited_stencil(self):
         # Col=1 has only 1 wet cell to its left → max stencil in x is 2
@@ -483,7 +483,7 @@ class TestAdaptiveMasks:
         mask[:, 0] = False
         mask[:, -1] = False
         m = Mask2D.from_mask(mask)
-        masks = m.get_adaptive_masks(direction="x", source="h")
+        masks = m.tiers("x")
         assert bool(masks[2][5, 1])
         assert not bool(masks[4][5, 1])
 
@@ -838,14 +838,14 @@ class TestMask1D:
         np.testing.assert_array_equal(np.asarray(sc.x_pos), [8, 7, 6, 5, 4, 3, 2, 1])
         np.testing.assert_array_equal(np.asarray(sc.x_neg), [1, 2, 3, 4, 5, 6, 7, 8])
 
-    def test_get_adaptive_masks_all_ocean(self, all_ocean_1d):
-        masks = all_ocean_1d.get_adaptive_masks(stencil_sizes=(2, 4, 6))
+    def test_tiers_all_ocean(self, all_ocean_1d):
+        masks = all_ocean_1d.tiers("x", sizes=(2, 4, 6))
         # Mutually exclusive
         sum_mask = sum(np.asarray(m).astype(int) for m in masks.values())
         assert np.all(sum_mask <= 1)
 
-    def test_get_adaptive_masks_keys(self, all_ocean_1d):
-        masks = all_ocean_1d.get_adaptive_masks(stencil_sizes=(2, 4))
+    def test_tiers_keys(self, all_ocean_1d):
+        masks = all_ocean_1d.tiers("x", sizes=(2, 4))
         assert set(masks.keys()) == {2, 4}
 
     def test_from_center(self):
@@ -966,19 +966,19 @@ class TestMask3D:
         # Interior is not boundary
         assert not np.any(b[1:-1, 1:-1, 1:-1])
 
-    def test_get_adaptive_masks_x(self, all_ocean_3d):
-        masks = all_ocean_3d.get_adaptive_masks(direction="x", stencil_sizes=(2, 4))
+    def test_tiers_x(self, all_ocean_3d):
+        masks = all_ocean_3d.tiers("x", sizes=(2, 4))
         assert set(masks.keys()) == {2, 4}
         sum_mask = sum(np.asarray(m).astype(int) for m in masks.values())
         assert np.all(sum_mask <= 1)
 
-    def test_get_adaptive_masks_z(self, all_ocean_3d):
-        masks = all_ocean_3d.get_adaptive_masks(direction="z", stencil_sizes=(2, 4))
+    def test_tiers_z(self, all_ocean_3d):
+        masks = all_ocean_3d.tiers("z", sizes=(2, 4))
         assert set(masks.keys()) == {2, 4}
 
-    def test_get_adaptive_masks_invalid_direction(self, all_ocean_3d):
-        with pytest.raises(ValueError, match="direction must be"):
-            all_ocean_3d.get_adaptive_masks(direction="q")
+    def test_tiers_invalid_direction(self, all_ocean_3d):
+        with pytest.raises(ValueError, match="axis must be"):
+            all_ocean_3d.tiers("q")
 
     def test_k_bottom_optional(self, all_ocean_3d):
         assert all_ocean_3d.k_bottom is None

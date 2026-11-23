@@ -6,6 +6,10 @@ Land/ocean masks with automatic stencil dispatch for Arakawa C-grids.
 
 ::: gridax.Mask2D
 
+## Coastal ghosts
+
+::: gridax.CoastGhosts
+
 ## Stencil Capability
 
 ::: gridax.StencilCapability2D

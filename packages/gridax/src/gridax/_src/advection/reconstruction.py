@@ -54,10 +54,7 @@ def _masked_columns(
     """
     xp = array_namespace(h, u)
     tiers = scheme.tiers()
-    sizes = tuple(sorted({tier.size for tier in tiers}))
-    amasks = mask.get_adaptive_masks(
-        direction="x" if axis == -1 else "y", stencil_sizes=sizes
-    )
+    amasks = mask.tiers("x" if axis == -1 else "y", sizes=[tier.size for tier in tiers])
     inner = (slice(1, -1), slice(1, -1), slice(1, -1))
     pos_flow = u[inner] >= 0.0
     # the upwind cell for negative flow is one step along `axis`

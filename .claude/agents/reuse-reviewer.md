@@ -24,7 +24,7 @@ in `AGENTS.md`.
      defining module, then the spectraldiffx and gaussx sections;
    - the shared private helpers: `operators/_ghost.py` (`interior`,
      `zero_z_ghosts`); `operators/_utils._safe_div_cos`; `boundary/atoms.py`
-     (`_Atom`, `_face_spacing`, `_value_like`); `advection/flux.narrow_mask_hierarchy`;
+     (`_Atom`, `_face_spacing`, `_value_like`); `mask/utils.shifted`;
      `advection/reconstruction._get_limiter`; `mask/utils.py` (`pool_bool`,
      `h_from_pooled`, `dilate_mask`, `count_contiguous`, `make_sponge`);
      `operators/calculus.py` (`gridax.divergence`, `curl`, `laplacian`, `gradient`, `grad_perp`);

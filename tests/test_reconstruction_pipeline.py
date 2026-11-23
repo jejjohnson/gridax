@@ -739,7 +739,7 @@ class TestDistboundPhysics:
 
 
 class TestStencilCapabilityTiers:
-    """Verify ``get_adaptive_masks`` tiers match the stencil hierarchy.
+    """Verify ``mask.tiers`` match the stencil hierarchy.
 
     These tests use the *actual* stencil-capability machinery rather than
     the distbound classification, covering the stencil sizes that
@@ -760,7 +760,7 @@ class TestStencilCapabilityTiers:
         h = np.zeros((1, 12), dtype=bool)
         h[0, 1:-1] = True  # 10 wet cells with land at both ends
         m = Mask2D.from_mask(h)
-        masks_x = m.get_adaptive_masks(direction="x", stencil_sizes=(2, 4, 6))
+        masks_x = m.tiers("x", sizes=(2, 4, 6))
 
         masks2 = np.asarray(masks_x[2])[0]
         masks4 = np.asarray(masks_x[4])[0]
@@ -780,7 +780,7 @@ class TestStencilCapabilityTiers:
         h = np.zeros((1, 10), dtype=bool)
         h[0, 1:-1] = True  # 8 wet cells
         m = Mask2D.from_mask(h)
-        masks_x = m.get_adaptive_masks(direction="x", stencil_sizes=(2, 4))
+        masks_x = m.tiers("x", sizes=(2, 4))
 
         masks2 = np.asarray(masks_x[2])[0]
         masks4 = np.asarray(masks_x[4])[0]
@@ -797,7 +797,7 @@ class TestStencilCapabilityTiers:
         h = rng.random((8, 12)) > 0.25  # sparse land
         m = Mask2D.from_mask(h)
         for direction in ("x", "y"):
-            masks = m.get_adaptive_masks(direction=direction, stencil_sizes=(2, 4, 6))
+            masks = m.tiers(direction, sizes=(2, 4, 6))
             total = sum(np.asarray(mm).astype(int) for mm in masks.values())
             assert np.all(total <= 1), (
                 f"direction={direction}: some cell is in multiple tiers"
@@ -809,7 +809,7 @@ class TestStencilCapabilityTiers:
         h = np.ones((6, 10), dtype=bool)
         h[2:4, 4:6] = False  # interior land patch
         m = Mask2D.from_mask(h)
-        masks_x = m.get_adaptive_masks(direction="x", stencil_sizes=(2, 4, 6))
+        masks_x = m.tiers("x", sizes=(2, 4, 6))
         union = np.zeros_like(np.asarray(h))
         for mm in masks_x.values():
             union = union | np.asarray(mm)
@@ -823,8 +823,8 @@ class TestStencilCapabilityTiers:
         h = np.ones((6, 10), dtype=bool)
         h[0, :] = h[-1, :] = False
         m = Mask2D.from_mask(h)
-        masks_x = m.get_adaptive_masks(direction="x", stencil_sizes=(2, 4, 6))
-        masks_y = m.get_adaptive_masks(direction="y", stencil_sizes=(2, 4, 6))
+        masks_x = m.tiers("x", sizes=(2, 4, 6))
+        masks_y = m.tiers("y", sizes=(2, 4, 6))
 
         # Row 1 (just above the south wall) and row 4 (just below the north
         # wall) are adjacent to land in y → y masks[2] is True there.
@@ -838,7 +838,7 @@ class TestStencilCapabilityTiers:
 
 
 class TestStencilCapabilityDistboundCorrespondence:
-    """Correspondence between ``get_adaptive_masks`` and distbound
+    """Correspondence between ``mask.tiers`` and distbound
     classification (``ind_coast``, ``ind_near_coast``, ``ind_ocean``).
 
     The two systems agree *exactly* in the axis-aligned 1-D case (a land
@@ -854,7 +854,7 @@ class TestStencilCapabilityDistboundCorrespondence:
         h = np.zeros((1, 12), dtype=bool)
         h[0, 1:-1] = True
         m = Mask2D.from_mask(h)
-        masks_x = m.get_adaptive_masks(direction="x", stencil_sizes=(2, 4, 6))
+        masks_x = m.tiers("x", sizes=(2, 4, 6))
 
         np.testing.assert_array_equal(np.asarray(m.ind_coast), np.asarray(masks_x[2]))
         np.testing.assert_array_equal(
@@ -869,7 +869,7 @@ class TestStencilCapabilityDistboundCorrespondence:
         h = np.ones((6, 10), dtype=bool)
         h[0, :] = h[-1, :] = False
         m = Mask2D.from_mask(h)
-        masks_y = m.get_adaptive_masks(direction="y", stencil_sizes=(2, 4, 6))
+        masks_y = m.tiers("y", sizes=(2, 4, 6))
 
         np.testing.assert_array_equal(np.asarray(m.ind_coast), np.asarray(masks_y[2]))
         np.testing.assert_array_equal(
@@ -886,7 +886,7 @@ class TestStencilCapabilityDistboundCorrespondence:
         h = np.ones((10, 10), dtype=bool)
         h[:, 5] = False
         m = Mask2D.from_mask(h)
-        masks_y = m.get_adaptive_masks(direction="y", stencil_sizes=(2, 4, 6))
+        masks_y = m.tiers("y", sizes=(2, 4, 6))
 
         # Cell (4, 4) is adjacent to land at (4, 5) in x → ind_coast.
         assert bool(m.ind_coast[4, 4])
@@ -972,7 +972,7 @@ class TestAdvectionStencilFallback:
 
         # At at least one coast cell (interior rows), the masked tendency
         # differs from the unmasked tendency: that's the fallback firing.
-        masks_x = mask.get_adaptive_masks(direction="x", stencil_sizes=(2, 4, 6))
+        masks_x = mask.tiers("x", sizes=(2, 4, 6))
         coast_x = np.asarray(masks_x[2])
         coast_mask = np.zeros_like(coast_x)
         coast_mask[3:-3, :] = coast_x[3:-3, :]  # interior rows only
@@ -1003,7 +1003,7 @@ class TestAdvectionStencilFallback:
         masked = adv_masked(h, u, v, scheme=TVD("van_leer"))
         unmasked = adv_plain(h, u, v, scheme=TVD("van_leer"))
 
-        masks_x = mask.get_adaptive_masks(direction="x", stencil_sizes=(2, 4))
+        masks_x = mask.tiers("x", sizes=(2, 4))
         coast_x = np.asarray(masks_x[2])
         coast_mask = np.zeros_like(coast_x)
         coast_mask[3:-3, :] = coast_x[3:-3, :]
@@ -1042,7 +1042,7 @@ class TestUpwindFluxFallbackExplicit:
         q = jnp.asarray(np.arange(Ny * Nx, dtype=float).reshape(Ny, Nx))
         u_vel = jnp.ones((Ny, Nx))
 
-        mask_hier = mask.get_adaptive_masks(direction="x", stencil_sizes=(2,))
+        mask_hier = mask.tiers("x", sizes=(2,))
         rec_funcs = {2: recon.upwind1_x}
         blended = upwind_flux(
             q, u_vel, dim=1, rec_funcs=rec_funcs, mask_hierarchy=mask_hier
@@ -1069,7 +1069,7 @@ class TestUpwindFluxFallbackExplicit:
         q = jnp.asarray(np.sin(np.arange(Ny * Nx, dtype=float).reshape(Ny, Nx)))
         u_vel = jnp.ones((Ny, Nx))
 
-        mask_hier = mask.get_adaptive_masks(direction="x", stencil_sizes=(2, 4, 6))
+        mask_hier = mask.tiers("x", sizes=(2, 4, 6))
         rec_funcs = {
             2: recon.upwind1_x,
             4: recon.weno3_x,
@@ -1112,7 +1112,7 @@ class TestUpwindFluxFallbackExplicit:
         q = jnp.asarray(np.cos(np.arange(Ny * Nx, dtype=float).reshape(Ny, Nx)))
         u_vel = jnp.ones((Ny, Nx))
 
-        mask_hier = mask.get_adaptive_masks(direction="x", stencil_sizes=(2, 4, 6))
+        mask_hier = mask.tiers("x", sizes=(2, 4, 6))
         rec_funcs = {
             2: recon.upwind1_x,
             4: recon.wenoz3_x,
@@ -1147,7 +1147,7 @@ class TestUpwindFluxFallbackExplicit:
         q = jnp.asarray(np.sin(np.arange(Ny * Nx, dtype=float).reshape(Ny, Nx)))
         u_vel = jnp.ones((Ny, Nx))
 
-        mask_hier = mask.get_adaptive_masks(direction="x", stencil_sizes=(2, 4))
+        mask_hier = mask.tiers("x", sizes=(2, 4))
         rec_funcs = {
             2: recon.upwind1_x,
             4: lambda q_, u_: recon.tvd_x(q_, u_, limiter="van_leer"),

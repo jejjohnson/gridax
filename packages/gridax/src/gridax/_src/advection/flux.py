@@ -24,7 +24,7 @@ Typical 2-D usage::
     recon = Reconstruction2D(grid=grid)
     mask = Mask2D.from_mask(h_mask)
 
-    mask_hier = mask.get_adaptive_masks(direction="x", stencil_sizes=(2, 4, 6))
+    mask_hier = mask.tiers("x", sizes=(2, 4, 6))
     rec_funcs = {2: recon.upwind1_x, 4: recon.weno3_x, 6: recon.weno5_x}
 
     fe = upwind_flux(q, u, dim=1, rec_funcs=rec_funcs, mask_hierarchy=mask_hier)
@@ -32,7 +32,7 @@ Typical 2-D usage::
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from jaxtyping import Bool, Float
@@ -45,65 +45,6 @@ if TYPE_CHECKING:
     from jaxtyping import Array
 else:
     Array = np.ndarray
-
-
-def narrow_mask_hierarchy(
-    hierarchy: dict[int, Bool[Array, "..."]],
-    target_sizes: Sequence[int],
-) -> dict[int, Bool[Array, "..."]]:
-    """Fold a wide stencil-hierarchy into a narrower one by merging oversized tiers.
-
-    The hierarchy returned by :meth:`~gridax.Mask2D.get_adaptive_masks`
-    is a dict ``{size -> boolean_mask}`` where each cell is in the bucket
-    corresponding to the **largest** stencil it can support.  If a caller
-    wants to dispatch onto a narrower set of stencil sizes (e.g. a WENO3
-    method with sizes ``(2, 4)`` consuming a ``(2, 4, 6)`` hierarchy
-    pre-built in ``__init__``), they need to fold the 6-tier cells down
-    into the 4-tier — since any cell that can support stencil 6 can also
-    support stencil 4.
-
-    Parameters
-    ----------
-    hierarchy : dict[int, Bool[Array, "..."]]
-        Source hierarchy with all stencil sizes present.
-    target_sizes : sequence of int
-        Sorted subset of stencil sizes to narrow to.  The largest element
-        receives all tiers at or above itself (OR-fold); intermediate and
-        smaller tiers are unchanged.
-
-    Returns
-    -------
-    dict[int, Bool[Array, "..."]]
-        Narrowed hierarchy containing exactly ``target_sizes`` keys.
-        Still mutually exclusive across the new tier set.
-    """
-    sizes_sorted = sorted(target_sizes)
-    if not sizes_sorted:
-        raise ValueError("target_sizes must not be empty")
-
-    biggest_target = sizes_sorted[-1]
-    narrowed: dict[int, Bool[Array, "..."]] = {}
-    for s in sizes_sorted[:-1]:
-        if s not in hierarchy:
-            raise ValueError(
-                f"hierarchy is missing stencil size {s}; "
-                f"available: {sorted(hierarchy.keys())}"
-            )
-        narrowed[s] = hierarchy[s]
-
-    # OR-fold every source tier >= biggest_target into the biggest target slot.
-    fold = None
-    for src_size, src_mask in hierarchy.items():
-        if src_size < biggest_target:
-            continue
-        fold = src_mask if fold is None else (fold | src_mask)
-    if fold is None:
-        raise ValueError(
-            f"hierarchy has no tier >= biggest target size {biggest_target}; "
-            f"available: {sorted(hierarchy.keys())}"
-        )
-    narrowed[biggest_target] = fold
-    return narrowed
 
 
 def upwind_flux(
@@ -154,9 +95,8 @@ def upwind_flux(
         (e.g. ``recon.upwind1_x``, ``recon.weno3_x``, ``recon.weno5_x``).
     mask_hierarchy : dict[int, Bool[Array, "..."]]
         Mutually-exclusive cell-centred boolean masks produced by
-        :meth:`~gridax.Mask1D.get_adaptive_masks` /
-        :meth:`~gridax.Mask2D.get_adaptive_masks` /
-        :meth:`~gridax.Mask3D.get_adaptive_masks`, keyed by the
+        :meth:`~gridax.Mask1D.tiers` / :meth:`~gridax.Mask2D.tiers` /
+        :meth:`~gridax.Mask3D.tiers`, keyed by the
         same stencil sizes as *rec_funcs*.  At each interior cell
         exactly one mask is ``True``; land cells and cells where even the
         smallest stencil cannot be supported are ``False`` in every mask.
@@ -199,7 +139,7 @@ def upwind_flux(
     >>> grid = CartesianCGrid2D.from_interior(Ny - 2, Nx - 2, 1.0, 1.0)
     >>> recon = Reconstruction2D(grid=grid)
     >>> mask = Mask2D.from_dimensions(Ny, Nx)
-    >>> mask_hier = mask.get_adaptive_masks(direction="x", stencil_sizes=(2, 4, 6))
+    >>> mask_hier = mask.tiers("x", sizes=(2, 4, 6))
     >>> rec_funcs = {2: recon.upwind1_x, 4: recon.weno3_x, 6: recon.weno5_x}
     >>> q = jnp.ones((Ny, Nx))
     >>> u = jnp.ones((Ny, Nx))

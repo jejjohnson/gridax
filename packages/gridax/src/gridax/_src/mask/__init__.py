@@ -1,6 +1,7 @@
 """gridax masks — base and Cartesian (used by spherical operators too)."""
 
 from gridax._src.mask.base import (
+    CoastGhosts,
     StencilCapability1D,
     StencilCapability2D,
     StencilCapability3D,
@@ -23,6 +24,8 @@ __all__ = [
     "Mask1D",
     "Mask2D",
     "Mask3D",
+    # Coastal ghosts
+    "CoastGhosts",
     # Mask construction primitives
     "count_contiguous",
     "dilate_mask",

@@ -120,7 +120,7 @@ def test_reconstruct_numpy_equals_jax(method, num_pts):
 
 
 def _upwind(q, u, mask):
-    hierarchy = mask.get_adaptive_masks(direction="x", stencil_sizes=(2, 4, 6))
+    hierarchy = mask.tiers("x", sizes=(2, 4, 6))
     # full-size face fluxes, one per tier, so the tier selection is what is compared
     rec = {s: (lambda q, u, s=s: s * q * u) for s in (2, 4, 6)}
     return gridax.upwind_flux(q, u, dim=1, rec_funcs=rec, mask_hierarchy=hierarchy)

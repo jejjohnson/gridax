@@ -1,6 +1,6 @@
 """Mask construction primitives.
 
-These helpers are dimension-agnostic numpy/scipy routines that the
+These helpers are dimension-agnostic numpy routines that the
 ``Mask1D`` / ``Mask2D`` / ``Mask3D`` factory methods compose to derive
 staggered masks, classify cells, build sponge layers, and infer h-grid
 masks from non-centre staggerings.  They are exposed as public API so
@@ -34,9 +34,11 @@ make_sponge
 from __future__ import annotations
 
 import itertools
+from typing import Any
 
 import numpy as np
-from scipy.ndimage import binary_dilation
+
+from gridax._src.pytree import array_namespace
 
 
 def pool_bool(
@@ -311,36 +313,27 @@ def h_from_pooled(
     return result
 
 
-def dilate_mask(mask: np.ndarray) -> np.ndarray:
+def dilate_mask(mask: Any) -> Any:
     """Binary dilation by 1 cell with an n-D *cross* structuring element.
 
-    Wraps :func:`scipy.ndimage.binary_dilation` with a cross-shaped
-    structuring element of size ``(3,) * ndim``: the centre and the
+    The structuring element has size ``(3,) * ndim``: the centre and the
     six (or four, in 2-D) immediate axis-aligned neighbours are
     ``True``; diagonals are ``False``.  Boundary cells are treated as
     zero (no wraparound).
 
     This is the building block for the 4-level land / coast / near-coast
-    / open-ocean classification used in the mask factories: starting
-    from the land mask ``~h``, two successive dilations identify the
-    coast (1 ring out from land) and near-coast (2 rings out) tiers.
-
-    Algorithm
-    ---------
-    1. Build a structuring element ``struct`` of shape ``(3,)*ndim``,
-       all-zero except the centre ``(1, 1, ..., 1)`` and each of the
-       ``2 * ndim`` axis-aligned face neighbours.
-    2. Call ``scipy.ndimage.binary_dilation(mask, structure=struct,
-       border_value=0)``.
+    / open-ocean classification: starting from the land mask ``~h``, two
+    successive dilations identify the coast (1 ring out from land) and
+    near-coast (2 rings out) tiers.
 
     Parameters
     ----------
-    mask : np.ndarray
-        Boolean mask of any number of dimensions.
+    mask : array of bool
+        Boolean mask of any number of dimensions, NumPy or JAX.
 
     Returns
     -------
-    np.ndarray
+    array of bool
         Dilated boolean mask, same shape.
 
     Examples
@@ -368,18 +361,51 @@ def dilate_mask(mask: np.ndarray) -> np.ndarray:
            [0, 0, 0, 0],
            [0, 0, 0, 0]])
     """
-    ndim = mask.ndim
-    # struct shape: (3,) * ndim — only the centre and the 2*ndim face
-    # neighbours are True (no diagonals).
-    struct = np.zeros((3,) * ndim, dtype=bool)
-    centre = (1,) * ndim
-    struct[centre] = True
-    for axis in range(ndim):
-        for offset in (0, 2):
-            idx = list(centre)
-            idx[axis] = offset
-            struct[tuple(idx)] = True
-    return binary_dilation(mask.astype(bool), structure=struct, border_value=0)
+    mask = array_namespace(mask).asarray(mask, dtype=bool)
+    out = mask
+    for axis in range(-mask.ndim, 0):
+        out = out | shifted(mask, axis, 1) | shifted(mask, axis, -1)
+    return out
+
+
+def shifted(mask: Any, axis: int, offset: int) -> Any:
+    """The mask ``offset`` cells along an axis: ``out[i] = mask[i + offset]``.
+
+    ``False`` where ``i + offset`` is outside the array. Works in the array
+    namespace of ``mask``, so on a traced mask too.
+
+    Parameters
+    ----------
+    mask : array of bool
+        The mask.
+    axis : int
+        The axis.
+    offset : int
+        The shift, in cells.
+
+    Returns
+    -------
+    array of bool
+        The shape of ``mask``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> shifted(np.array([True, False, True]), 0, 1).tolist()
+    [False, True, False]
+    """
+    if offset == 0:
+        return mask
+    xp = array_namespace(mask)
+    n = mask.shape[axis]
+    reach = min(abs(offset), n)
+    kept: list[slice] = [slice(None)] * mask.ndim
+    kept[axis] = slice(reach, None) if offset > 0 else slice(0, n - reach)
+    shape = list(mask.shape)
+    shape[axis] = reach
+    outside = xp.zeros(tuple(shape), dtype=mask.dtype)
+    parts = [mask[tuple(kept)], outside]
+    return xp.concat(parts if offset > 0 else parts[::-1], axis=axis)
 
 
 def count_contiguous(

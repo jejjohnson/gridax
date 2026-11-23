@@ -122,7 +122,7 @@ def test_argument_errors() -> None:
 
 
 def test_tier_sizes_are_the_mask_hierarchy() -> None:
-    # the sizes Advection*D uses for get_adaptive_masks: 2, 4, 6, 8, 10
+    # the default sizes of mask.tiers: 2, 4, 6, 8, 10
     assert [tier.size for tier in WENO(9).tiers()] == [10, 8, 6, 4, 2]
     assert [tier.size for tier in Upwind(2).tiers()] == [4, 2]
     assert [tier.size for tier in TVD().tiers()] == [4, 2]
