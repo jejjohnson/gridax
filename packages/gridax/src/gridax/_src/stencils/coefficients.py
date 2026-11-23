@@ -69,7 +69,7 @@ Data = Literal["point", "cell"]
 Bias = Literal["centred", "left", "right"]
 
 #: The collocated methods, widest support first: the fallback order of
-#: ``gridax.analysis.adaptive_difference``. ``"staggered"`` is not in it,
+#: ``difference`` with a mask on a collocated grid. ``"staggered"`` is not in it,
 #: because a staggered stencil writes half a cell away from its inputs.
 METHODS: tuple[Method, ...] = ("central", "forward", "backward")
 

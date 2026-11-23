@@ -53,7 +53,8 @@ def difference(
     fits and the other one-sided stencil where it does not.
 
     A stencil that reads a NaN returns NaN, so a masked cell costs a halo of
-    about ``accuracy`` cells; :func:`adaptive_difference` recovers them.
+    about ``accuracy`` cells; :func:`gridax.difference` with a mask, on a
+    collocated grid, recovers them.
 
     .. math::
 

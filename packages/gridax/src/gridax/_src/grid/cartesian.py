@@ -184,8 +184,8 @@ class CartesianCGrid3D(CurvilinearGrid3D):
     axis is reserved for boundary conditions.
 
     The horizontal staggering (T, U, V, X) follows the 2-D convention
-    applied independently at each z-level — i.e. ``Difference3D`` and
-    related operators act on the ``(y, x)`` plane for fixed ``k``.  The
+    applied independently at each z-level — i.e. ``difference``
+    and the other functions act on the ``(y, x)`` plane for fixed ``k``.  The
     vertical axis is **not** staggered within this same-shape array
     convention.  W-point fields (vertical velocity at z-interfaces) use the same
     ``[Nz, Ny, Nx]`` shape, ``w[k]`` on the top face of ``T[k]`` (as

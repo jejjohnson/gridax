@@ -379,7 +379,7 @@ def run_simulation(config: ShallowWaterConfig | None = None) -> xr.Dataset:
         u_adv = ops.interpolate(u_on_t * du_dx + v_on_t * du_dy, src="T", dst="U")
         v_adv = ops.interpolate(u_on_t * dv_dx + v_on_t * dv_dy, src="T", dst="V")
 
-        # Coriolis: use the 4-point bilinear cross-face averages V_to_U / U_to_V
+        # Coriolis: the 4-point cross-face averages, V to U and U to V
         # directly, rather than routing through T-points (V->T->U double-average).
         # Direct cross-face interpolation is more accurate (one averaging step)
         # and consistent with the linear script.

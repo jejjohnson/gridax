@@ -16,7 +16,7 @@ with ``f_X[j+1/2, i+1/2]`` the 4-point average of f (given at T-points).
 Because both tendencies are built from the same corner products,
 ``sum(u * du) + sum(v * dv) = 0`` exactly for any f (beta-plane included),
 on a periodic domain or a closed basin.  For uniform f it reduces to the
-familiar ``f * V_to_U(v)`` / ``-f * U_to_V(u)``.
+familiar ``f`` times the mean of ``v`` at U and ``-f`` times the mean of ``u`` at V.
 
 References
 ----------

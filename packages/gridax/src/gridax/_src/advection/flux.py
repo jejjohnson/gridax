@@ -17,15 +17,19 @@ which the flux is computed (the axis *perpendicular* to the face):
 
 Typical 2-D usage::
 
-    from gridax import Mask2D, upwind_flux
-    from gridax import Reconstruction2D, CartesianCGrid2D
+    from functools import partial
+
+    from gridax import CartesianCGrid2D, Mask2D, reconstruct, upwind_flux
+    from gridax.schemes import WENO, Upwind
 
     grid = CartesianCGrid2D.from_interior(nx_interior, ny_interior, Lx, Ly)
-    recon = Reconstruction2D(grid=grid)
     mask = Mask2D.from_mask(h_mask)
 
     mask_hier = mask.tiers("x", sizes=(2, 4, 6))
-    rec_funcs = {2: recon.upwind1_x, 4: recon.weno3_x, 6: recon.weno5_x}
+    rec_funcs = {
+        size: partial(reconstruct, grid=grid, axis="x", scheme=scheme)
+        for size, scheme in {2: Upwind(1), 4: WENO(3), 6: WENO(5)}.items()
+    }
 
     fe = upwind_flux(q, u, dim=1, rec_funcs=rec_funcs, mask_hierarchy=mask_hier)
 """
@@ -91,8 +95,8 @@ def upwind_flux(
         to a reconstruction callable with signature
         ``fn(q, u) -> flux_field``.  Each callable must return a full array
         of the same shape as *q* with the ghost ring set to zero — exactly
-        the convention used by all ``Reconstruction1D/2D/3D`` methods
-        (e.g. ``recon.upwind1_x``, ``recon.weno3_x``, ``recon.weno5_x``).
+        the convention of :func:`~gridax.reconstruct` with the grid, the axis
+        and the scheme filled in.
     mask_hierarchy : dict[int, Bool[Array, "..."]]
         Mutually-exclusive cell-centred boolean masks produced by
         :meth:`~gridax.Mask1D.tiers` / :meth:`~gridax.Mask2D.tiers` /
@@ -128,19 +132,18 @@ def upwind_flux(
 
     Examples
     --------
+    >>> from functools import partial
     >>> import jax.numpy as jnp
-    >>> from gridax import (
-    ...     CartesianCGrid2D,
-    ...     Mask2D,
-    ...     Reconstruction2D,
-    ...     upwind_flux,
-    ... )
+    >>> from gridax import CartesianCGrid2D, Mask2D, reconstruct, upwind_flux
+    >>> from gridax.schemes import WENO, Upwind
     >>> Ny, Nx = 10, 10
     >>> grid = CartesianCGrid2D.from_interior(Ny - 2, Nx - 2, 1.0, 1.0)
-    >>> recon = Reconstruction2D(grid=grid)
     >>> mask = Mask2D.from_dimensions(Ny, Nx)
     >>> mask_hier = mask.tiers("x", sizes=(2, 4, 6))
-    >>> rec_funcs = {2: recon.upwind1_x, 4: recon.weno3_x, 6: recon.weno5_x}
+    >>> rec_funcs = {
+    ...     size: partial(reconstruct, grid=grid, axis="x", scheme=scheme)
+    ...     for size, scheme in {2: Upwind(1), 4: WENO(3), 6: WENO(5)}.items()
+    ... }
     >>> q = jnp.ones((Ny, Nx))
     >>> u = jnp.ones((Ny, Nx))
     >>> fe = upwind_flux(q, u, dim=1, rec_funcs=rec_funcs, mask_hierarchy=mask_hier)

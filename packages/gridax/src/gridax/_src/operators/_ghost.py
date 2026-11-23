@@ -81,7 +81,7 @@ def zero_z_ghosts(arr: Array) -> Array:
     # Same values as ``arr.at[0].set(0.0).at[-1].set(0.0)``, written as a
     # pad of the interior slabs: the two scatters into the full array become
     # one fusible pad, and XLA can skip computing the discarded ghost slabs
-    # of ``arr`` (``Coriolis3D`` forward ~1.6x faster on CPU).
+    # of ``arr`` (``coriolis`` in 3-D: forward ~1.6x faster on CPU).
     if arr.shape[0] <= 2:
         return array_namespace(arr).zeros_like(arr)
     return pad(arr[1:-1], ((1, 1),) + ((0, 0),) * (arr.ndim - 1))
