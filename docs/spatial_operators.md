@@ -20,6 +20,7 @@ and what they compute:
 | `curl` | X-points | $\zeta = \partial v/\partial x - \partial u/\partial y$ |
 | `sw_potential_vorticity` | X-points | $q = (\zeta + f)/h$ |
 | `pv_flux` | U/V-points | $(q\,Uh, q\,Vh)$ |
+| `vortex_force` | U/V-points | $(+q\,Vh, -q\,Uh)$ |
 | `diffuse`, `diffusive_fluxes` | T-points, U/V-points | $\nabla \cdot (\kappa\,\nabla h)$ and the face fluxes |
 | `biharmonic` | T-points | $-\kappa\,\nabla^4 h$ |
 | `coriolis` | U/V-points | $(+\overline{f_X\bar{v}}, -\overline{f_X\bar{u}})$, energy-conserving |
@@ -126,8 +127,7 @@ $(q\,Uh, q\,Vh)$ and neither label applies.
 :::{warning} The blend is not the Arakawa–Lamb (1981) scheme
 `form="blend"` is a linear blend of the two Sadourny forms and, for
 $0 < \alpha < 1$, conserves neither invariant exactly.  The
-Arakawa–Lamb (1981) scheme is a distinct eight-point stencil and is not
-implemented (#283).
+Arakawa–Lamb (1981) scheme is a distinct stencil: `vortex_force(…, form="arakawa_lamb")` below.
 :::
 
 The corner products are formed on the full arrays, so the first interior
@@ -313,13 +313,14 @@ kinetic energy at T-points, and $(\zeta\,v)_{\text{on-U}}$ is the
 vorticity-flux product interpolated to U-points.
 
 This form has important discrete conservation properties depending on how
-the vorticity-flux product is evaluated.  Three forms are available:
+the vorticity-flux product is evaluated.  Four forms are available:
 
 | `form=` | Discrete form of $(\zeta\,v)_{\text{on-U}}$ | Key property | Reference |
 |--------|------|-------------|-----------|
 | `"energy"` (default) | $\overline{\zeta\,\overline{v}^{xy}}^{y}$: product at the corners, then average | Conserves total KE for non-divergent flow | Sadourny (1975) E-scheme |
 | `"enstrophy"` | $\overline{\zeta}^{y}\,\overline{v}^{xy}$: average to the face, then multiply | Conserves potential enstrophy | Sadourny (1975) Z-scheme |
 | `"blend"` | $\tfrac13 E + \tfrac23 Z$ | Conserves neither exactly | linear blend, **not** Arakawa & Lamb (1981) |
+| `"arakawa_lamb"` | twelve products around the face, with $K = \tfrac12(\overline{u^2}^x + \overline{v^2}^y)$ | Conserves energy and potential enstrophy | Arakawa & Lamb (1981) |
 
 :::{tip} When to use each form
 - **`"energy"`**: energy-conserving vortex force, the usual choice for
@@ -327,7 +328,8 @@ the vorticity-flux product is evaluated.  Three forms are available:
 - **`"enstrophy"`**: preferred when enstrophy conservation matters (e.g.
   turbulence spindown experiments).
 - **`"blend"`**: a ⅓–⅔ blend of the two; it is not the Arakawa–Lamb
-  (1981) scheme, which conserves both (not implemented, #283).
+  (1981) scheme.
+- **`"arakawa_lamb"`**: conserves both, at the cost of a wider stencil.
 :::
 
 ### Usage
@@ -345,6 +347,37 @@ du_adv, dv_adv = advect_momentum(u, v, grid, form="enstrophy")
 
 # 1/3 energy + 2/3 enstrophy blend
 du_adv, dv_adv = advect_momentum(u, v, grid, form="blend")
+```
+
+---
+
+## Vortex Force
+
+### Theory
+
+The rotation term of the vector-invariant equations is a force at a right angle to the flow. With $q$ the vorticity at X-points and $(U, V)$ the transport at the faces,
+
+$$
+\frac{\partial u}{\partial t} = +(q\,V)_{\text{on-U}}, \qquad \frac{\partial v}{\partial t} = -(q\,U)_{\text{on-V}}.
+$$
+
+`vortex_force(q, u, v, grid, form=…)` has the two forms of Sadourny and the scheme of Arakawa and Lamb, which weighs the four cross transports and the two along-stream ones around a face with sums of $q$. With the mass fluxes $U = \overline{h}^x u$, $V = \overline{h}^y v$ and $q = (\zeta + f)/\overline{h}^{xy}$, in a periodic shallow-water box with divergence (`tests/test_vortex_force.py`):
+
+| `form=` | Work of the force, $\sum U \dot u + V \dot v$ | $\frac{d}{dt}\sum \tfrac12 h q^2$ |
+|---|---|---|
+| `"energy"` | zero to rounding | not zero |
+| `"enstrophy"` | not zero | zero to rounding |
+| `"arakawa_lamb"` | zero to rounding | zero to rounding |
+
+On a sphere the transports carry the lengths of the faces, so the work of `"arakawa_lamb"` is zero there too.
+
+### Usage
+
+```python
+from gridax import bernoulli_potential, sw_potential_vorticity, vortex_force
+
+q = sw_potential_vorticity(u, v, h, f, grid)
+du, dv = vortex_force(q, hu, hv, grid, form="arakawa_lamb")  # hu, hv: the mass fluxes
 ```
 
 ---
@@ -406,7 +439,7 @@ What spatial operator do you need?
 ├── Coriolis tendency (f×v, −f×u)            → coriolis
 │
 ├── Momentum advection ∂u/∂t|adv
-│   ├── Conservative vortex-force form → advect_momentum
+│   ├── Conservative vortex-force form → advect_momentum, or vortex_force on (q, hU, hV)
 │   └── QG vorticity advection         → arakawa_jacobian
 │
 └── Diagnostics (KE, APE, enstrophy, Okubo-Weiss, …)

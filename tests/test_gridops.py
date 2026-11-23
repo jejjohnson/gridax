@@ -52,6 +52,7 @@ CALLS: dict[str, tuple[int, dict[str, Any]]] = {
     "vertical_velocity": (2, {}),
     "volume_mean": (1, {}),
     "volume_sum": (1, {}),
+    "vortex_force": (3, {"form": "arakawa_lamb"}),
 }
 PAIRS = [(name, grid) for name, grids in SUPPORT.items() for grid in grids]
 MASKS = {1: gridax.Mask1D, 2: gridax.Mask2D, 3: gridax.Mask3D}

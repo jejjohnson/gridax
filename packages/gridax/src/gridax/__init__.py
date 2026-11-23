@@ -141,7 +141,7 @@ from gridax._src.operators.diagnostics import (
 )
 from gridax._src.operators.differentiable import smooth_abs, smooth_clamp, smooth_max
 from gridax._src.operators.jacobian import arakawa_jacobian
-from gridax._src.operators.momentum import advect_momentum, pv_flux
+from gridax._src.operators.momentum import advect_momentum, pv_flux, vortex_force
 from gridax._src.operators.moves import difference, interpolate
 from gridax._src.operators.reductions import (
     area_mean,
@@ -239,6 +239,7 @@ __all__ = [
     "reconstruct",
     "advect_momentum",
     "pv_flux",
+    "vortex_force",
     "diffuse",
     "diffusive_fluxes",
     "advect_vertical",

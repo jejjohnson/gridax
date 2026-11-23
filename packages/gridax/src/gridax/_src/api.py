@@ -64,6 +64,7 @@ SUPPORT: dict[str, tuple[str, ...]] = {
     "vertical_velocity": ("CartesianCGrid3D",),
     "volume_mean": (*_C3, _S3, _A3),
     "volume_sum": (*_C3, _S3, _A3),
+    "vortex_force": (*_C2, *_C3),
 }
 
 
