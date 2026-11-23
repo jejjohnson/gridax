@@ -934,9 +934,9 @@ def _advection_entries(
 
     Covers two representative methods per class:
 
-    * ``upwind1`` — the non-mask-dispatchable path (post-compute mask.h only).
+    * ``upwind1`` — the non-mask-dispatchable path (post-compute mask.wet() only).
     * ``weno5`` — the mask-dispatchable path (adaptive tier selection +
-      post-compute mask.h).
+      post-compute mask.wet()).
     """
     from gridax._src.advection.advection import (
         Advection1D,

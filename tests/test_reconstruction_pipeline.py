@@ -615,7 +615,7 @@ class TestDistboundAccessors:
         d1 = island_mask.ind_coast
         d2 = island_mask.ind_near_coast
         d3 = island_mask.ind_ocean
-        wet = island_mask.h
+        wet = island_mask.wet()
 
         covered = d1 | d2 | d3
         np.testing.assert_array_equal(covered, wet)
@@ -633,7 +633,7 @@ class TestDistboundAccessors:
         assert int(jnp.sum(all_ocean.ind_coast)) == 0
         assert int(jnp.sum(all_ocean.ind_near_coast)) == 0
         # All wet cells should be ind_ocean
-        assert int(jnp.sum(all_ocean.ind_ocean)) == int(jnp.sum(all_ocean.h))
+        assert int(jnp.sum(all_ocean.ind_ocean)) == int(jnp.sum(all_ocean.wet()))
 
     def test_island_has_coast_ring(self, island_mask):
         """Island mask should have coast cells surrounding the island."""
@@ -648,7 +648,7 @@ class TestDistboundAccessors:
         """The distbound masks work for the documented blending formula:
         flux = flux_1pt * ind_coast + flux_3pt * ind_near_coast + flux_5pt * ind_ocean
         """
-        Ny, Nx = island_mask.h.shape
+        Ny, Nx = island_mask.wet().shape
         # Create dummy flux fields
         flux_1pt = jnp.ones((Ny, Nx)) * 1.0
         flux_3pt = jnp.ones((Ny, Nx)) * 3.0

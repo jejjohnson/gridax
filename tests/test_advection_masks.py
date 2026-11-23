@@ -210,7 +210,7 @@ class TestDryCellsAreZero:
         mask = make_mask_1d()
         op = Advection1D(grid=make_grid_1d(), mask=mask)
         out = np.asarray(op(make_h_field_1d(), make_u_field_1d(), method=method))
-        dry = np.asarray(~mask.h)
+        dry = np.asarray(~mask.wet())
         assert np.all(out[dry] == 0.0)
 
     @pytest.mark.parametrize("method", ["upwind1", "weno5"])
@@ -220,7 +220,7 @@ class TestDryCellsAreZero:
         out = np.asarray(
             op(make_h_field_2d(), make_u_field_2d(), make_v_field_2d(), method=method)
         )
-        dry = np.asarray(~mask.h)
+        dry = np.asarray(~mask.wet())
         assert np.all(out[dry] == 0.0)
 
     @pytest.mark.parametrize("method", ["upwind1", "weno5"])
@@ -230,7 +230,7 @@ class TestDryCellsAreZero:
         out = np.asarray(
             op(make_h_field_3d(), make_u_field_3d(), make_v_field_3d(), method=method)
         )
-        dry = np.asarray(~mask.h)
+        dry = np.asarray(~mask.wet())
         assert np.all(out[dry] == 0.0)
 
 

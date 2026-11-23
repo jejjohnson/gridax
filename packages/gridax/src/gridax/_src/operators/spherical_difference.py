@@ -62,13 +62,13 @@ class SphericalDifference2D:
         post-multiplies its output by the mask field matching its
         output stagger:
 
-        * T-output → ``mask.h`` (``diff_lon_U_to_T``, ``diff_lat_V_to_T``,
+        * T-output → ``mask.wet()`` (``diff_lon_U_to_T``, ``diff_lat_V_to_T``,
           ``diff2_lon``, ``laplacian_merid``)
-        * U-output → ``mask.u`` (``diff_lon_T_to_U``)
-        * V-output → ``mask.v`` (``diff_lat_T_to_V``)
-        * X-output → ``mask.xy_corner_strict`` (``diff_lon_V_to_X``,
+        * U-output → ``mask.wet(at="U")`` (``diff_lon_T_to_U``)
+        * V-output → ``mask.wet(at="V")`` (``diff_lat_T_to_V``)
+        * X-output → ``mask.wet(at="X", kind="strict")`` (``diff_lon_V_to_X``,
           ``diff_lat_U_to_X``)
-        * (U, V)-output → ``(mask.u, mask.v)`` (``geostrophic_velocity``)
+        * (U, V)-output → ``(mask.wet(at="U"), mask.wet(at="V"))`` (``geostrophic_velocity``)
 
         Per #209 Q2, spherical 2-D operators take a Cartesian ``Mask2D``
         rather than a dedicated ``SphericalMask2D`` — the mask geometry
@@ -93,7 +93,7 @@ class SphericalDifference2D:
             _safe_div_cos(raw, cos_U, _metric_like(self.grid.R * self.grid.dlon, h)), h
         )
         if self.mask is not None:
-            out = out * self.mask.u
+            out = out * self.mask.wet(at="U")
         return out
 
     def diff_lat_T_to_V(self, h: Float[Array, "Ny Nx"]) -> Float[Array, "Ny Nx"]:
@@ -104,7 +104,7 @@ class SphericalDifference2D:
         raw = diff_y_fwd_2d(h)
         out = interior(raw / _metric_like(self.grid.R * self.grid.dlat, h), h)
         if self.mask is not None:
-            out = out * self.mask.v
+            out = out * self.mask.wet(at="V")
         return out
 
     def diff_lon_V_to_X(self, v: Float[Array, "Ny Nx"]) -> Float[Array, "Ny Nx"]:
@@ -118,7 +118,7 @@ class SphericalDifference2D:
             _safe_div_cos(raw, cos_X, _metric_like(self.grid.R * self.grid.dlon, v)), v
         )
         if self.mask is not None:
-            out = out * self.mask.xy_corner_strict
+            out = out * self.mask.wet(at="X", kind="strict")
         return out
 
     def diff_lat_U_to_X(self, u: Float[Array, "Ny Nx"]) -> Float[Array, "Ny Nx"]:
@@ -129,7 +129,7 @@ class SphericalDifference2D:
         raw = diff_y_fwd_2d(u)
         out = interior(raw / _metric_like(self.grid.R * self.grid.dlat, u), u)
         if self.mask is not None:
-            out = out * self.mask.xy_corner_strict
+            out = out * self.mask.wet(at="X", kind="strict")
         return out
 
     # ------------------------------------------------------------------
@@ -147,7 +147,7 @@ class SphericalDifference2D:
             _safe_div_cos(raw, cos_T, _metric_like(self.grid.R * self.grid.dlon, u)), u
         )
         if self.mask is not None:
-            out = out * self.mask.h
+            out = out * self.mask.wet()
         return out
 
     def diff_lat_V_to_T(self, v: Float[Array, "Ny Nx"]) -> Float[Array, "Ny Nx"]:
@@ -158,7 +158,7 @@ class SphericalDifference2D:
         raw = diff_y_bwd_2d(v)
         out = interior(raw / _metric_like(self.grid.R * self.grid.dlat, v), v)
         if self.mask is not None:
-            out = out * self.mask.h
+            out = out * self.mask.wet()
         return out
 
     # ------------------------------------------------------------------
@@ -176,7 +176,7 @@ class SphericalDifference2D:
         d2h = _spherical_d2_lon(h_c, h_e, h_w, cos_T, self.grid.dlon, self.grid.R)
         out = interior(d2h, h)
         if self.mask is not None:
-            out = out * self.mask.h
+            out = out * self.mask.wet()
         return out
 
     def laplacian_merid(self, h: Float[Array, "Ny Nx"]) -> Float[Array, "Ny Nx"]:
@@ -198,7 +198,7 @@ class SphericalDifference2D:
         )
         out = interior(merid, h)
         if self.mask is not None:
-            out = out * self.mask.h
+            out = out * self.mask.wet()
         return out
 
     # ------------------------------------------------------------------
@@ -249,8 +249,8 @@ class SphericalDifference2D:
         -----
         Under a mask, the face-averaged Coriolis parameter is replaced by
         ``1`` on every dry face *before* the division
-        (``f_on_U = 1`` where ``mask.u`` is False, ``f_on_V = 1`` where
-        ``mask.v`` is False), so no dry face divides by zero -- whatever
+        (``f_on_U = 1`` where ``mask.wet(at="U")`` is False, ``f_on_V = 1`` where
+        ``mask.wet(at="V")`` is False), so no dry face divides by zero -- whatever
         ``f`` holds on land, and even where a wet neighbour's ``f`` would
         cancel it -- keeping both the forward value and its reverse-mode
         gradient finite.  Wet faces keep their real ``f_on_face``.  The
@@ -262,10 +262,15 @@ class SphericalDifference2D:
         if self.mask is None:
             return _geostrophic_velocity_sphere(h, f, self.grid, gravity)
         u_g, v_g = _geostrophic_velocity_sphere(
-            h, f, self.grid, gravity, wet_u=self.mask.u, wet_v=self.mask.v
+            h,
+            f,
+            self.grid,
+            gravity,
+            wet_u=self.mask.wet(at="U"),
+            wet_v=self.mask.wet(at="V"),
         )
-        u_g = xp.where(self.mask.u, u_g, 0.0)
-        v_g = xp.where(self.mask.v, v_g, 0.0)
+        u_g = xp.where(self.mask.wet(at="U"), u_g, 0.0)
+        v_g = xp.where(self.mask.wet(at="V"), v_g, 0.0)
         return u_g, v_g
 
 
@@ -285,11 +290,11 @@ class SphericalDifference3D:
         3-D result is post-multiplied by the mask field matching each
         method's output stagger:
 
-        * T-output → ``mask.h`` (``diff_lon_U_to_T``, ``diff_lat_V_to_T``,
+        * T-output → ``mask.wet()`` (``diff_lon_U_to_T``, ``diff_lat_V_to_T``,
           ``diff2_lon``, ``laplacian_merid``)
-        * U-output → ``mask.u`` (``diff_lon_T_to_U``)
-        * V-output → ``mask.v`` (``diff_lat_T_to_V``)
-        * X-output → ``mask.xy_corner_strict`` (``diff_lon_V_to_X``,
+        * U-output → ``mask.wet(at="U")`` (``diff_lon_T_to_U``)
+        * V-output → ``mask.wet(at="V")`` (``diff_lat_T_to_V``)
+        * X-output → ``mask.wet(at="X", kind="strict")`` (``diff_lon_V_to_X``,
           ``diff_lat_U_to_X``)
 
         Per #209 Q3, the 3-D class takes the Cartesian ``Mask3D``
@@ -314,54 +319,54 @@ class SphericalDifference3D:
         """Zonal derivative T → U over all z-levels."""
         out = zero_z_ghosts(vmap(self._diff2d.diff_lon_T_to_U)(h))
         if self.mask is not None:
-            out = out * self.mask.u
+            out = out * self.mask.wet(at="U")
         return out
 
     def diff_lat_T_to_V(self, h: Float[Array, "Nz Ny Nx"]) -> Float[Array, "Nz Ny Nx"]:
         """Meridional derivative T → V over all z-levels."""
         out = zero_z_ghosts(vmap(self._diff2d.diff_lat_T_to_V)(h))
         if self.mask is not None:
-            out = out * self.mask.v
+            out = out * self.mask.wet(at="V")
         return out
 
     def diff_lon_V_to_X(self, v: Float[Array, "Nz Ny Nx"]) -> Float[Array, "Nz Ny Nx"]:
         """Zonal derivative V → X over all z-levels."""
         out = zero_z_ghosts(vmap(self._diff2d.diff_lon_V_to_X)(v))
         if self.mask is not None:
-            out = out * self.mask.xy_corner_strict
+            out = out * self.mask.wet(at="X", kind="strict")
         return out
 
     def diff_lat_U_to_X(self, u: Float[Array, "Nz Ny Nx"]) -> Float[Array, "Nz Ny Nx"]:
         """Meridional derivative U → X over all z-levels."""
         out = zero_z_ghosts(vmap(self._diff2d.diff_lat_U_to_X)(u))
         if self.mask is not None:
-            out = out * self.mask.xy_corner_strict
+            out = out * self.mask.wet(at="X", kind="strict")
         return out
 
     def diff_lon_U_to_T(self, u: Float[Array, "Nz Ny Nx"]) -> Float[Array, "Nz Ny Nx"]:
         """Backward zonal derivative U → T over all z-levels."""
         out = zero_z_ghosts(vmap(self._diff2d.diff_lon_U_to_T)(u))
         if self.mask is not None:
-            out = out * self.mask.h
+            out = out * self.mask.wet()
         return out
 
     def diff_lat_V_to_T(self, v: Float[Array, "Nz Ny Nx"]) -> Float[Array, "Nz Ny Nx"]:
         """Backward meridional derivative V → T over all z-levels."""
         out = zero_z_ghosts(vmap(self._diff2d.diff_lat_V_to_T)(v))
         if self.mask is not None:
-            out = out * self.mask.h
+            out = out * self.mask.wet()
         return out
 
     def diff2_lon(self, h: Float[Array, "Nz Ny Nx"]) -> Float[Array, "Nz Ny Nx"]:
         """Second zonal derivative at T-points over all z-levels."""
         out = zero_z_ghosts(vmap(self._diff2d.diff2_lon)(h))
         if self.mask is not None:
-            out = out * self.mask.h
+            out = out * self.mask.wet()
         return out
 
     def laplacian_merid(self, h: Float[Array, "Nz Ny Nx"]) -> Float[Array, "Nz Ny Nx"]:
         """Meridional Laplacian term at T-points over all z-levels."""
         out = zero_z_ghosts(vmap(self._diff2d.laplacian_merid)(h))
         if self.mask is not None:
-            out = out * self.mask.h
+            out = out * self.mask.wet()
         return out

@@ -34,8 +34,8 @@ the lifting tools `boundary_ring` / `SolveDomain` / `KnownValueLifting`.
   one belongs in gaussx.
 - **The one-call wrappers** live in sesmax-core now (#475); gridax keeps no copy of them.
 - **Masks**: accept a `Mask2D` or an array; a `Mask2D` contributes the
-  mask of the field's staggering — `xy_corner_strict` for ψ (`"X"`),
-  `h` for pressure (`"T"`) — cast to the rhs dtype (`_resolve_mask_arr`).
+  mask of the field's staggering — `mask.wet(at="X", kind="strict")` for ψ,
+  `mask.wet()` for pressure — cast to the rhs dtype (`_resolve_mask_arr`).
 - **Wall placement**: ψ = 0 (or a known value) sits on the coast ring, the
   dry cells 4-adjacent to the wet mask — what `masked_laplacian` imposes;
   for ψ on a rectangle, the X wall nodes `0` and `N-2`.  A spectral path

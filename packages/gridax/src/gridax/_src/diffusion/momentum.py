@@ -94,8 +94,8 @@ class MomentumAdvection2D:
         and ``Interpolation2D`` (for the vorticity-flux averages) are
         constructed with the same mask, so every intermediate staggered
         field already has the correct post-compute zero.  The final
-        tendencies are additionally post-multiplied by ``mask.u`` and
-        ``mask.v`` so dry U/V faces stay exactly zero.  ``None``
+        tendencies are additionally post-multiplied by ``mask.wet(at="U")`` and
+        ``mask.wet(at="V")`` so dry U/V faces stay exactly zero.  ``None``
         (default) matches the pre-existing unmasked behaviour bit for bit.
 
     Examples
@@ -240,8 +240,8 @@ class MomentumAdvection2D:
         # dv_adv[j+1/2, i] = -(zeta*u)_v - dK/dy
         dv_adv = interior(-zu_v[2:-2, 2:-2] - dK_dy[2:-2, 2:-2], v, ghost=2)
         if self.mask is not None:
-            du_adv = du_adv * self.mask.u
-            dv_adv = dv_adv * self.mask.v
+            du_adv = du_adv * self.mask.wet(at="U")
+            dv_adv = dv_adv * self.mask.wet(at="V")
         return du_adv, dv_adv
 
 
@@ -269,7 +269,7 @@ class MomentumAdvection3D:
         Optional 3-D land/ocean mask.  Pattern A (post-compute) — the
         inner :class:`MomentumAdvection2D` is always constructed
         ``mask=None`` and the vmap'd 3-D result is post-multiplied by
-        ``mask.u`` / ``mask.v`` so dry U/V faces stay exactly zero at
+        ``mask.wet(at="U")`` / ``mask.wet(at="V")`` so dry U/V faces stay exactly zero at
         every z-level.
 
     Examples
@@ -324,7 +324,7 @@ class MomentumAdvection3D:
             ``(du_adv, dv_adv)`` — tendencies at U-points and V-points,
             both zero in the ghost ring.  When ``self.mask`` is set, the
             outputs are additionally zeroed at dry U/V faces via
-            ``* mask.u`` / ``* mask.v``.
+            ``* mask.wet(at="U")`` / ``* mask.wet(at="V")``.
 
         Raises
         ------
@@ -340,6 +340,6 @@ class MomentumAdvection3D:
         du_adv = zero_z_ghosts(du_adv)
         dv_adv = zero_z_ghosts(dv_adv)
         if self.mask is not None:
-            du_adv = du_adv * self.mask.u
-            dv_adv = dv_adv * self.mask.v
+            du_adv = du_adv * self.mask.wet(at="U")
+            dv_adv = dv_adv * self.mask.wet(at="V")
         return du_adv, dv_adv

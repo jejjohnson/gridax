@@ -58,7 +58,7 @@ def kinetic_energy(
 
     This is a mask-free Layer-2 functional helper per #209.  For masked
     kinetic energy, multiply the result by your T-point mask at the call
-    site: ``ke = kinetic_energy(u, v) * mask.h``.
+    site: ``ke = kinetic_energy(u, v) * mask.wet()``.
 
     Args:
         u (Array): x-velocity at U-points (east faces), shape [Ny, Nx].
@@ -326,7 +326,7 @@ def enstrophy(
 
     Mask-free Layer-2 functional helper per #209.  For masked enstrophy,
     multiply the result by your mask at the call site:
-    ``z = enstrophy(omega) * mask.xy_corner_strict``.
+    ``z = enstrophy(omega) * mask.wet(at="X", kind="strict")``.
 
     Parameters
     ----------
@@ -589,7 +589,7 @@ def vertical_velocity(
 
         w[k+1/2] = w[k-1/2] - (du/dx + dv/dy)[k] * dz,   k = 1 .. Nz-2
 
-    The result uses the same ``[Nz, Ny, Nx]`` convention as ``Mask3D.w``:
+    The result uses the same ``[Nz, Ny, Nx]`` convention as ``Mask3D.wet(at="W")``:
     ``w[k]`` is the **top face** of ``T[k]`` (``k + 1/2``).  So ``w[0]`` is
     the floor (the bottom face of the first physical level ``T[1]``, zero),
     ``w[1:-1]`` are the interfaces above the physical levels, ``w[Nz-2]`` is
@@ -613,8 +613,8 @@ def vertical_velocity(
     mask : Mask3D or Float[Array, "Nz Ny Nx"] or None, optional
         A :class:`Mask3D`: ``u`` / ``v`` are zeroed on dry faces with
         ``jnp.where`` before the stencil (so NaN-filled land cannot leak),
-        the divergence on dry T-points (``mask.h``) before the integration,
-        and the output on dry W-faces (``mask.w``).  ``mask.w[Nz-2]`` (the
+        the divergence on dry T-points (``mask.wet()``) before the integration,
+        and the output on dry W-faces (``mask.wet(at="W")``).  ``mask.wet(at="W")[Nz-2]`` (the
         surface) is dry wherever the top ghost slab is dry, so a non-zero
         rigid-lid residual there is masked out too.  A raw float T-point
         mask (deprecated) only zeroes the divergence.
@@ -643,15 +643,15 @@ def vertical_velocity(
     xp = array_namespace(u, v, mask)
     if isinstance(mask, Mask3D):
         # zero dry faces before the stencil reads them (NaN-filled land)
-        u = xp.where(mask.u, u, 0.0)
-        v = xp.where(mask.v, v, 0.0)
+        u = xp.where(mask.wet(at="U"), u, 0.0)
+        v = xp.where(mask.wet(at="V"), v, 0.0)
     # Horizontal divergence at the interior T-points of the physical levels
     # div[k, j, i] = (u[k, j, i+1/2] - u[k, j, i-1/2]) / dx
     #              + (v[k, j+1/2, i] - v[k, j-1/2, i]) / dy,   k = 1 .. Nz-2
     div_h = diff_x_bwd_3d(u) / dx + diff_y_bwd_3d(v) / dy  # [Nz-2, Ny-2, Nx-2]
 
     if isinstance(mask, Mask3D):
-        div_h = xp.where(mask.h[..., 1:-1, 1:-1, 1:-1], div_h, 0.0)
+        div_h = xp.where(mask.wet()[..., 1:-1, 1:-1, 1:-1], div_h, 0.0)
     elif mask is not None:
         warnings.warn(
             "vertical_velocity(mask=<float array>) is deprecated; pass a "
@@ -665,7 +665,7 @@ def vertical_velocity(
     w_int = -xp.cumsum(div_h, axis=0) * dz  # [Nz-2, Ny-2, Nx-2]
     w = interior(w_int, u)  # [Nz, Ny, Nx]; w[0] = 0 is the floor
     if isinstance(mask, Mask3D):
-        w = xp.where(mask.w, w, 0.0)
+        w = xp.where(mask.wet(at="W"), w, 0.0)
     return w
 
 

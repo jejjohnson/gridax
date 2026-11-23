@@ -9,17 +9,17 @@ the dry cells of its output stagger, following the rule in ``docs/masks.md``
 ==================================  ======  =========================
 Method                              Output  Mask field
 ==================================  ======  =========================
-``Energetics2D.*``                  T       ``mask.h``
-``Strain2D.shear``                  X       ``mask.xy_corner_strict``
-``Strain2D.tensor``                 T       ``mask.h``
-``Strain2D.magnitude_squared``      T       ``mask.h``
-``Strain2D.okubo_weiss``            T       ``mask.h``
-``QGPotentialVorticity2D.*``        T       ``mask.h``
+``Energetics2D.*``                  T       ``mask.wet()``
+``Strain2D.shear``                  X       ``mask.wet(at="X", kind="strict")``
+``Strain2D.tensor``                 T       ``mask.wet()``
+``Strain2D.magnitude_squared``      T       ``mask.wet()``
+``Strain2D.okubo_weiss``            T       ``mask.wet()``
+``QGPotentialVorticity2D.*``        T       ``mask.wet()``
 ==================================  ======  =========================
 
 Under a mask, inputs are zeroed on the dry *interior* cells of their
-stagger before any stencil reads them (``u`` by ``mask.u``, ``v`` by
-``mask.v`` -- the no-normal-flow condition; T-fields by ``mask.h``), and
+stagger before any stencil reads them (``u`` by ``mask.wet(at="U")``, ``v`` by
+``mask.wet(at="V")`` -- the no-normal-flow condition; T-fields by ``mask.wet()``), and
 outputs are zeroed with ``jnp.where`` rather than a multiply, so interior
 land values stored as ``NaN`` (as :meth:`Mask2D.from_center` supports)
 neither leak into wet cells nor survive at dry ones, in the forward pass
@@ -106,7 +106,7 @@ class Energetics2D:
     :func:`~gridax.available_potential_energy`.  Every method returns a
     T-point field with a zero ghost ring; when ``mask`` is set, inputs are
     zeroed on dry interior cells first and dry T-cells are zeroed last (via
-    ``jnp.where(mask.h, ...)``); see the module docstring.
+    ``jnp.where(mask.wet(), ...)``); see the module docstring.
 
     Parameters
     ----------
@@ -135,15 +135,15 @@ class Energetics2D:
         """Zero velocities on dry interior faces (no-normal-flow)."""
         if self.mask is None:
             return u, v
-        return _sanitize(self.mask.u, u), _sanitize(self.mask.v, v)
+        return _sanitize(self.mask.wet(at="U"), u), _sanitize(self.mask.wet(at="V"), v)
 
     def _t(self, field: Float[Array, "*batch Ny Nx"]) -> Float[Array, "*batch Ny Nx"]:
         """Zero a T-field on dry interior cells."""
-        return _sanitize(None if self.mask is None else self.mask.h, field)
+        return _sanitize(None if self.mask is None else self.mask.wet(), field)
 
     def _out(self, out: Float[Array, "*batch Ny Nx"]) -> Float[Array, "*batch Ny Nx"]:
-        """Zero dry T-cells: out[j, i] = out[j, i] if mask.h[j, i] else 0."""
-        return _where(None if self.mask is None else self.mask.h, out)
+        """Zero dry T-cells: out[j, i] = out[j, i] if mask.wet()[j, i] else 0."""
+        return _where(None if self.mask is None else self.mask.wet(), out)
 
     def kinetic_energy(
         self,
@@ -273,7 +273,7 @@ class Strain2D:
     mask : Mask2D or None, optional
         Optional land/ocean mask.  Velocities are zeroed on dry faces
         first; each method then zeroes the dry cells of its output stagger
-        (``mask.xy_corner_strict`` for :meth:`shear`, ``mask.h``
+        (``mask.wet(at="X", kind="strict")`` for :meth:`shear`, ``mask.wet()``
         otherwise).  For the T-point combinations the X-point intermediates
         are masked before averaging (pass-down, Pattern 2 in
         ``docs/masks.md``), so a coastal T-cell averages in zero from its
@@ -308,7 +308,7 @@ class Strain2D:
         """Zero velocities on dry interior faces (no-normal-flow)."""
         if self.mask is None:
             return u, v
-        return _sanitize(self.mask.u, u), _sanitize(self.mask.v, v)
+        return _sanitize(self.mask.wet(at="U"), u), _sanitize(self.mask.wet(at="V"), v)
 
     def _x_with_ghosts(
         self,
@@ -348,7 +348,9 @@ class Strain2D:
         out = set_at(
             xp.zeros_like(u, dtype=x.dtype), (..., slice(None, -1), slice(None, -1)), x
         )
-        return _sanitize(None if self.mask is None else self.mask.xy_corner_strict, out)
+        return _sanitize(
+            None if self.mask is None else self.mask.wet(at="X", kind="strict"), out
+        )
 
     def shear(
         self,
@@ -380,7 +382,9 @@ class Strain2D:
             _spacing(self.grid, "x", v, at="X"),
             _spacing(self.grid, "y", u, at="X"),
         )
-        return _where(None if self.mask is None else self.mask.xy_corner_strict, out)
+        return _where(
+            None if self.mask is None else self.mask.wet(at="X", kind="strict"), out
+        )
 
     def tensor(
         self,
@@ -409,7 +413,7 @@ class Strain2D:
         out = tensor_strain(
             u, v, _spacing(self.grid, "x", u), _spacing(self.grid, "y", v)
         )
-        return _where(None if self.mask is None else self.mask.h, out)
+        return _where(None if self.mask is None else self.mask.wet(), out)
 
     def magnitude_squared(
         self,
@@ -447,7 +451,7 @@ class Strain2D:
         )
         ss_on_T = self.interp.X_to_T(self._x_with_ghosts(u, v, 1.0))
         out = strain_magnitude_squared(sn, ss_on_T)
-        return _where(None if self.mask is None else self.mask.h, out)
+        return _where(None if self.mask is None else self.mask.wet(), out)
 
     def okubo_weiss(
         self,
@@ -488,7 +492,7 @@ class Strain2D:
         ss_on_T = self.interp.X_to_T(self._x_with_ghosts(u, v, 1.0))
         omega_on_T = self.interp.X_to_T(self._x_with_ghosts(u, v, -1.0))
         out = okubo_weiss(sn, ss_on_T, omega_on_T)
-        return _where(None if self.mask is None else self.mask.h, out)
+        return _where(None if self.mask is None else self.mask.wet(), out)
 
 
 @pytree_dataclass
@@ -500,7 +504,7 @@ class QGPotentialVorticity2D:
     :func:`~gridax.potential_vorticity_multilayer`.  Every method
     returns a T-point field (``[Ny, Nx]`` for one layer, ``[nl, Ny, Nx]``
     for the multilayer methods); when ``mask`` is set, dry T-cells are
-    zeroed via ``jnp.where(mask.h, ...)`` (post-compute, Pattern 1 in
+    zeroed via ``jnp.where(mask.wet(), ...)`` (post-compute, Pattern 1 in
     ``docs/masks.md``), broadcast over the layer axis.
 
     The Laplacian stencil reads ``psi`` at the four neighbours of each
@@ -533,11 +537,11 @@ class QGPotentialVorticity2D:
 
     def _psi(self, psi: Float[Array, "... Ny Nx"]) -> Float[Array, "... Ny Nx"]:
         """Zero psi on dry interior T-cells; the ghost ring is BC-owned."""
-        return _sanitize(None if self.mask is None else self.mask.h, psi)
+        return _sanitize(None if self.mask is None else self.mask.wet(), psi)
 
     def _mask_h(self, out: Float[Array, "... Ny Nx"]) -> Float[Array, "... Ny Nx"]:
-        """Zero dry T-cells: out[..., j, i] = out[..., j, i] if mask.h[j, i] else 0."""
-        return _where(None if self.mask is None else self.mask.h, out)
+        """Zero dry T-cells: out[..., j, i] = out[..., j, i] if mask.wet()[j, i] else 0."""
+        return _where(None if self.mask is None else self.mask.wet(), out)
 
     def __call__(
         self,

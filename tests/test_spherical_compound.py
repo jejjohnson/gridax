@@ -119,7 +119,7 @@ class TestSphericalVorticity2D:
         zeta = op.relative_vorticity(u, v)
         num = zeta + op._interp.T_to_X(f)
         den = op._interp.T_to_X(h)
-        wet = np.asarray(mask.xy_corner_strict)
+        wet = np.asarray(mask.wet(at="X", kind="strict"))
         wet_int = wet.copy()
         wet_int[[0, -1], :] = False
         wet_int[:, [0, -1]] = False

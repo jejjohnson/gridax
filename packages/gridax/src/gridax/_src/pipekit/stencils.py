@@ -227,8 +227,8 @@ class FillGhosts(FVXOperator):
         return GHOST_FILLERS[self.kind](x)
 
 
-#: ``stagger -> Mask2D attribute`` used by `ApplyMask` (contract 3).
-MASK_ATTRIBUTES = {"T": "h", "U": "u", "V": "v", "X": "xy_corner_strict"}
+#: ``stagger -> kind`` of the wet points `ApplyMask` keeps (contract 3).
+MASK_KINDS = {"T": "default", "U": "default", "V": "default", "X": "strict"}
 
 
 class ApplyMask(FVXOperator):
@@ -243,8 +243,8 @@ class ApplyMask(FVXOperator):
     mask : Mask2D
         Land / ocean mask.
     stagger : {"T", "U", "V", "X"}
-        Which wet mask to apply: T → ``mask.h``, U → ``mask.u``, V →
-        ``mask.v``, X → ``mask.xy_corner_strict``.
+        Which wet mask to apply: T → ``mask.wet()``, U → ``mask.wet(at="U")``, V →
+        ``mask.wet(at="V")``, X → ``mask.wet(at="X", kind="strict")``.
     """
 
     forbid_in_yaml: ClassVar[bool] = True
@@ -253,13 +253,13 @@ class ApplyMask(FVXOperator):
     stagger: str = eqx.field(static=True, default="T")
 
     def __check_init__(self) -> None:
-        if self.stagger not in MASK_ATTRIBUTES:
+        if self.stagger not in MASK_KINDS:
             raise ValueError(
                 f"stagger {self.stagger!r} is not available; valid: {list(STAGGERS)}"
             )
 
     def _apply(self, x: Field) -> Field:
-        wet = getattr(self.mask, MASK_ATTRIBUTES[self.stagger])
+        wet = self.mask.wet(at=self.stagger, kind=MASK_KINDS[self.stagger])
         return jnp.where(wet, x, jnp.zeros((), x.dtype))
 
 

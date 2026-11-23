@@ -743,7 +743,7 @@ Every public name in gridax (428 entries), listed per public module (`gridax`, i
 | `DIFFERENCES` | constant | `{('x', 'T', 'U'): 'diff_x_T_to_U', ('x', 'U', 'T'): 'diff...` |
 | `GHOST_FILLERS` | constant | `{'periodic': <function enforce_periodic>, 'zero': <functi...` |
 | `INTERPOLATIONS` | constant | `{('T', 'U'): 'T_to_U', ('T', 'V'): 'T_to_V', ('T', 'X'): ...` |
-| `MASK_ATTRIBUTES` | constant | `{'T': 'h', 'U': 'u', 'V': 'v', 'X': 'xy_corner_strict'}` |
+| `MASK_KINDS` | constant | `{'T': 'default', 'U': 'default', 'V': 'default', 'X': 'st...` |
 | `SCHEMES` | constant | `{'euler': <function euler_step>, 'heun': <function heun_s...` |
 | `STRAIN_COMPONENTS` | constant | `{'shear': 'shear', 'tensor': 'tensor', 'magnitude_squared...` |
 

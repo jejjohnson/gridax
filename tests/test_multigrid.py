@@ -200,7 +200,7 @@ class TestBoundaryCondition:
         on a basin with an island (the copies must not drift)."""
         n = 14
         dx, dy = 1.0 / n, 1.3 / n
-        h = np.asarray(_basin_mask2d(n).h, dtype=float)
+        h = np.asarray(_basin_mask2d(n).wet(), dtype=float)
         h[6:9, 5:8] = 0.0  # island
         solver = build_multigrid_solver(h, dx, dy, lambda_=4.0, bc="neumann")
         psi = jnp.asarray(np.random.default_rng(0).standard_normal(h.shape))
@@ -212,11 +212,12 @@ class TestBoundaryCondition:
         mask = _basin_mask2d(14)
         solver = build_multigrid_solver(mask, 1.0, 1.0)
         np.testing.assert_array_equal(
-            np.asarray(solver.levels[0].mask), np.asarray(mask.xy_corner_strict)
+            np.asarray(solver.levels[0].mask),
+            np.asarray(mask.wet(at="X", kind="strict")),
         )
 
     def test_neumann_annihilates_constants(self):
-        mask = np.asarray(_basin_mask2d(14).h, dtype=float)
+        mask = np.asarray(_basin_mask2d(14).wet(), dtype=float)
         solver = build_multigrid_solver(mask, 0.1, 0.1, bc="neumann")
         out = _apply_operator(jnp.ones(mask.shape), solver.levels[0])
         np.testing.assert_allclose(np.asarray(out), 0.0, atol=1e-10)
@@ -230,7 +231,7 @@ class TestBoundaryCondition:
         eig = np.linalg.eigvalsh(_dense_wet_operator(solver.levels[0]))
         assert eig.max() < -1e-2  # smallest |eig| ~ 2 pi^2 / L^2 >> round-off
         neu = build_multigrid_solver(
-            np.asarray(mask.xy_corner_strict), 1.0, 1.0, bc="neumann"
+            np.asarray(mask.wet(at="X", kind="strict")), 1.0, 1.0, bc="neumann"
         )
         eig_n = np.linalg.eigvalsh(_dense_wet_operator(neu.levels[0]))
         assert abs(eig_n.max()) < 1e-10
@@ -243,7 +244,7 @@ class TestBoundaryCondition:
         n = 30
         dx = dy = 1.0 / n
         mask = _basin_mask2d(n)
-        m = jnp.asarray(mask.xy_corner_strict, dtype=float)
+        m = jnp.asarray(mask.wet(at="X", kind="strict"), dtype=float)
         rhs = jnp.asarray(np.random.default_rng(1).standard_normal(m.shape)) * m
         x_cg, info = cg_solve(
             lambda p: masked_laplacian(p, m, dx, dy, lambda_),
@@ -265,7 +266,7 @@ class TestBoundaryCondition:
         """bc="neumann" at lambda = 0 solves the projected (solvable) problem
         and returns the zero-mean solution on each wet component."""
         n = 30
-        h = np.asarray(_basin_mask2d(n).h, dtype=float)
+        h = np.asarray(_basin_mask2d(n).wet(), dtype=float)
         h[n // 2, :] = 0.0  # split the basin into two components
         solver = build_multigrid_solver(h, 1.0 / n, 1.0 / n, bc="neumann", n_cycles=30)
         assert int(solver.null_counts.shape[0]) == 3  # dry + two basins
@@ -324,7 +325,7 @@ class TestConvergence:
         """<M r1, r2> = <r1, M r2> to round-off for M = v_cycle(0, .) (#344)."""
         n = 30
         mask2d = _basin_mask2d(n)
-        mask = mask2d if bc == "dirichlet" else np.asarray(mask2d.h, dtype=float)
+        mask = mask2d if bc == "dirichlet" else np.asarray(mask2d.wet(), dtype=float)
         solver = build_multigrid_solver(mask, 1.0 / n, 1.0 / n, lambda_, bc=bc)
         m = solver.levels[0].mask
         rng = np.random.default_rng(4)
@@ -351,7 +352,7 @@ class TestConvergence:
         n = 128
         dx = 1.0 / n
         mask = _basin_mask2d(n)
-        m = jnp.asarray(mask.xy_corner_strict, dtype=float)
+        m = jnp.asarray(mask.wet(at="X", kind="strict"), dtype=float)
         solver = build_multigrid_solver(mask, dx, dx, lambda_=4.0)
         rhs = jnp.asarray(np.random.default_rng(1).standard_normal(m.shape)) * m
         _, info = cg_solve(

@@ -39,9 +39,7 @@ Three guarantees make the pair safe to divide by:
   infinite derivative at zero, so flooring afterwards would return a NaN
   gradient for precisely the case the floor exists for.
 
-Pick the staggering location with `location=` (`"h"`, `"u"`, `"v"`,
-`"xy_corner"`, or `"w"` on `Mask3D`) so U- and V-point fields use their
-own C-grid mask.
+Pick the point with `at=` (`"T"`, `"U"`, `"V"`, `"X"`, or `"W"` on `Mask3D`) so U- and V-point fields use their own C-grid mask.
 
 ::: gridax.masked_mean
 

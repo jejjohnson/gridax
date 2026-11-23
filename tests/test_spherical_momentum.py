@@ -195,9 +195,9 @@ class TestSphericalMomentumAdvection2DMasked:
         u = jax.random.normal(k1, (grid.Ny, grid.Nx))
         v = jax.random.normal(k2, (grid.Ny, grid.Nx))
         du, dv = madv(u, v, scheme="energy")
-        # mask.u[j,i] is False wherever h[j,i] or h[j,i+1] is dry.
-        mu = Mask2D.from_mask(m).u
-        mv = Mask2D.from_mask(m).v
+        # mask.wet(at="U")[j,i] is False wherever h[j,i] or h[j,i+1] is dry.
+        mu = Mask2D.from_mask(m).wet(at="U")
+        mv = Mask2D.from_mask(m).wet(at="V")
         # tendency must vanish exactly where the respective mask is False
         assert jnp.all(du[~mu.astype(bool)] == 0.0)
         assert jnp.all(dv[~mv.astype(bool)] == 0.0)

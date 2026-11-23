@@ -172,7 +172,7 @@ class ArakawaJacobian2D:
     coastal cell would otherwise read land values, ``NaN`` or not; a
     streamfunction from a masked elliptic solve is zero there anyway; the
     ghost ring is BC-owned and passed through), and dry output cells
-    are zeroed last via ``jnp.where(mask.h, ...)`` (Pattern 1 in
+    are zeroed last via ``jnp.where(mask.wet(), ...)`` (Pattern 1 in
     ``docs/masks.md``), broadcast over any leading batch axes.
 
     Masking zeroes the Jacobian at dry cells, so the discrete identities
@@ -224,8 +224,8 @@ class ArakawaJacobian2D:
         xp = array_namespace(f, g)
         if self.mask is not None:
             # f[..., j, i] = 0 on dry interior T-cells (same for g)
-            f = _sanitize(self.mask.h, f)
-            g = _sanitize(self.mask.h, g)
+            f = _sanitize(self.mask.wet(), f)
+            g = _sanitize(self.mask.wet(), g)
         J = arakawa_jacobian(
             f, g, _spacing(self.grid, "x", f), _spacing(self.grid, "y", f)
         )
@@ -234,5 +234,5 @@ class ArakawaJacobian2D:
         out = xp.zeros_like(f, dtype=J.dtype, shape=shape)
         out = set_at(out, (..., slice(1, -1), slice(1, -1)), J)
         if self.mask is not None:
-            out = xp.where(self.mask.h, out, 0.0)
+            out = xp.where(self.mask.wet(), out, 0.0)
         return out

@@ -234,13 +234,13 @@ w[0]      floor (bottom face of T[1]; zero for a rigid bottom)
 ```
 
 just as `U[:, 0]` / `U[:, Nx-2]` are the west / east wall faces and
-`U[:, Nx-1]` is outside the domain.  `Mask3D.w` and
+`U[:, Nx-1]` is outside the domain.  `Mask3D.wet(at="W")` and
 [`vertical_velocity`](https://jejjohnson.github.io/gridax/reference/diagnostics/) both use this convention, so
 `h`, `u`, `v`, `w` and every mask share the `[Nz, Ny, Nx]` shape and
 broadcast without reshaping:
 
 ```python
-mask = Mask3D.from_mask(wet)                          # mask.w.shape == (Nz, Ny, Nx)
+mask = Mask3D.from_mask(wet)                          # mask.wet(at="W").shape == (Nz, Ny, Nx)
 w = vertical_velocity(u, v, dx, dy, dz, mask=mask)    # w.shape == (Nz, Ny, Nx)
 ```
 

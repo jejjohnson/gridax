@@ -63,7 +63,7 @@ def masked_laplacian(
         Result of (∇² − λ)·(ψ·mask), zeroed outside the mask.
     """
     if isinstance(mask, Mask2D):
-        mask_arr = mask.xy_corner_strict.astype(psi.dtype)
+        mask_arr = mask.wet(at="X", kind="strict").astype(psi.dtype)
     else:
         mask_arr = mask
     psi_m = psi * mask_arr  # enforce zero outside domain  [Ny, Nx]

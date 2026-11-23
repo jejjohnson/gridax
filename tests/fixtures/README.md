@@ -49,8 +49,8 @@ exact operator and variant that moved.
 
 * **16×16** is small enough that golden ``.npz`` files stay diff-able
   but large enough to have a non-trivial interior, a coastline, and a
-  cross-shaped island whose ``mask.xy_corner_strict`` (strict 4-of-4
-  corner propagation) differs from ``mask.h`` near the corners.
+  cross-shaped island whose ``mask.wet(at="X", kind="strict")`` (strict 4-of-4
+  corner propagation) differs from ``mask.wet()`` near the corners.
 * **Smooth analytic fields** — sines and polynomials of normalised
   ``(x, y)``, see ``inputs.py`` — are deterministic across JAX
   versions and easy to reason about by hand.

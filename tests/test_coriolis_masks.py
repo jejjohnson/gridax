@@ -102,8 +102,8 @@ class TestDryCellsAreZero:
         du, dv = op(make_u_field_2d(), make_v_field_2d(), make_f_field_2d())
         du = np.asarray(du)
         dv = np.asarray(dv)
-        assert np.all(du[np.asarray(~mask.u)] == 0.0)
-        assert np.all(dv[np.asarray(~mask.v)] == 0.0)
+        assert np.all(du[np.asarray(~mask.wet(at="U"))] == 0.0)
+        assert np.all(dv[np.asarray(~mask.wet(at="V"))] == 0.0)
 
     def test_coriolis3d_dry_u_and_v(self):
         mask = make_mask_3d()
@@ -111,5 +111,5 @@ class TestDryCellsAreZero:
         du, dv = op(make_u_field_3d(), make_v_field_3d(), make_f_field_2d())
         du = np.asarray(du)
         dv = np.asarray(dv)
-        assert np.all(du[np.asarray(~mask.u)] == 0.0)
-        assert np.all(dv[np.asarray(~mask.v)] == 0.0)
+        assert np.all(du[np.asarray(~mask.wet(at="U"))] == 0.0)
+        assert np.all(dv[np.asarray(~mask.wet(at="V"))] == 0.0)

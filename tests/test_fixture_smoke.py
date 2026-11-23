@@ -67,40 +67,40 @@ class TestDimensions:
 class TestMask1D:
     def test_mask1d_shape(self):
         mask = make_mask_1d()
-        assert mask.h.shape == (NX,)
-        assert mask.u.shape == (NX,)
+        assert mask.wet().shape == (NX,)
+        assert mask.wet(at="U").shape == (NX,)
 
     def test_mask1d_has_dry_interior(self):
         mask = make_mask_1d()
-        interior_h = np.asarray(mask.h[1:-1])
+        interior_h = np.asarray(mask.wet()[1:-1])
         n_dry_interior = int((~interior_h).sum())
         assert n_dry_interior > 0, "expected interior dry block + coastal cell"
 
     def test_all_ocean_mask1d_is_fully_wet(self):
         mask = make_mask_1d_all_ocean()
-        assert int(np.asarray(mask.h).sum()) == NX
+        assert int(np.asarray(mask.wet()).sum()) == NX
 
 
 class TestMask2D:
     def test_mask2d_shape(self):
         mask = make_mask_2d()
-        assert mask.h.shape == (NY, NX)
-        assert mask.u.shape == (NY, NX)
-        assert mask.v.shape == (NY, NX)
-        assert mask.xy_corner.shape == (NY, NX)
-        assert mask.xy_corner_strict.shape == (NY, NX)
+        assert mask.wet().shape == (NY, NX)
+        assert mask.wet(at="U").shape == (NY, NX)
+        assert mask.wet(at="V").shape == (NY, NX)
+        assert mask.wet(at="X").shape == (NY, NX)
+        assert mask.wet(at="X", kind="strict").shape == (NY, NX)
 
     def test_mask2d_has_dry_interior(self):
         """The cross-shaped island carves out interior dry cells."""
         mask = make_mask_2d()
         # Interior (excluding ghost ring) has dry cells from the island.
-        interior_h = np.asarray(mask.h[1:-1, 1:-1])
+        interior_h = np.asarray(mask.wet()[1:-1, 1:-1])
         n_dry_interior = int((~interior_h).sum())
         assert n_dry_interior > 0, "expected island + coastal-ring dry cells"
 
     def test_all_ocean_mask2d_is_fully_wet(self):
         mask = make_mask_2d_all_ocean()
-        assert int(np.asarray(mask.h).sum()) == NY * NX
+        assert int(np.asarray(mask.wet()).sum()) == NY * NX
 
     def test_h_mask2d_outer_ring_is_dry(self):
         h_mask = make_h_mask_2d()
@@ -113,24 +113,24 @@ class TestMask2D:
 class TestMask3D:
     def test_mask3d_shape(self):
         mask = make_mask_3d()
-        assert mask.h.shape == (NZ, NY, NX)
-        assert mask.u.shape == (NZ, NY, NX)
-        assert mask.v.shape == (NZ, NY, NX)
-        assert mask.w.shape == (NZ, NY, NX)
-        assert mask.xy_corner.shape == (NZ, NY, NX)
-        assert mask.xy_corner_strict.shape == (NZ, NY, NX)
+        assert mask.wet().shape == (NZ, NY, NX)
+        assert mask.wet(at="U").shape == (NZ, NY, NX)
+        assert mask.wet(at="V").shape == (NZ, NY, NX)
+        assert mask.wet(at="W").shape == (NZ, NY, NX)
+        assert mask.wet(at="X").shape == (NZ, NY, NX)
+        assert mask.wet(at="X", kind="strict").shape == (NZ, NY, NX)
 
     def test_mask3d_has_dry_interior(self):
         mask = make_mask_3d()
         # Interior (excluding ghost ring in all three dims) has dry cells
         # from the cross-shaped island at every wet z-level.
-        interior_h = np.asarray(mask.h[1:-1, 1:-1, 1:-1])
+        interior_h = np.asarray(mask.wet()[1:-1, 1:-1, 1:-1])
         n_dry_interior = int((~interior_h).sum())
         assert n_dry_interior > 0
 
     def test_all_ocean_mask3d_is_fully_wet(self):
         mask = make_mask_3d_all_ocean()
-        assert int(np.asarray(mask.h).sum()) == NZ * NY * NX
+        assert int(np.asarray(mask.wet()).sum()) == NZ * NY * NX
 
     def test_h_mask3d_top_bottom_caps_are_dry(self):
         """Top/bottom ghost z-levels are entirely land."""

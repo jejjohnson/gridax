@@ -131,7 +131,7 @@ class TestCoastRing:
 
         m = np.zeros((7, 9), dtype=bool)
         m[1:-1, 1:-1] = True
-        psi_mask = Mask2D.from_mask(m).xy_corner_strict
+        psi_mask = Mask2D.from_mask(m).wet(at="X", kind="strict")
         ring = np.asarray(coast_ring(psi_mask))
         expected = np.zeros((7, 9), dtype=bool)
         expected[0, 1:-2] = expected[-2, 1:-2] = True

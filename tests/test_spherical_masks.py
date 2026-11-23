@@ -145,8 +145,8 @@ class TestSphericalGeostrophicVelocityMasks:
         u_g, v_g = (np.asarray(a) for a in self._call(op))
         assert np.all(np.isfinite(u_g))
         assert np.all(np.isfinite(v_g))
-        np.testing.assert_array_equal(u_g[~np.asarray(mask.u)], 0.0)
-        np.testing.assert_array_equal(v_g[~np.asarray(mask.v)], 0.0)
+        np.testing.assert_array_equal(u_g[~np.asarray(mask.wet(at="U"))], 0.0)
+        np.testing.assert_array_equal(v_g[~np.asarray(mask.wet(at="V"))], 0.0)
 
     def test_matches_functional(self):
         grid = make_spherical_grid_2d()
@@ -161,12 +161,12 @@ class TestSphericalGeostrophicVelocityMasks:
         mask = make_mask_2d()
         grid = make_spherical_grid_2d()
         h = make_h_field_2d()
-        f = jnp.where(jnp.asarray(mask.h), make_f_field_2d(), 0.0)
+        f = jnp.where(jnp.asarray(mask.wet()), make_f_field_2d(), 0.0)
         # A face whose two T-neighbours are both dry gets f_on_face = 0, so
         # the raw (unmasked) output is non-finite there ...
         raw_u, raw_v = SphericalDifference2D(grid=grid).geostrophic_velocity(h, f)
         assert not np.all(np.isfinite(raw_u)) or not np.all(np.isfinite(raw_v))
-        # ... but mask.u / mask.v mark those faces dry, so the masked output
+        # ... but mask.wet(at="U") / mask.wet(at="V") mark those faces dry, so the masked output
         # is finite everywhere and exactly 0 on dry faces.
         u_g, v_g = SphericalDifference2D(grid=grid, mask=mask).geostrophic_velocity(
             h, f
@@ -174,8 +174,8 @@ class TestSphericalGeostrophicVelocityMasks:
         u_g, v_g = np.asarray(u_g), np.asarray(v_g)
         assert np.all(np.isfinite(u_g))
         assert np.all(np.isfinite(v_g))
-        np.testing.assert_array_equal(u_g[~np.asarray(mask.u)], 0.0)
-        np.testing.assert_array_equal(v_g[~np.asarray(mask.v)], 0.0)
+        np.testing.assert_array_equal(u_g[~np.asarray(mask.wet(at="U"))], 0.0)
+        np.testing.assert_array_equal(v_g[~np.asarray(mask.wet(at="V"))], 0.0)
 
     @pytest.mark.slow
     def test_gradient_finite_with_zero_f_on_land(self):
@@ -184,7 +184,7 @@ class TestSphericalGeostrophicVelocityMasks:
         grid = make_spherical_grid_2d()
         op = SphericalDifference2D(grid=grid, mask=mask)
         h = make_h_field_2d()
-        f = jnp.where(jnp.asarray(mask.h), make_f_field_2d(), 0.0)
+        f = jnp.where(jnp.asarray(mask.wet()), make_f_field_2d(), 0.0)
 
         def loss(h, f):
             u_g, v_g = op.geostrophic_velocity(h, f)
@@ -199,7 +199,7 @@ class TestSphericalGeostrophicVelocityMasks:
         mask = make_mask_2d()
         grid = make_spherical_grid_2d()
         op = SphericalDifference2D(grid=grid, mask=mask)
-        wet = np.asarray(mask.h)
+        wet = np.asarray(mask.wet())
         # f[j, i] = -1 on wet cells, +1 on dry cells, so every coastal face
         # averages to f_on_face = 0 if the guard were applied before averaging
         f = jnp.where(wet, -1.0, 1.0)
@@ -398,7 +398,7 @@ class TestSphericalVorticity2DMasks:
             )
         )
         mask = make_mask_2d()
-        dry = np.asarray(~mask.xy_corner_strict)
+        dry = np.asarray(~mask.wet(at="X", kind="strict"))
         assert not np.isnan(out[dry]).any()
 
     def test_pv_flux_energy_conserving_unmasked(self, op_unmasked):
@@ -560,49 +560,49 @@ class TestDryCellsAreZero:
         mask = make_mask_2d()
         op = SphericalDifference2D(grid=make_spherical_grid_2d(), mask=mask)
         out = np.asarray(op.diff_lon_T_to_U(make_h_field_2d()))
-        assert np.all(out[np.asarray(~mask.u)] == 0.0)
+        assert np.all(out[np.asarray(~mask.wet(at="U"))] == 0.0)
 
     def test_spherical_diff2d_v_output(self):
         mask = make_mask_2d()
         op = SphericalDifference2D(grid=make_spherical_grid_2d(), mask=mask)
         out = np.asarray(op.diff_lat_T_to_V(make_h_field_2d()))
-        assert np.all(out[np.asarray(~mask.v)] == 0.0)
+        assert np.all(out[np.asarray(~mask.wet(at="V"))] == 0.0)
 
     def test_spherical_diff2d_t_output(self):
         mask = make_mask_2d()
         op = SphericalDifference2D(grid=make_spherical_grid_2d(), mask=mask)
         out = np.asarray(op.laplacian_merid(make_h_field_2d()))
-        assert np.all(out[np.asarray(~mask.h)] == 0.0)
+        assert np.all(out[np.asarray(~mask.wet())] == 0.0)
 
     def test_spherical_diff2d_x_output(self):
         mask = make_mask_2d()
         op = SphericalDifference2D(grid=make_spherical_grid_2d(), mask=mask)
         out = np.asarray(op.diff_lon_V_to_X(make_v_field_2d()))
-        assert np.all(out[np.asarray(~mask.xy_corner_strict)] == 0.0)
+        assert np.all(out[np.asarray(~mask.wet(at="X", kind="strict"))] == 0.0)
 
     def test_spherical_diff3d_t_output(self):
         mask = make_mask_3d()
         op = SphericalDifference3D(grid=make_spherical_grid_3d(), mask=mask)
         out = np.asarray(op.laplacian_merid(make_h_field_3d()))
-        assert np.all(out[np.asarray(~mask.h)] == 0.0)
+        assert np.all(out[np.asarray(~mask.wet())] == 0.0)
 
     def test_spherical_div2d_t_output(self):
         mask = make_mask_2d()
         op = SphericalDivergence2D(grid=make_spherical_grid_2d(), mask=mask)
         out = np.asarray(op(make_u_field_2d(), make_v_field_2d()))
-        assert np.all(out[np.asarray(~mask.h)] == 0.0)
+        assert np.all(out[np.asarray(~mask.wet())] == 0.0)
 
     def test_spherical_div3d_t_output(self):
         mask = make_mask_3d()
         op = SphericalDivergence3D(grid=make_spherical_grid_3d(), mask=mask)
         out = np.asarray(op(make_u_field_3d(), make_v_field_3d()))
-        assert np.all(out[np.asarray(~mask.h)] == 0.0)
+        assert np.all(out[np.asarray(~mask.wet())] == 0.0)
 
     def test_spherical_vort2d_x_output(self):
         mask = make_mask_2d()
         op = SphericalVorticity2D(grid=make_spherical_grid_2d(), mask=mask)
         out = np.asarray(op.relative_vorticity(make_u_field_2d(), make_v_field_2d()))
-        assert np.all(out[np.asarray(~mask.xy_corner_strict)] == 0.0)
+        assert np.all(out[np.asarray(~mask.wet(at="X", kind="strict"))] == 0.0)
 
     def test_spherical_vort2d_potential_x_output(self):
         mask = make_mask_2d()
@@ -615,22 +615,22 @@ class TestDryCellsAreZero:
                 make_f_field_2d(),
             )
         )
-        assert np.all(out[np.asarray(~mask.xy_corner_strict)] == 0.0)
+        assert np.all(out[np.asarray(~mask.wet(at="X", kind="strict"))] == 0.0)
 
     def test_spherical_vort3d_x_output(self):
         mask = make_mask_3d()
         op = SphericalVorticity3D(grid=make_spherical_grid_3d(), mask=mask)
         out = np.asarray(op.relative_vorticity(make_u_field_3d(), make_v_field_3d()))
-        assert np.all(out[np.asarray(~mask.xy_corner_strict)] == 0.0)
+        assert np.all(out[np.asarray(~mask.wet(at="X", kind="strict"))] == 0.0)
 
     def test_spherical_lap2d_t_output(self):
         mask = make_mask_2d()
         op = SphericalLaplacian2D(grid=make_spherical_grid_2d(), mask=mask)
         out = np.asarray(op(make_h_field_2d()))
-        assert np.all(out[np.asarray(~mask.h)] == 0.0)
+        assert np.all(out[np.asarray(~mask.wet())] == 0.0)
 
     def test_spherical_lap3d_t_output(self):
         mask = make_mask_3d()
         op = SphericalLaplacian3D(grid=make_spherical_grid_3d(), mask=mask)
         out = np.asarray(op(make_h_field_3d()))
-        assert np.all(out[np.asarray(~mask.h)] == 0.0)
+        assert np.all(out[np.asarray(~mask.wet())] == 0.0)

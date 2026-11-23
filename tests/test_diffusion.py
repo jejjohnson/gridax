@@ -152,7 +152,7 @@ class TestDiffusion2DClass:
 
     def test_masked_class_zeros_dry_interior_block(self, grid):
         """Class API with a Mask2D: wet-interior tendencies match the
-        unmasked class API bit-for-bit (since mask.h is 1 at wet cells),
+        unmasked class API bit-for-bit (since mask.wet() is 1 at wet cells),
         and the dry 2x2 interior block carries exactly zero tendency.
         """
         from gridax import Mask2D
@@ -166,7 +166,7 @@ class TestDiffusion2DClass:
         x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
         h = jnp.broadcast_to(x**2, (grid.Ny, grid.Nx))
         out_masked = np.asarray(diff_masked(h, kappa=0.7))
-        # Dry cells → exact zero via the mask.h final multiply
+        # Dry cells → exact zero via the mask.wet() final multiply
         assert np.all(out_masked[2:4, 2:4] == 0.0)
         # Unmasked path stays bit-identical at mask.none
         np.testing.assert_array_equal(
@@ -242,7 +242,7 @@ class TestDiffusion2DFluxes:
         np.testing.assert_allclose(tendency, div_flux, atol=1e-12)
 
     def test_all_dry_mask_zeros_east_flux(self, grid):
-        """An all-dry Mask2D (mask.u = 0 everywhere) zeros east-face fluxes."""
+        """An all-dry Mask2D (mask.wet(at="U") = 0 everywhere) zeros east-face fluxes."""
         from gridax import Mask2D
 
         all_dry = Mask2D.from_mask(np.zeros((grid.Ny, grid.Nx), dtype=bool))

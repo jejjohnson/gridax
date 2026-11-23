@@ -107,11 +107,11 @@ level:
 | `bc` | Wet–dry face | Use for |
 |---|---|---|
 | `"dirichlet"` (default) | keeps its coefficient; the dry neighbour's value is $0$ | the streamfunction $\psi$ at X points (QG PV inversion), $\psi = 0$ on the coast |
-| `"neumann"` | zero coefficient: no flux | pressure / free surface at T points (pass `mask.h`) |
+| `"neumann"` | zero coefficient: no flux | pressure / free surface at T points (pass `mask.wet()`) |
 
 With `bc="dirichlet"` and `coeff=None` the finest-level operator is exactly
 `masked_laplacian` with dry neighbours zero: for $\psi$ on
-`Mask2D.xy_corner_strict` the wall sits on the dry X nodes next to the wet
+`Mask2D.wet(at="X", kind="strict")` the wall sits on the dry X nodes next to the wet
 ones (index $0$ and $N-2$ on a rectangle built with `from_interior`). The
 wet–dry faces only add to the diagonal,
 

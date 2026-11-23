@@ -59,7 +59,7 @@ class SphericalDivergence2D:
         The underlying 2-D spherical grid.
     mask : Mask2D or None, optional
         Optional land/ocean mask.  Post-compute pattern — the divergence
-        output is multiplied by ``mask.h`` at the end.  Per #209 Q2,
+        output is multiplied by ``mask.wet()`` at the end.  Per #209 Q2,
         this is a Cartesian ``Mask2D`` pending a dedicated
         ``SphericalMask2D`` follow-up.
     """
@@ -92,7 +92,7 @@ class SphericalDivergence2D:
         cos_T = _metric_like(self.grid._cos_lat("T"), u)[1:-1, 1:-1]
         out = interior(_safe_div_cos(du_dlon + dvc_dlat, cos_T, R), u)
         if self.mask is not None:
-            out = out * self.mask.h
+            out = out * self.mask.wet()
         return out
 
 
@@ -121,7 +121,7 @@ class SphericalVorticity2D:
         automatically via the staggered-interp layer.  The sphere-
         specific ``relative_vorticity`` and ``potential_vorticity``
         compute via raw stencils and then post-multiply by
-        ``mask.xy_corner_strict`` at the end.  ``potential_vorticity``
+        ``mask.wet(at="X", kind="strict")`` at the end.  ``potential_vorticity``
         additionally applies a ``jnp.where`` to replace the
         mask-induced NaNs at dry X-corners with exact zero — same
         fix as :class:`Vorticity2D.potential_vorticity`.
@@ -168,7 +168,7 @@ class SphericalVorticity2D:
         cos_X = _metric_like(self.grid._cos_lat("X"), u)[1:-1, 1:-1]
         out = interior(_safe_div_cos(dv_dlon - duc_dlat, cos_X, R), u)
         if self.mask is not None:
-            out = out * self.mask.xy_corner_strict
+            out = out * self.mask.wet(at="X", kind="strict")
         return out
 
     def potential_vorticity(
@@ -194,7 +194,7 @@ class SphericalVorticity2D:
             # 0 at dry corners; divide by 1 there so reverse mode never
             # evaluates 0 * inf (the output is zeroed below anyway).
             # den[j, i] = den[j, i] if xy_corner_strict[j+1, i+1] else 1
-            den = xp.where(self.mask.xy_corner_strict[1:-1, 1:-1], den, 1.0)
+            den = xp.where(self.mask.wet(at="X", kind="strict")[1:-1, 1:-1], den, 1.0)
         pv = xp.where(den == 0, xp.nan, num / den)
         out = interior(pv, u)
         if self.mask is not None:
@@ -202,7 +202,7 @@ class SphericalVorticity2D:
             # X-corner, so every dry corner hit the NaN branch.  Replace
             # those mask-induced NaNs with 0 while preserving the NaN
             # sentinel for genuine zero thickness at wet corners.
-            out = xp.where(self.mask.xy_corner_strict, out, 0.0)
+            out = xp.where(self.mask.wet(at="X", kind="strict"), out, 0.0)
         return out
 
     def pv_flux_energy_conserving(
@@ -222,9 +222,9 @@ class SphericalVorticity2D:
             q,
             u,
             v,
-            wet_x=None if mask is None else mask.xy_corner_strict,
-            wet_u=None if mask is None else mask.u,
-            wet_v=None if mask is None else mask.v,
+            wet_x=None if mask is None else mask.wet(at="X", kind="strict"),
+            wet_u=None if mask is None else mask.wet(at="U"),
+            wet_v=None if mask is None else mask.wet(at="V"),
         )
 
     def pv_flux_enstrophy_conserving(
@@ -238,8 +238,8 @@ class SphericalVorticity2D:
         Same coordinate-independent form as
         :meth:`Vorticity2D.pv_flux_enstrophy_conserving`.
         """
-        q_on_u = self._interp.X_to_U(q)  # already * mask.u under pass-down
-        q_on_v = self._interp.X_to_V(q)  # already * mask.v under pass-down
+        q_on_u = self._interp.X_to_U(q)  # already * mask.wet(at="U") under pass-down
+        q_on_v = self._interp.X_to_V(q)  # already * mask.wet(at="V") under pass-down
         qu = interior(q_on_u[1:-1, 1:-1] * u[1:-1, 1:-1], u)
         qv = interior(q_on_v[1:-1, 1:-1] * v[1:-1, 1:-1], v)
         return qu, qv
@@ -286,7 +286,7 @@ class SphericalLaplacian2D:
         The underlying 2-D spherical grid.
     mask : Mask2D or None, optional
         Optional land/ocean mask.  Post-compute pattern — the output
-        is multiplied by ``mask.h`` at the end.  Per #209 Q2, this is
+        is multiplied by ``mask.wet()`` at the end.  Per #209 Q2, this is
         a Cartesian ``Mask2D`` pending a ``SphericalMask2D`` follow-up.
     """
 
@@ -314,7 +314,7 @@ class SphericalLaplacian2D:
         )
         out = interior(lon_term + lat_term, h)
         if self.mask is not None:
-            out = out * self.mask.h
+            out = out * self.mask.wet()
         return out
 
 
@@ -399,7 +399,7 @@ class SphericalDivergence3D:
     """3-D spherical divergence (vmap over z-levels).
 
     Pattern A (post-compute) — the inner 2-D op is mask-free and the
-    3-D result is post-multiplied by ``mask.h``.
+    3-D result is post-multiplied by ``mask.wet()``.
 
     Parameters
     ----------
@@ -429,7 +429,7 @@ class SphericalDivergence3D:
         """Horizontal divergence at T-points over all z-levels."""
         out = zero_z_ghosts(vmap(self._div2d)(u, v))
         if self.mask is not None:
-            out = out * self.mask.h
+            out = out * self.mask.wet()
         return out
 
 
@@ -438,7 +438,7 @@ class SphericalVorticity3D:
     """3-D spherical vorticity (vmap over z-levels).
 
     Pattern A (post-compute) — the inner 2-D op is mask-free and the
-    3-D result is post-multiplied by ``mask.xy_corner_strict``.
+    3-D result is post-multiplied by ``mask.wet(at="X", kind="strict")``.
 
     Parameters
     ----------
@@ -468,7 +468,7 @@ class SphericalVorticity3D:
         """Relative vorticity at X-points over all z-levels."""
         out = zero_z_ghosts(vmap(self._vort2d.relative_vorticity)(u, v))
         if self.mask is not None:
-            out = out * self.mask.xy_corner_strict
+            out = out * self.mask.wet(at="X", kind="strict")
         return out
 
 
@@ -477,7 +477,7 @@ class SphericalLaplacian3D:
     """3-D spherical Laplacian (vmap over z-levels).
 
     Pattern A (post-compute) — the inner 2-D op is mask-free and the
-    3-D result is post-multiplied by ``mask.h``.
+    3-D result is post-multiplied by ``mask.wet()``.
 
     Parameters
     ----------
@@ -503,5 +503,5 @@ class SphericalLaplacian3D:
         """Laplacian at T-points over all z-levels."""
         out = zero_z_ghosts(vmap(self._lap2d)(h))
         if self.mask is not None:
-            out = out * self.mask.h
+            out = out * self.mask.wet()
         return out

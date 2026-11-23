@@ -165,8 +165,8 @@ def make_h_mask_2d() -> Bool[np.ndarray, "Ny Nx"]:
         L L L L L L L L L L L L L L L L L L
 
     The interior island is non-rectangular (cross-shaped) so the derived
-    ``mask.xy_corner_strict`` (strict 4-of-4 corner mask) actually differs
-    from ``mask.h`` near the corners — this exercises the staggered-mask
+    ``mask.wet(at="X", kind="strict")`` (strict 4-of-4 corner mask) actually differs
+    from ``mask.wet()`` near the corners — this exercises the staggered-mask
     propagation.
     """
     h = np.zeros((NY, NX), dtype=bool)
@@ -189,7 +189,7 @@ def make_h_mask_3d() -> Bool[np.ndarray, "Nz Ny Nx"]:
 
     This gives each z-slice the same coastline geometry as the 2-D mask
     while still exercising the vertical-face (``w``) mask — the ghost
-    ring at ``k=0`` and ``k=Nz-1`` is dry, so ``mask.w`` is non-trivial
+    ring at ``k=0`` and ``k=Nz-1`` is dry, so ``mask.wet(at="W")`` is non-trivial
     near the top/bottom.
     """
     h2 = make_h_mask_2d()

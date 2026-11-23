@@ -197,7 +197,7 @@ def build_capacitance_solver(
     if base_bc not in ("fft", "dst", "dct"):
         raise ValueError(f"base_bc must be 'fft', 'dst', or 'dct'; got {base_bc!r}")
     if isinstance(mask, Mask2D):
-        mask = np.asarray(mask.xy_corner_strict)
+        mask = np.asarray(mask.wet(at="X", kind="strict"))
     wet = np.asarray(mask) > 0.5  # [Ny, Nx], concrete
     if not wet.any():
         raise ValueError("The mask has no wet (True) cells.")

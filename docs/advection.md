@@ -358,10 +358,10 @@ reuses it.
   "Mask tier" column above), so no chosen stencil reads a land cell.
   `naive` reads only the two cells beside the face and needs no ladder.
 - **No flux through a dry face.**  The face fluxes on every face with
-  `mask.u` / `mask.v` false are zeroed before the divergence, as in
+  `mask.wet(at="U")` / `mask.wet(at="V")` false are zeroed before the divergence, as in
   `Diffusion2D`, so no mass crosses the coastline: in a closed basin
   $\sum A\,\partial_t\bar q = 0$ to rounding.
-- **Dry output is exactly zero** (`jnp.where(mask.h, out, 0)`), and an
+- **Dry output is exactly zero** (`jnp.where(mask.wet(), out, 0)`), and an
   all-ocean mask reproduces `mask=None` bit for bit.
 - `wall="open"` together with a mask raises `NotImplementedError`.
 
@@ -377,7 +377,7 @@ wet[7:11, 7:11] = False  # an island
 mask = Mask2D.from_mask(wet)
 adv = Advection2D(grid=grid, mask=mask)  # hierarchy built once, here
 
-h = jnp.where(mask.h, 1.0, jnp.nan)  # NaN on land is fine
+h = jnp.where(mask.wet(), 1.0, jnp.nan)  # NaN on land is fine
 u = jnp.ones((grid.Ny, grid.Nx))  # [Ny, Nx] U-points
 v = 0.5 * jnp.ones((grid.Ny, grid.Nx))  # [Ny, Nx] V-points
 for method in ("naive", "upwind3", "weno5", "weno9", "van_leer"):

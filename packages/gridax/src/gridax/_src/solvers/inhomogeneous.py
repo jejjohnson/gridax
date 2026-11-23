@@ -8,7 +8,7 @@ Where the known values sit
 The prescribed values live on the **coast ring**: the dry cells 4-adjacent
 to a wet cell.  That is where :func:`~gridax.solvers.masked_laplacian` (and so
 ``method="cg"``) puts its homogeneous Dirichlet wall -- for ψ on the X points
-of a ``Mask2D.xy_corner_strict`` mask, the C-grid wall nodes.  Every wet
+of a ``Mask2D.wet(at="X", kind="strict")`` mask, the C-grid wall nodes.  Every wet
 cell stays an unknown unless ``known_mask`` pins it.
 
 Primitives
@@ -80,7 +80,7 @@ def coast_ring(mask: Float[Array, "Ny Nx"]) -> Bool[Array, "Ny Nx"]:
     This is where :func:`~gridax.solvers.masked_laplacian` imposes its
     homogeneous Dirichlet wall (a dry neighbour reads as zero), so it is
     where prescribed (known) values sit.  For ψ on a ``from_interior``
-    rectangle (``Mask2D.xy_corner_strict`` wet on ``[1:-2, 1:-2]``) it is the
+    rectangle (``Mask2D.wet(at="X", kind="strict")`` wet on ``[1:-2, 1:-2]``) it is the
     C-grid wall: X rows / columns ``0`` and ``N-2`` (corners excluded).
 
     Uses pad-then-slice (cells outside the array count as dry), so it never
@@ -166,7 +166,7 @@ class SolveDomain(eqx.Module):
         # Keep the masks boolean: a float32 copy would downcast a weakly
         # typed float64 field it multiplies (the lifting uses jnp.where).
         if isinstance(mask, Mask2D):
-            mask_arr = jnp.asarray(mask.xy_corner_strict, dtype=bool)
+            mask_arr = jnp.asarray(mask.wet(at="X", kind="strict"), dtype=bool)
         else:
             mask_arr = jnp.asarray(mask) > 0.5
 

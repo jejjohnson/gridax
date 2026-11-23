@@ -131,8 +131,8 @@ class Coriolis2D:
         xp = array_namespace(u, v, f)
         if self.mask is not None:
             # zero dry faces before any stencil reads them (NaN-filled land)
-            u = xp.where(self.mask.u, u, 0.0)
-            v = xp.where(self.mask.v, v, 0.0)
+            u = xp.where(self.mask.wet(at="U"), u, 0.0)
+            v = xp.where(self.mask.wet(at="V"), v, 0.0)
         # f_X[j+1/2, i+1/2] = 1/4 (f[j, i] + f[j+1, i] + f[j, i+1] + f[j+1, i+1])
         #   X rows / cols 0 .. N-2 (the south / west ghost corners included)
         f_x = 0.25 * (
@@ -151,8 +151,8 @@ class Coriolis2D:
         dv_cor = interior(-0.5 * (q[..., 1:, 1:] + q[..., 1:, :-1]), v)
 
         if self.mask is not None:
-            du_cor = xp.where(self.mask.u, du_cor, 0.0)
-            dv_cor = xp.where(self.mask.v, dv_cor, 0.0)
+            du_cor = xp.where(self.mask.wet(at="U"), du_cor, 0.0)
+            dv_cor = xp.where(self.mask.wet(at="V"), dv_cor, 0.0)
 
         return du_cor, dv_cor
 
@@ -172,7 +172,7 @@ class Coriolis3D:
     mask : Mask3D or None, optional
         Optional land/ocean mask.  Pattern A (post-compute) — the
         inner :class:`Coriolis2D` is constructed ``mask=None`` and
-        the 3-D result is post-multiplied by ``mask.u`` / ``mask.v``
+        the 3-D result is post-multiplied by ``mask.wet(at="U")`` / ``mask.wet(at="V")``
         after the vmap.
 
         Takes a :class:`Mask3D` (not ``Mask2D``): even though ``f``
@@ -236,13 +236,13 @@ class Coriolis3D:
             ``(du_cor, dv_cor)`` — Coriolis tendencies at U-points and
             V-points, both zero in the ghost ring.  When ``self.mask``
             is set, ``du_cor`` is zeroed at dry U-faces via
-            ``* mask.u`` and ``dv_cor`` at dry V-faces via ``* mask.v``.
+            ``* mask.wet(at="U")`` and ``dv_cor`` at dry V-faces via ``* mask.wet(at="V")``.
         """
         xp = array_namespace(u, v, f)
         if self.mask is not None:
             # zero dry faces before the stencil, as Coriolis2D does
-            u = xp.where(self.mask.u, u, 0.0)
-            v = xp.where(self.mask.v, v, 0.0)
+            u = xp.where(self.mask.wet(at="U"), u, 0.0)
+            v = xp.where(self.mask.wet(at="V"), v, 0.0)
         # Vmap the 2D Coriolis operator over z-levels.
         # f is 2D (depth-independent) and broadcast to each z-slice.
         du_cor, dv_cor = vmap(lambda u_k, v_k: self._cor2d(u_k, v_k, f))(u, v)
@@ -252,7 +252,7 @@ class Coriolis3D:
         dv_cor = zero_z_ghosts(dv_cor)
 
         if self.mask is not None:
-            du_cor = du_cor * self.mask.u
-            dv_cor = dv_cor * self.mask.v
+            du_cor = du_cor * self.mask.wet(at="U")
+            dv_cor = dv_cor * self.mask.wet(at="V")
 
         return du_cor, dv_cor

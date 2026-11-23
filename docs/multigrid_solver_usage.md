@@ -77,7 +77,7 @@ the pressure / free-surface problem on the T-point mask.
 # Pressure at T points, zero normal flux at the coast.  At lambda_ = 0 the
 # solution is returned in the zero-mean gauge on each wet component.
 p_solver = gs.build_multigrid_solver(
-    np.asarray(cgrid_mask.h, dtype=float), dx, dy, lambda_=0.0, bc="neumann"
+    np.asarray(cgrid_mask.wet(), dtype=float), dx, dy, lambda_=0.0, bc="neumann"
 )
 ```
 

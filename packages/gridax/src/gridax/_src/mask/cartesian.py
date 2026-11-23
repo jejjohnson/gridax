@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING, Any
 from jaxtyping import Bool, Float, Int
 import numpy as np
 
+from gridax._src.grid.points import Stagger, point_axes
 from gridax._src.mask.base import (
     StencilCapability1D,
     StencilCapability2D,
@@ -52,6 +53,29 @@ if TYPE_CHECKING:
     from jaxtyping import Array
 else:
     Array = np.ndarray
+
+
+def _wet(mask: Any, axes: tuple[str, ...], at: str | Stagger, kind: str) -> Any:
+    """``mask.wet``: the stored array of a point, and of a kind of corner."""
+    staggered = point_axes(at, axes)
+    if staggered == ("x", "y"):
+        name = "_xy_corner" if kind == "default" else f"_xy_corner_{kind}"
+        if hasattr(mask, name):
+            return getattr(mask, name)
+        kinds = ("default", "strict", "y_wall", "x_wall", "convex", "valid")
+        raise ValueError(f"kind must be one of {kinds} at X, got {kind!r}")
+    if kind != "default":
+        raise ValueError(f"kind={kind!r} exists at X only, not at {at!r}")
+    if not staggered:
+        return mask._h
+    return getattr(mask, {"x": "_u", "y": "_v", "z": "_w"}[staggered[0]])
+
+
+def _check_grid_shape(grid: Any, wet_t: Any) -> None:
+    if np.shape(wet_t) != grid.shape:
+        raise ValueError(
+            f"wet_t has shape {np.shape(wet_t)}, and the grid {grid.shape}"
+        )
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -94,22 +118,43 @@ class Mask1D:
         Directional contiguous-wet-cell counts on the h-grid.
     """
 
-    h: Bool[Array, "Nx"]
-    u: Bool[Array, "Nx"]
+    _h: Bool[Array, "Nx"]
+    _u: Bool[Array, "Nx"]
     classification: Int[Array, "Nx"]
     stencil_capability: StencilCapability1D
 
-    # ── inverted masks (derived, not stored) ─────────────────────────────────
+    # ── wet points ───────────────────────────────────────────────────────────
 
-    @property
-    def not_h(self) -> Bool[Array, "Nx"]:
-        """Logical inverse of ``h`` (dry where ``h`` is wet)."""
-        return ~self.h
+    def wet(
+        self, *, at: str | Stagger = "T", kind: str = "default"
+    ) -> Bool[Array, "Nx"]:
+        """The wet points at a point of the staggering; ``True`` = wet.
 
-    @property
-    def not_u(self) -> Bool[Array, "Nx"]:
-        """Logical inverse of ``u`` (dry where ``u`` is wet)."""
-        return ~self.u
+        Parameters
+        ----------
+        at : str or Stagger
+            The point, ``"T"`` or ``"U"``, or a field's stagger (``CField.stagger``).
+        kind : str
+            ``"default"``, the only one in 1-D.
+
+        Returns
+        -------
+        Bool[Array, "Nx"]
+
+        Raises
+        ------
+        ValueError
+            If the mask has no such point or kind.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from gridax import Mask1D
+        >>> mask = Mask1D.from_mask(np.ones((4,), dtype=bool))
+        >>> int(mask.wet().sum()), int(mask.wet(at="U").sum())
+        (4, 3)
+        """
+        return _wet(self, ("x",), at, kind)
 
     # ── Boolean accessors for land/coast classification ───────────────────────
 
@@ -136,7 +181,7 @@ class Mask1D:
     @property
     def ind_boundary(self) -> Bool[Array, "Nx"]:
         """Boolean mask: outermost domain-boundary endpoints."""
-        (Nx,) = self.h.shape
+        (Nx,) = self._h.shape
         bnd = np.zeros((Nx,), dtype=bool)
         bnd[0] = True
         bnd[-1] = True
@@ -246,12 +291,47 @@ class Mask1D:
         # NumPy arrays fill fields the type checker reads as JAX arrays: the
         # type a consumer sees once JAX has flattened the mask.
         fields: dict[str, Any] = {
-            "h": h_np,
-            "u": u_np,
+            "_h": h_np,
+            "_u": u_np,
             "classification": classification,
             "stencil_capability": sc,
         }
         return cls(**fields)
+
+    @classmethod
+    def from_grid(
+        cls,
+        grid: Any,
+        wet_t: np.ndarray | Bool[Array, "Nx"],
+    ) -> Mask1D:
+        """Construct from the wet T points of a grid.
+
+        Parameters
+        ----------
+        grid : CartesianCGrid1D
+            The grid the mask is for.
+        wet_t : array-like [Nx]
+            Wet (``True``) / dry mask at the T points, ghost ring included.
+
+        Returns
+        -------
+        Mask1D
+
+        Raises
+        ------
+        ValueError
+            If the shape of ``wet_t`` is not the grid's.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from gridax import CartesianCGrid1D, Mask1D
+        >>> grid = CartesianCGrid1D.from_interior(4, 1.0)
+        >>> Mask1D.from_grid(grid, np.ones(grid.shape)).wet().shape == grid.shape
+        True
+        """
+        _check_grid_shape(grid, wet_t)
+        return cls.from_mask(wet_t)
 
     @classmethod
     def from_center(
@@ -402,17 +482,17 @@ class Mask2D:
     """
 
     # ── staggered masks ───────────────────────────────────────────────────────
-    h: Bool[Array, "Ny Nx"]
-    u: Bool[Array, "Ny Nx"]
-    v: Bool[Array, "Ny Nx"]
-    xy_corner: Bool[Array, "Ny Nx"]
-    xy_corner_strict: Bool[Array, "Ny Nx"]
+    _h: Bool[Array, "Ny Nx"]
+    _u: Bool[Array, "Ny Nx"]
+    _v: Bool[Array, "Ny Nx"]
+    _xy_corner: Bool[Array, "Ny Nx"]
+    _xy_corner_strict: Bool[Array, "Ny Nx"]
 
     # ── corner boundary classification ────────────────────────────────────────
-    xy_corner_y_wall: Bool[Array, "Ny Nx"]
-    xy_corner_x_wall: Bool[Array, "Ny Nx"]
-    xy_corner_convex: Bool[Array, "Ny Nx"]
-    xy_corner_valid: Bool[Array, "Ny Nx"]
+    _xy_corner_y_wall: Bool[Array, "Ny Nx"]
+    _xy_corner_x_wall: Bool[Array, "Ny Nx"]
+    _xy_corner_convex: Bool[Array, "Ny Nx"]
+    _xy_corner_valid: Bool[Array, "Ny Nx"]
 
     # ── land/coast classification ─────────────────────────────────────────────
     classification: Int[Array, "Ny Nx"]
@@ -423,32 +503,40 @@ class Mask2D:
     # ── optional arrays ───────────────────────────────────────────────────────
     k_bottom: Array | None = None
 
-    # ── inverted masks (derived, not stored) ─────────────────────────────────
+    # ── wet points ───────────────────────────────────────────────────────────
 
-    @property
-    def not_h(self) -> Bool[Array, "Ny Nx"]:
-        """Logical inverse of ``h`` (dry where ``h`` is wet)."""
-        return ~self.h
+    def wet(
+        self, *, at: str | Stagger = "T", kind: str = "default"
+    ) -> Bool[Array, "Ny Nx"]:
+        """The wet points at a point of the staggering; ``True`` = wet.
 
-    @property
-    def not_u(self) -> Bool[Array, "Ny Nx"]:
-        """Logical inverse of ``u`` (dry where ``u`` is wet)."""
-        return ~self.u
+        Parameters
+        ----------
+        at : str or Stagger
+            The point, ``"T"``, ``"U"``, ``"V"`` or ``"X"``, or a field's stagger (``CField.stagger``).
+        kind : str
+            At X only: ``"default"`` (at least one of the four cells is wet),
+            ``"strict"`` (all four are), ``"y_wall"``, ``"x_wall"``,
+            ``"convex"`` or ``"valid"``.
 
-    @property
-    def not_v(self) -> Bool[Array, "Ny Nx"]:
-        """Logical inverse of ``v`` (dry where ``v`` is wet)."""
-        return ~self.v
+        Returns
+        -------
+        Bool[Array, "Ny Nx"]
 
-    @property
-    def not_xy_corner(self) -> Bool[Array, "Ny Nx"]:
-        """Logical inverse of ``xy_corner`` (dry where ``xy_corner`` is wet)."""
-        return ~self.xy_corner
+        Raises
+        ------
+        ValueError
+            If the mask has no such point or kind.
 
-    @property
-    def not_xy_corner_strict(self) -> Bool[Array, "Ny Nx"]:
-        """Logical inverse of ``xy_corner_strict`` (dry where ``xy_corner_strict`` is wet)."""
-        return ~self.xy_corner_strict
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from gridax import Mask2D
+        >>> mask = Mask2D.from_mask(np.ones((4, 4), dtype=bool))
+        >>> int(mask.wet().sum()), int(mask.wet(at="U").sum())
+        (16, 12)
+        """
+        return _wet(self, ("y", "x"), at, kind)
 
     # ── Boolean accessors for land/coast classification ───────────────────────
 
@@ -475,7 +563,7 @@ class Mask2D:
     @property
     def ind_boundary(self) -> Bool[Array, "Ny Nx"]:
         """Boolean mask: outermost domain-boundary ring."""
-        Ny, Nx = self.h.shape
+        Ny, Nx = self._h.shape
         bnd = np.zeros((Ny, Nx), dtype=bool)
         bnd[0, :] = True
         bnd[-1, :] = True
@@ -558,11 +646,11 @@ class Mask2D:
         source : {'h', 'u', 'v', 'xy_corner', 'xy_corner_strict'}
         """
         grid_map = {
-            "h": self.h,
-            "u": self.u,
-            "v": self.v,
-            "xy_corner": self.xy_corner,
-            "xy_corner_strict": self.xy_corner_strict,
+            "h": self._h,
+            "u": self._u,
+            "v": self._v,
+            "xy_corner": self._xy_corner,
+            "xy_corner_strict": self._xy_corner_strict,
         }
         if source not in grid_map:
             raise ValueError(
@@ -679,20 +767,59 @@ class Mask2D:
         # NumPy arrays fill fields the type checker reads as JAX arrays: the
         # type a consumer sees once JAX has flattened the mask.
         fields: dict[str, Any] = {
-            "h": h_np,
-            "u": u_np,
-            "v": v_np,
-            "xy_corner": xy_corner_np,
-            "xy_corner_strict": xy_corner_strict_np,
-            "xy_corner_y_wall": xy_corner_y_wall,
-            "xy_corner_x_wall": xy_corner_x_wall,
-            "xy_corner_convex": xy_corner_convex,
-            "xy_corner_valid": xy_corner_valid,
+            "_h": h_np,
+            "_u": u_np,
+            "_v": v_np,
+            "_xy_corner": xy_corner_np,
+            "_xy_corner_strict": xy_corner_strict_np,
+            "_xy_corner_y_wall": xy_corner_y_wall,
+            "_xy_corner_x_wall": xy_corner_x_wall,
+            "_xy_corner_convex": xy_corner_convex,
+            "_xy_corner_valid": xy_corner_valid,
             "classification": classification,
             "stencil_capability": sc,
             "k_bottom": np.asarray(k_bottom) if k_bottom is not None else None,
         }
         return cls(**fields)
+
+    @classmethod
+    def from_grid(
+        cls,
+        grid: Any,
+        wet_t: np.ndarray | Bool[Array, "Ny Nx"],
+        *,
+        k_bottom: Array | None = None,
+    ) -> Mask2D:
+        """Construct from the wet T points of a grid.
+
+        Parameters
+        ----------
+        grid : CartesianCGrid2D or SphericalCGrid2D
+            The grid the mask is for.
+        wet_t : array-like [Ny Nx]
+            Wet (``True``) / dry mask at the T points, ghost ring included.
+        k_bottom : array-like [Ny, Nx], optional
+            Vertical sea-floor indices. See :meth:`from_mask`.
+
+        Returns
+        -------
+        Mask2D
+
+        Raises
+        ------
+        ValueError
+            If the shape of ``wet_t`` is not the grid's.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from gridax import CartesianCGrid2D, Mask2D
+        >>> grid = CartesianCGrid2D.from_interior(4, 4, 1.0, 1.0)
+        >>> Mask2D.from_grid(grid, np.ones(grid.shape)).wet().shape == grid.shape
+        True
+        """
+        _check_grid_shape(grid, wet_t)
+        return cls.from_mask(wet_t, k_bottom=k_bottom)
 
     @classmethod
     def from_center(
@@ -876,7 +1003,7 @@ class Mask2D:
         >>> depth = np.full((6, 6), 100.0)
         >>> depth[2:4, 2:4] = -5.0  # an island
         >>> mask = Mask2D.from_bathymetry(depth, min_depth=10.0)
-        >>> int(mask.h.sum())
+        >>> int(mask.wet().sum())
         32
         """
         depth_np = np.asarray(depth, dtype=float)
@@ -981,18 +1108,18 @@ class Mask3D:
     """
 
     # ── staggered masks ───────────────────────────────────────────────────────
-    h: Bool[Array, "Nz Ny Nx"]
-    u: Bool[Array, "Nz Ny Nx"]
-    v: Bool[Array, "Nz Ny Nx"]
-    w: Bool[Array, "Nz Ny Nx"]
-    xy_corner: Bool[Array, "Nz Ny Nx"]
-    xy_corner_strict: Bool[Array, "Nz Ny Nx"]
+    _h: Bool[Array, "Nz Ny Nx"]
+    _u: Bool[Array, "Nz Ny Nx"]
+    _v: Bool[Array, "Nz Ny Nx"]
+    _w: Bool[Array, "Nz Ny Nx"]
+    _xy_corner: Bool[Array, "Nz Ny Nx"]
+    _xy_corner_strict: Bool[Array, "Nz Ny Nx"]
 
     # ── corner boundary classification (per z-level) ──────────────────────────
-    xy_corner_y_wall: Bool[Array, "Nz Ny Nx"]
-    xy_corner_x_wall: Bool[Array, "Nz Ny Nx"]
-    xy_corner_convex: Bool[Array, "Nz Ny Nx"]
-    xy_corner_valid: Bool[Array, "Nz Ny Nx"]
+    _xy_corner_y_wall: Bool[Array, "Nz Ny Nx"]
+    _xy_corner_x_wall: Bool[Array, "Nz Ny Nx"]
+    _xy_corner_convex: Bool[Array, "Nz Ny Nx"]
+    _xy_corner_valid: Bool[Array, "Nz Ny Nx"]
 
     # ── land/coast classification ─────────────────────────────────────────────
     classification: Int[Array, "Nz Ny Nx"]
@@ -1003,37 +1130,40 @@ class Mask3D:
     # ── optional arrays ───────────────────────────────────────────────────────
     k_bottom: Array | None = None
 
-    # ── inverted masks (derived, not stored) ─────────────────────────────────
+    # ── wet points ───────────────────────────────────────────────────────────
 
-    @property
-    def not_h(self) -> Bool[Array, "Nz Ny Nx"]:
-        """Logical inverse of ``h`` (dry where ``h`` is wet)."""
-        return ~self.h
+    def wet(
+        self, *, at: str | Stagger = "T", kind: str = "default"
+    ) -> Bool[Array, "Nz Ny Nx"]:
+        """The wet points at a point of the staggering; ``True`` = wet.
 
-    @property
-    def not_u(self) -> Bool[Array, "Nz Ny Nx"]:
-        """Logical inverse of ``u`` (dry where ``u`` is wet)."""
-        return ~self.u
+        Parameters
+        ----------
+        at : str or Stagger
+            The point, ``"T"``, ``"U"``, ``"V"``, ``"X"`` or ``"W"``, or a field's stagger (``CField.stagger``).
+        kind : str
+            At X only: ``"default"`` (at least one of the four cells is wet),
+            ``"strict"`` (all four are), ``"y_wall"``, ``"x_wall"``,
+            ``"convex"`` or ``"valid"``.
 
-    @property
-    def not_v(self) -> Bool[Array, "Nz Ny Nx"]:
-        """Logical inverse of ``v`` (dry where ``v`` is wet)."""
-        return ~self.v
+        Returns
+        -------
+        Bool[Array, "Nz Ny Nx"]
 
-    @property
-    def not_w(self) -> Bool[Array, "Nz Ny Nx"]:
-        """Logical inverse of ``w`` (dry where ``w`` is wet)."""
-        return ~self.w
+        Raises
+        ------
+        ValueError
+            If the mask has no such point or kind.
 
-    @property
-    def not_xy_corner(self) -> Bool[Array, "Nz Ny Nx"]:
-        """Logical inverse of ``xy_corner`` (dry where ``xy_corner`` is wet)."""
-        return ~self.xy_corner
-
-    @property
-    def not_xy_corner_strict(self) -> Bool[Array, "Nz Ny Nx"]:
-        """Logical inverse of ``xy_corner_strict`` (dry where ``xy_corner_strict`` is wet)."""
-        return ~self.xy_corner_strict
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from gridax import Mask3D
+        >>> mask = Mask3D.from_mask(np.ones((3, 4, 4), dtype=bool))
+        >>> int(mask.wet().sum()), int(mask.wet(at="U").sum())
+        (48, 36)
+        """
+        return _wet(self, ("z", "y", "x"), at, kind)
 
     # ── Boolean accessors for land/coast classification ───────────────────────
 
@@ -1060,7 +1190,7 @@ class Mask3D:
     @property
     def ind_boundary(self) -> Bool[Array, "Nz Ny Nx"]:
         """Boolean mask: outermost domain-boundary ring (all six faces)."""
-        Nz, Ny, Nx = self.h.shape
+        Nz, Ny, Nx = self._h.shape
         bnd = np.zeros((Nz, Ny, Nx), dtype=bool)
         bnd[0, :, :] = True
         bnd[-1, :, :] = True
@@ -1225,21 +1355,60 @@ class Mask3D:
         # NumPy arrays fill fields the type checker reads as JAX arrays: the
         # type a consumer sees once JAX has flattened the mask.
         fields: dict[str, Any] = {
-            "h": h_np,
-            "u": u_np,
-            "v": v_np,
-            "w": w_np,
-            "xy_corner": xy_corner_np,
-            "xy_corner_strict": xy_corner_strict_np,
-            "xy_corner_y_wall": xy_corner_y_wall,
-            "xy_corner_x_wall": xy_corner_x_wall,
-            "xy_corner_convex": xy_corner_convex,
-            "xy_corner_valid": xy_corner_valid,
+            "_h": h_np,
+            "_u": u_np,
+            "_v": v_np,
+            "_w": w_np,
+            "_xy_corner": xy_corner_np,
+            "_xy_corner_strict": xy_corner_strict_np,
+            "_xy_corner_y_wall": xy_corner_y_wall,
+            "_xy_corner_x_wall": xy_corner_x_wall,
+            "_xy_corner_convex": xy_corner_convex,
+            "_xy_corner_valid": xy_corner_valid,
             "classification": classification,
             "stencil_capability": sc,
             "k_bottom": np.asarray(k_bottom) if k_bottom is not None else None,
         }
         return cls(**fields)
+
+    @classmethod
+    def from_grid(
+        cls,
+        grid: Any,
+        wet_t: np.ndarray | Bool[Array, "Nz Ny Nx"],
+        *,
+        k_bottom: Array | None = None,
+    ) -> Mask3D:
+        """Construct from the wet T points of a grid.
+
+        Parameters
+        ----------
+        grid : CartesianCGrid3D or SphericalCGrid3D
+            The grid the mask is for.
+        wet_t : array-like [Nz Ny Nx]
+            Wet (``True``) / dry mask at the T points, ghost ring included.
+        k_bottom : array-like [Ny, Nx], optional
+            Vertical sea-floor indices. See :meth:`from_mask`.
+
+        Returns
+        -------
+        Mask3D
+
+        Raises
+        ------
+        ValueError
+            If the shape of ``wet_t`` is not the grid's.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from gridax import CartesianCGrid3D, Mask3D
+        >>> grid = CartesianCGrid3D.from_interior(4, 4, 2, 1.0, 1.0, 1.0)
+        >>> Mask3D.from_grid(grid, np.ones(grid.shape)).wet().shape == grid.shape
+        True
+        """
+        _check_grid_shape(grid, wet_t)
+        return cls.from_mask(wet_t, k_bottom=k_bottom)
 
     @classmethod
     def from_center(

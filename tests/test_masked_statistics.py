@@ -77,14 +77,14 @@ class TestMaskedPerGridpoint:
         std = np.asarray(masked_std(samples, mask2d))
         ref_mean = np.asarray(samples).mean(axis=0)
         ref_std = np.asarray(samples).std(axis=0)
-        wet = np.asarray(mask2d.h)
+        wet = np.asarray(mask2d.wet())
         np.testing.assert_allclose(mean[wet], ref_mean[wet], rtol=1e-6)
         np.testing.assert_allclose(std[wet], ref_std[wet], rtol=1e-5)
 
     def test_dry_cells_are_identity_loc_scale(self, samples, mask2d):
         mean = np.asarray(masked_mean(samples, mask2d))
         std = np.asarray(masked_std(samples, mask2d))
-        dry = ~np.asarray(mask2d.h)
+        dry = ~np.asarray(mask2d.wet())
         assert dry.any()
         np.testing.assert_array_equal(mean[dry], 0.0)
         np.testing.assert_array_equal(std[dry], 1.0)
@@ -97,7 +97,7 @@ class TestMaskedPerGridpoint:
         np.testing.assert_allclose(recovered, samples, rtol=1e-5, atol=1e-6)
 
     def test_land_nan_does_not_leak_into_wet_cells(self, samples, mask2d):
-        poisoned = jnp.where(mask2d.h, samples, jnp.nan)
+        poisoned = jnp.where(mask2d.wet(), samples, jnp.nan)
         mean = np.asarray(masked_mean(poisoned, mask2d))
         std = np.asarray(masked_std(poisoned, mask2d))
         assert np.isfinite(mean).all()
@@ -105,7 +105,7 @@ class TestMaskedPerGridpoint:
         np.testing.assert_allclose(mean, masked_mean(samples, mask2d), rtol=1e-6)
 
     def test_land_inf_does_not_leak_into_wet_cells(self, samples, mask2d):
-        poisoned = jnp.where(mask2d.h, samples, jnp.inf)
+        poisoned = jnp.where(mask2d.wet(), samples, jnp.inf)
         assert np.isfinite(np.asarray(masked_mean(poisoned, mask2d))).all()
         assert np.isfinite(np.asarray(masked_std(poisoned, mask2d))).all()
 
@@ -113,7 +113,7 @@ class TestMaskedPerGridpoint:
 class TestMaskedScalarReduction:
     def test_divides_by_the_wet_count_not_the_cell_count(self, samples, mask2d):
         got = float(masked_mean(samples, mask2d, axis=(0, -2, -1)))
-        wet = np.asarray(mask2d.h)
+        wet = np.asarray(mask2d.wet())
         expected = np.asarray(samples)[:, wet].mean()
         assert got == pytest.approx(expected, rel=1e-5)
         # The naive all-cells mean is a genuinely different number.
@@ -122,12 +122,12 @@ class TestMaskedScalarReduction:
     def test_std_excludes_land_from_the_deviation_sum(self, samples, mask2d):
         """Land must not contribute ``(0 - mean)**2`` to the variance."""
         got = float(masked_std(samples, mask2d, axis=(0, -2, -1)))
-        wet = np.asarray(mask2d.h)
+        wet = np.asarray(mask2d.wet())
         expected = np.asarray(samples)[:, wet].std()
         assert got == pytest.approx(expected, rel=1e-5)
 
     def test_land_sentinels_do_not_leak_into_the_scalar(self, samples, mask2d):
-        poisoned = jnp.where(mask2d.h, samples, jnp.nan)
+        poisoned = jnp.where(mask2d.wet(), samples, jnp.nan)
         got = float(masked_mean(poisoned, mask2d, axis=(0, -2, -1)))
         assert np.isfinite(got)
         assert got == pytest.approx(
@@ -154,34 +154,36 @@ class TestVarianceFloor:
         np.testing.assert_array_equal(np.asarray(std), 1.0)
 
     def test_dividing_by_the_scale_is_always_finite(self, samples, mask2d):
-        constant = jnp.where(mask2d.h, 3.0, jnp.nan) * jnp.ones((NSAMPLE, 1, 1))
+        constant = jnp.where(mask2d.wet(), 3.0, jnp.nan) * jnp.ones((NSAMPLE, 1, 1))
         mean, std = masked_moments(constant, mask2d)
         assert np.isfinite(
-            np.asarray((constant - mean) / std)[:, np.asarray(mask2d.h)]
+            np.asarray((constant - mean) / std)[:, np.asarray(mask2d.wet())]
         ).all()
 
 
 class TestStaggeringLocations:
-    @pytest.mark.parametrize("location", ["h", "u", "v", "xy_corner"])
-    def test_uses_the_named_c_grid_mask(self, samples, mask2d, location):
-        mean = np.asarray(masked_mean(samples, mask2d, location=location))
-        expected_dry = ~np.asarray(getattr(mask2d, location))
+    @pytest.mark.parametrize("at", ["T", "U", "V", "X"])
+    def test_uses_the_named_c_grid_mask(self, samples, mask2d, at):
+        mean = np.asarray(masked_mean(samples, mask2d, at=at))
+        expected_dry = ~np.asarray(mask2d.wet(at=at))
         np.testing.assert_array_equal(mean[expected_dry], 0.0)
 
     def test_u_and_v_masks_differ_from_h(self, samples, mask2d):
-        """Otherwise the location kwarg would be silently doing nothing."""
-        assert not np.array_equal(np.asarray(mask2d.u), np.asarray(mask2d.h))
-        mean_h = np.asarray(masked_mean(samples, mask2d, location="h"))
-        mean_u = np.asarray(masked_mean(samples, mask2d, location="u"))
+        """Otherwise the at kwarg would be silently doing nothing."""
+        assert not np.array_equal(
+            np.asarray(mask2d.wet(at="U")), np.asarray(mask2d.wet())
+        )
+        mean_h = np.asarray(masked_mean(samples, mask2d, at="T"))
+        mean_u = np.asarray(masked_mean(samples, mask2d, at="U"))
         assert not np.allclose(mean_h, mean_u)
 
-    def test_unknown_location_is_rejected(self, samples, mask2d):
-        with pytest.raises(ValueError, match="unknown location"):
-            masked_mean(samples, mask2d, location="nope")
+    def test_unknown_point_is_rejected(self, samples, mask2d):
+        with pytest.raises(ValueError, match="at='nope'"):
+            masked_mean(samples, mask2d, at="nope")
 
-    def test_w_location_requires_a_3d_mask(self, samples, mask2d):
-        with pytest.raises(ValueError, match="no 'w' mask"):
-            masked_mean(samples, mask2d, location="w")
+    def test_w_requires_a_3d_mask(self, samples, mask2d):
+        with pytest.raises(ValueError, match="at='W'"):
+            masked_mean(samples, mask2d, at="W")
 
 
 class TestThreeDimensional:
@@ -199,7 +201,7 @@ class TestThreeDimensional:
     def test_per_gridpoint_statistics_on_a_3d_mask(self, samples3d, mask3d):
         mean = np.asarray(masked_mean(samples3d, mask3d))
         assert mean.shape == (3, NY, NX)
-        wet = np.asarray(mask3d.h)
+        wet = np.asarray(mask3d.wet())
         np.testing.assert_allclose(
             mean[wet], np.asarray(samples3d).mean(axis=0)[wet], rtol=1e-6
         )
@@ -209,14 +211,14 @@ class TestThreeDimensional:
         """``axis=(0, -2, -1)`` leaves one number per vertical level."""
         got = masked_mean(samples3d, mask3d, axis=(0, -2, -1))
         assert got.shape == (3,)
-        wet = np.asarray(mask3d.h)
+        wet = np.asarray(mask3d.wet())
         for k in range(3):
             expected = np.asarray(samples3d)[:, k][:, wet[k]].mean()
             assert float(got[k]) == pytest.approx(expected, rel=1e-5)
 
-    def test_w_location_available_on_3d_masks(self, samples3d, mask3d):
-        mean = np.asarray(masked_mean(samples3d, mask3d, location="w"))
-        np.testing.assert_array_equal(mean[~np.asarray(mask3d.w)], 0.0)
+    def test_w_available_on_3d_masks(self, samples3d, mask3d):
+        mean = np.asarray(masked_mean(samples3d, mask3d, at="W"))
+        np.testing.assert_array_equal(mean[~np.asarray(mask3d.wet(at="W"))], 0.0)
 
 
 class TestTransformsAndGradients:
@@ -235,13 +237,13 @@ class TestTransformsAndGradients:
             return jnp.sum(masked_mean(x, mask2d))
 
         g = np.asarray(jax.grad(total)(samples))
-        wet = np.asarray(mask2d.h)
+        wet = np.asarray(mask2d.wet())
         expected = np.broadcast_to(wet / NSAMPLE, g.shape)
         np.testing.assert_allclose(g, expected, rtol=1e-6, atol=1e-7)
 
     def test_grad_is_finite_with_land_sentinels(self, samples, mask2d):
         """A NaN on land must not poison the gradient of the wet cells."""
-        poisoned = jnp.where(mask2d.h, samples, jnp.nan)
+        poisoned = jnp.where(mask2d.wet(), samples, jnp.nan)
 
         def total(x):
             return jnp.sum(masked_mean(x, mask2d))
