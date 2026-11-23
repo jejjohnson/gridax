@@ -189,7 +189,7 @@ from gridax._src.operators.stencils import (
     diff_z_fwd_3d,
 )
 
-__version__ = "0.2.0"  # x-release-please-version
+__version__ = "0.3.0"  # x-release-please-version
 
 # CField is a pipekit carrier from the moment pipekit is imported, by anyone.
 _register()
