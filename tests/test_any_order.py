@@ -201,9 +201,9 @@ def test_masked_and_periodic(scheme: Any) -> None:
 def test_gradient_and_dtype(scheme: Any) -> None:
     n = scheme.order
     tier = scheme.tiers()[0]
-    # the kernel alone: the gradient of ``advect`` compiles for a minute
+    # the kernel alone and not jitted: a wide gradient takes long to compile
     for kernel in (tier.left, tier.right):
-        gradient = jax.jit(jax.grad(lambda q, kernel=kernel: kernel(*q) ** 2))
+        gradient = jax.grad(lambda q, kernel=kernel: kernel(*q) ** 2)
         assert np.isfinite(gradient(jnp.asarray(RNG.normal(size=n)))).all()
         assert np.isfinite(gradient(jnp.full(n, 2.0))).all()
     grid = g.CartesianCGrid1D.from_interior(24, 1.0)
