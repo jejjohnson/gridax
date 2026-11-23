@@ -312,7 +312,7 @@ class TestVorticity2DMasks:
             )
         )
         mask = make_mask_2d()
-        dry = np.asarray(~mask.xy_corner_strict)
+        dry = np.asarray(~mask.wet(at="X", kind="strict"))
         assert not np.isnan(out[dry]).any(), (
             "potential_vorticity produced NaN at dry X-corners — the NaN-safe "
             "branch in Vorticity2D.potential_vorticity is broken."
@@ -414,65 +414,65 @@ class TestDryCellsAreZero:
         mask = make_mask_1d()
         op = Interpolation1D(grid=make_grid_1d(), mask=mask)
         out = np.asarray(op.U_to_T(make_u_field_1d()))
-        assert np.all(out[np.asarray(~mask.h)] == 0.0)
+        assert np.all(out[np.asarray(~mask.wet())] == 0.0)
 
     def test_interp1d_u_output(self):
         mask = make_mask_1d()
         op = Interpolation1D(grid=make_grid_1d(), mask=mask)
         out = np.asarray(op.T_to_U(make_h_field_1d()))
-        assert np.all(out[np.asarray(~mask.u)] == 0.0)
+        assert np.all(out[np.asarray(~mask.wet(at="U"))] == 0.0)
 
     # Interpolation2D
     def test_interp2d_t_output(self):
         mask = make_mask_2d()
         op = Interpolation2D(grid=make_grid_2d(), mask=mask)
         out = np.asarray(op.U_to_T(make_u_field_2d()))
-        assert np.all(out[np.asarray(~mask.h)] == 0.0)
+        assert np.all(out[np.asarray(~mask.wet())] == 0.0)
 
     def test_interp2d_u_output(self):
         mask = make_mask_2d()
         op = Interpolation2D(grid=make_grid_2d(), mask=mask)
         out = np.asarray(op.T_to_U(make_h_field_2d()))
-        assert np.all(out[np.asarray(~mask.u)] == 0.0)
+        assert np.all(out[np.asarray(~mask.wet(at="U"))] == 0.0)
 
     def test_interp2d_v_output(self):
         mask = make_mask_2d()
         op = Interpolation2D(grid=make_grid_2d(), mask=mask)
         out = np.asarray(op.T_to_V(make_h_field_2d()))
-        assert np.all(out[np.asarray(~mask.v)] == 0.0)
+        assert np.all(out[np.asarray(~mask.wet(at="V"))] == 0.0)
 
     def test_interp2d_x_output(self):
         mask = make_mask_2d()
         op = Interpolation2D(grid=make_grid_2d(), mask=mask)
         out = np.asarray(op.T_to_X(make_h_field_2d()))
-        assert np.all(out[np.asarray(~mask.xy_corner_strict)] == 0.0)
+        assert np.all(out[np.asarray(~mask.wet(at="X", kind="strict"))] == 0.0)
 
     # Interpolation3D
     def test_interp3d_t_output(self):
         mask = make_mask_3d()
         op = Interpolation3D(grid=make_grid_3d(), mask=mask)
         out = np.asarray(op.U_to_T(make_u_field_3d()))
-        assert np.all(out[np.asarray(~mask.h)] == 0.0)
+        assert np.all(out[np.asarray(~mask.wet())] == 0.0)
 
     def test_interp3d_u_output(self):
         mask = make_mask_3d()
         op = Interpolation3D(grid=make_grid_3d(), mask=mask)
         out = np.asarray(op.T_to_U(make_h_field_3d()))
-        assert np.all(out[np.asarray(~mask.u)] == 0.0)
+        assert np.all(out[np.asarray(~mask.wet(at="U"))] == 0.0)
 
     # Divergence2D (T-output)
     def test_divergence2d_t_output(self):
         mask = make_mask_2d()
         op = Divergence2D(grid=make_grid_2d(), mask=mask)
         out = np.asarray(op(make_u_field_2d(), make_v_field_2d()))
-        assert np.all(out[np.asarray(~mask.h)] == 0.0)
+        assert np.all(out[np.asarray(~mask.wet())] == 0.0)
 
     # Vorticity2D (X-output)
     def test_vorticity2d_x_output(self):
         mask = make_mask_2d()
         op = Vorticity2D(grid=make_grid_2d(), mask=mask)
         out = np.asarray(op.relative_vorticity(make_u_field_2d(), make_v_field_2d()))
-        assert np.all(out[np.asarray(~mask.xy_corner_strict)] == 0.0)
+        assert np.all(out[np.asarray(~mask.wet(at="X", kind="strict"))] == 0.0)
 
     def test_vorticity2d_potential_x_output(self):
         mask = make_mask_2d()
@@ -485,14 +485,14 @@ class TestDryCellsAreZero:
                 make_f_field_2d(),
             )
         )
-        assert np.all(out[np.asarray(~mask.xy_corner_strict)] == 0.0)
+        assert np.all(out[np.asarray(~mask.wet(at="X", kind="strict"))] == 0.0)
 
     # Vorticity3D (X-output)
     def test_vorticity3d_x_output(self):
         mask = make_mask_3d()
         op = Vorticity3D(grid=make_grid_3d(), mask=mask)
         out = np.asarray(op.relative_vorticity(make_u_field_3d(), make_v_field_3d()))
-        assert np.all(out[np.asarray(~mask.xy_corner_strict)] == 0.0)
+        assert np.all(out[np.asarray(~mask.wet(at="X", kind="strict"))] == 0.0)
 
 
 # ---------------------------------------------------------------------------
@@ -521,12 +521,12 @@ class TestCrossFaceAudit:
     """
 
     CROSS_FACE_SPECS: typing.ClassVar = [
-        ("U_to_V", make_u_field_2d, "v"),
-        ("V_to_U", make_v_field_2d, "u"),
-        ("U_to_X", make_u_field_2d, "xy_corner_strict"),
-        ("V_to_X", make_v_field_2d, "xy_corner_strict"),
-        ("X_to_U", make_q_field_2d, "u"),
-        ("X_to_V", make_q_field_2d, "v"),
+        ("U_to_V", make_u_field_2d, {"at": "V"}),
+        ("V_to_U", make_v_field_2d, {"at": "U"}),
+        ("U_to_X", make_u_field_2d, {"at": "X", "kind": "strict"}),
+        ("V_to_X", make_v_field_2d, {"at": "X", "kind": "strict"}),
+        ("X_to_U", make_q_field_2d, {"at": "U"}),
+        ("X_to_V", make_q_field_2d, {"at": "V"}),
     ]
 
     @pytest.mark.parametrize("method,field_fn,output_stagger", CROSS_FACE_SPECS)
@@ -534,7 +534,7 @@ class TestCrossFaceAudit:
         mask = make_mask_2d()
         op = Interpolation2D(grid=make_grid_2d(), mask=mask)
         out = np.asarray(getattr(op, method)(field_fn()))
-        dry = np.asarray(~getattr(mask, output_stagger))
+        dry = np.asarray(~mask.wet(**output_stagger))
         assert np.all(out[dry] == 0.0), (
             f"Interpolation2D.{method} leaked non-zero values into dry "
             f"{output_stagger} cells under the post-compute convention."
@@ -554,7 +554,7 @@ class TestCrossFaceAudit:
         mask = make_mask_2d()
         op = Interpolation2D(grid=make_grid_2d(), mask=mask)
         out = np.asarray(getattr(op, method)(field_fn()))
-        wet = np.asarray(getattr(mask, output_stagger))
+        wet = np.asarray(mask.wet(**output_stagger))
         assert np.all(np.isfinite(out[wet])), (
             f"Interpolation2D.{method} produced non-finite values at wet "
             f"{output_stagger} cells."

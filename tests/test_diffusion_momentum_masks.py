@@ -14,7 +14,7 @@ API on ``Mask2D`` / ``Mask3D`` class fields:
   twice (``-κ · Dm(Dm(h))``) after zeroing the dry inputs.
 * ``MomentumAdvection2D`` / ``MomentumAdvection3D`` grow a ``mask``
   class field with pass-down into the internal Difference2D /
-  Interpolation2D, plus a final post-multiply by ``mask.u`` / ``mask.v``.
+  Interpolation2D, plus a final post-multiply by ``mask.wet(at="U")`` / ``mask.wet(at="V")``.
 """
 
 from __future__ import annotations
@@ -265,25 +265,25 @@ class TestDryCellsAreZero:
         mask = make_mask_2d()
         op = Diffusion2D(grid=make_grid_2d(), mask=mask)
         out = np.asarray(op(make_h_field_2d(), kappa=1.0))
-        assert np.all(out[np.asarray(~mask.h)] == 0.0)
+        assert np.all(out[np.asarray(~mask.wet())] == 0.0)
 
     def test_diffusion3d(self):
         mask = make_mask_3d()
         op = Diffusion3D(grid=make_grid_3d(), mask=mask)
         out = np.asarray(op(make_h_field_3d(), kappa=1.0))
-        assert np.all(out[np.asarray(~mask.h)] == 0.0)
+        assert np.all(out[np.asarray(~mask.wet())] == 0.0)
 
     def test_biharmonic2d(self):
         mask = make_mask_2d()
         op = BiharmonicDiffusion2D(grid=make_grid_2d(), mask=mask)
         out = np.asarray(op(make_h_field_2d(), kappa=1e-3))
-        assert np.all(out[np.asarray(~mask.h)] == 0.0)
+        assert np.all(out[np.asarray(~mask.wet())] == 0.0)
 
     def test_biharmonic3d(self):
         mask = make_mask_3d()
         op = BiharmonicDiffusion3D(grid=make_grid_3d(), mask=mask)
         out = np.asarray(op(make_h_field_3d(), kappa=1e-3))
-        assert np.all(out[np.asarray(~mask.h)] == 0.0)
+        assert np.all(out[np.asarray(~mask.wet())] == 0.0)
 
     def test_momentum2d(self):
         mask = make_mask_2d()
@@ -291,8 +291,8 @@ class TestDryCellsAreZero:
         du, dv = op(make_u_field_2d(), make_v_field_2d())
         du = np.asarray(du)
         dv = np.asarray(dv)
-        assert np.all(du[np.asarray(~mask.u)] == 0.0)
-        assert np.all(dv[np.asarray(~mask.v)] == 0.0)
+        assert np.all(du[np.asarray(~mask.wet(at="U"))] == 0.0)
+        assert np.all(dv[np.asarray(~mask.wet(at="V"))] == 0.0)
 
     def test_momentum3d(self):
         mask = make_mask_3d()
@@ -300,8 +300,8 @@ class TestDryCellsAreZero:
         du, dv = op(make_u_field_3d(), make_v_field_3d())
         du = np.asarray(du)
         dv = np.asarray(dv)
-        assert np.all(du[np.asarray(~mask.u)] == 0.0)
-        assert np.all(dv[np.asarray(~mask.v)] == 0.0)
+        assert np.all(du[np.asarray(~mask.wet(at="U"))] == 0.0)
+        assert np.all(dv[np.asarray(~mask.wet(at="V"))] == 0.0)
 
 
 # ---------------------------------------------------------------------------

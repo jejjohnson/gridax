@@ -296,28 +296,28 @@ class TestDryCellsAreZero:
         mask = make_mask_2d()
         diff = Difference2D(grid=make_grid_2d(), mask=mask)
         out = np.asarray(diff.laplacian(make_h_field_2d()))
-        dry = np.asarray(~mask.h)
+        dry = np.asarray(~mask.wet())
         assert np.all(out[dry] == 0.0)
 
     def test_u_output_diff_x_T_to_U_2d(self):
         mask = make_mask_2d()
         diff = Difference2D(grid=make_grid_2d(), mask=mask)
         out = np.asarray(diff.diff_x_T_to_U(make_h_field_2d()))
-        dry = np.asarray(~mask.u)
+        dry = np.asarray(~mask.wet(at="U"))
         assert np.all(out[dry] == 0.0)
 
     def test_v_output_diff_y_T_to_V_2d(self):
         mask = make_mask_2d()
         diff = Difference2D(grid=make_grid_2d(), mask=mask)
         out = np.asarray(diff.diff_y_T_to_V(make_h_field_2d()))
-        dry = np.asarray(~mask.v)
+        dry = np.asarray(~mask.wet(at="V"))
         assert np.all(out[dry] == 0.0)
 
     def test_x_output_curl_2d(self):
         mask = make_mask_2d()
         diff = Difference2D(grid=make_grid_2d(), mask=mask)
         out = np.asarray(diff.curl(make_u_field_2d(), make_v_field_2d()))
-        dry = np.asarray(~mask.xy_corner_strict)
+        dry = np.asarray(~mask.wet(at="X", kind="strict"))
         assert np.all(out[dry] == 0.0)
 
     def test_grad_perp_u_and_v_components_2d(self):
@@ -326,26 +326,26 @@ class TestDryCellsAreZero:
         u, v = diff.grad_perp(make_h_field_2d())
         u = np.asarray(u)
         v = np.asarray(v)
-        assert np.all(u[np.asarray(~mask.u)] == 0.0)
-        assert np.all(v[np.asarray(~mask.v)] == 0.0)
+        assert np.all(u[np.asarray(~mask.wet(at="U"))] == 0.0)
+        assert np.all(v[np.asarray(~mask.wet(at="V"))] == 0.0)
 
     def test_t_output_laplacian_1d(self):
         mask = make_mask_1d()
         diff = Difference1D(grid=make_grid_1d(), mask=mask)
         out = np.asarray(diff.laplacian(make_h_field_1d()))
-        dry = np.asarray(~mask.h)
+        dry = np.asarray(~mask.wet())
         assert np.all(out[dry] == 0.0)
 
     def test_u_output_diff_x_T_to_U_1d(self):
         mask = make_mask_1d()
         diff = Difference1D(grid=make_grid_1d(), mask=mask)
         out = np.asarray(diff.diff_x_T_to_U(make_h_field_1d()))
-        dry = np.asarray(~mask.u)
+        dry = np.asarray(~mask.wet(at="U"))
         assert np.all(out[dry] == 0.0)
 
     def test_t_output_divergence_3d(self):
         mask = make_mask_3d()
         diff = Difference3D(grid=make_grid_3d(), mask=mask)
         out = np.asarray(diff.divergence(make_u_field_3d(), make_v_field_3d()))
-        dry = np.asarray(~mask.h)
+        dry = np.asarray(~mask.wet())
         assert np.all(out[dry] == 0.0)

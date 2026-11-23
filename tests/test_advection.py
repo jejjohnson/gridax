@@ -411,7 +411,7 @@ class TestAdvection3DMask:
     def test_weno7_weno9_with_mask_falls_through(self, grid, all_ocean):
         """weno7/weno9 with mask: no masked 3D variant, falls through to unmasked.
 
-        For an all-ocean mask, ``mask.h`` is all 1 so the post-compute
+        For an all-ocean mask, ``mask.wet()`` is all 1 so the post-compute
         multiply is a no-op and the output must bit-match the unmasked path.
         """
         adv_masked = Advection3D(grid=grid, mask=all_ocean)

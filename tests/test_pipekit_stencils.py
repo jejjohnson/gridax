@@ -76,10 +76,10 @@ CASES = [
         (
             f"ApplyMask-{s}",
             fp.ApplyMask(mask=MASK, stagger=s),
-            lambda x, a=a: jnp.where(getattr(MASK, a), x, 0.0),
+            lambda x, s=s, k=k: jnp.where(MASK.wet(at=s, kind=k), x, 0.0),
             1,
         )
-        for s, a in fp.MASK_ATTRIBUTES.items()
+        for s, k in fp.MASK_KINDS.items()
     ],
     (
         "LinComb",

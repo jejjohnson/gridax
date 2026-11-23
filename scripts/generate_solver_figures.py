@@ -2,7 +2,7 @@
 
 Solves the streamfunction Helmholtz problem
 
-    (∇² − λ) ψ = f   on the wet X points of Mask2D.xy_corner_strict,
+    (∇² − λ) ψ = f   on the wet X points of Mask2D.wet(at="X", kind="strict"),
     ψ = 0             on the dry wall / coast X nodes,
 
 (the problem every finitevolX method solves, see docs/elliptic_solvers.md)
@@ -81,7 +81,7 @@ def make_case(geometry: str, n: int) -> dict:
         r_island = np.hypot(X - 0.62, Y - 0.55)
         h &= (r_basin < 0.45) & (r_island > 0.1)
     mask = fvx.Mask2D.from_mask(h)
-    wet = np.asarray(mask.xy_corner_strict, dtype=bool)  # psi (X-point) mask
+    wet = np.asarray(mask.wet(at="X", kind="strict"), dtype=bool)  # psi (X-point) mask
     # X-point coordinates: node i sits at i + 1/2 in T-index units -> x = i dx
     Xq, Yq = np.meshgrid(np.arange(nx) * dx, np.arange(ny) * dy)  # [Ny, Nx]
     f = np.sin(3 * np.pi * Xq) * np.cos(2 * np.pi * Yq) + np.exp(

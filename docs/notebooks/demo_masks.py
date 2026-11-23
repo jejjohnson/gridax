@@ -37,9 +37,9 @@
 # derives all staggered masks, a 4-level land/coast classification,
 # directional stencil capability arrays, and vorticity boundary flags
 # automatically.  All staggered masks use the **same-index positive
-# half-step** convention (matching the grid module): ``mask.u[j, i]``
-# is at ``(j, i + 1/2)``, ``mask.v[j, i]`` at ``(j + 1/2, i)``,
-# ``mask.xy_corner[j, i]`` at ``(j + 1/2, i + 1/2)``.
+# half-step** convention (matching the grid module): ``mask.wet(at="U")[j, i]``
+# is at ``(j, i + 1/2)``, ``mask.wet(at="V")[j, i]`` at ``(j + 1/2, i)``,
+# ``mask.wet(at="X")[j, i]`` at ``(j + 1/2, i + 1/2)``.
 #
 # ### Mask derivation rules
 #
@@ -94,11 +94,11 @@ h_basin[:, 0] = False  # west wall
 h_basin[:, -1] = False  # east wall
 
 masks_basin = Mask2D.from_mask(h_basin)
-print(f"Basin: h shape = {masks_basin.h.shape}")
-print(f"  Wet h-cells: {int(masks_basin.h.sum())}")
-print(f"  Wet u-cells: {int(masks_basin.u.sum())}")
-print(f"  Wet v-cells: {int(masks_basin.v.sum())}")
-print(f"  Wet xy_corner_strict cells: {int(masks_basin.xy_corner_strict.sum())}")
+print(f"Basin: h shape = {masks_basin.wet().shape}")
+print(f"  Wet h-cells: {int(masks_basin.wet().sum())}")
+print(f"  Wet u-cells: {int(masks_basin.wet(at="U").sum())}")
+print(f"  Wet v-cells: {int(masks_basin.wet(at="V").sum())}")
+print(f"  Wet xy_corner_strict cells: {int(masks_basin.wet(at="X", kind="strict").sum())}")
 
 # %%
 # --- Island: basin with a 3x3 island in the centre ---
@@ -111,7 +111,7 @@ h_island[4:7, 4:7] = False  # island
 
 masks_island = Mask2D.from_mask(h_island)
 print(
-    f"Island: h shape = {masks_island.h.shape}, Wet h-cells = {int(masks_island.h.sum())}"
+    f"Island: h shape = {masks_island.wet().shape}, Wet h-cells = {int(masks_island.wet().sum())}"
 )
 
 # %%
@@ -123,8 +123,8 @@ h_channel[:, -1] = False  # north wall
 
 masks_channel = Mask2D.from_mask(h_channel)
 print(
-    f"Channel: h shape = {masks_channel.h.shape}, "
-    f"Wet h-cells = {int(masks_channel.h.sum())}"
+    f"Channel: h shape = {masks_channel.wet().shape}, "
+    f"Wet h-cells = {int(masks_channel.wet().sum())}"
 )
 
 # %%
@@ -141,10 +141,10 @@ h_irregular[2, n - 1] = False
 
 masks_irregular = Mask2D.from_mask(h_irregular)
 print(
-    f"Irregular: h shape = {masks_irregular.h.shape}, Wet h-cells = {int(masks_irregular.h.sum())}"
+    f"Irregular: h shape = {masks_irregular.wet().shape}, Wet h-cells = {int(masks_irregular.wet().sum())}"
 )
 print(
-    f"  Coast cells: {int(masks_irregular.ind_coast.sum())}, strict-corner wet cells: {int(masks_irregular.xy_corner_strict.sum())}"
+    f"  Coast cells: {int(masks_irregular.ind_coast.sum())}, strict-corner wet cells: {int(masks_irregular.wet(at="X", kind="strict").sum())}"
 )
 
 # %% [markdown]
@@ -168,11 +168,11 @@ print(
 def plot_staggered_masks(masks, name, img_dir):
     """Plot the 5 staggered masks + classification in a 2x3 grid."""
     fields = {
-        "h (centre)": masks.h,
-        "u (east face)": masks.u,
-        "v (north face)": masks.v,
-        "xy_corner (lenient)": masks.xy_corner,
-        "xy_corner_strict": masks.xy_corner_strict,
+        "h (centre)": masks.wet(),
+        "u (east face)": masks.wet(at="U"),
+        "v (north face)": masks.wet(at="V"),
+        "xy_corner (lenient)": masks.wet(at="X"),
+        "xy_corner_strict": masks.wet(at="X", kind="strict"),
         "classification": masks.classification,
     }
     fig, axes = plt.subplots(2, 3, figsize=(14, 10))
@@ -219,10 +219,10 @@ all_masks = {
 
 for topo_name, topo_masks in all_masks.items():
     print(f"--- {topo_name} ---")
-    print(f"  h: {topo_masks.h.shape}, wet = {int(topo_masks.h.sum())}")
-    print(f"  u: {topo_masks.u.shape}, wet = {int(topo_masks.u.sum())}")
-    print(f"  v: {topo_masks.v.shape}, wet = {int(topo_masks.v.sum())}")
-    print(f"  xy_corner_strict: {topo_masks.xy_corner_strict.shape}, wet = {int(topo_masks.xy_corner_strict.sum())}")
+    print(f"  h: {topo_masks.wet().shape}, wet = {int(topo_masks.wet().sum())}")
+    print(f"  u: {topo_masks.wet(at="U").shape}, wet = {int(topo_masks.wet(at="U").sum())}")
+    print(f"  v: {topo_masks.wet(at="V").shape}, wet = {int(topo_masks.wet(at="V").sum())}")
+    print(f"  xy_corner_strict: {topo_masks.wet(at="X", kind="strict").shape}, wet = {int(topo_masks.wet(at="X", kind="strict").sum())}")
     plot_staggered_masks(topo_masks, topo_name, IMG_DIR)
     plot_classification(topo_masks, topo_name, IMG_DIR)
 
@@ -293,10 +293,10 @@ for size, mask in sorted(adaptive.items()):
 fig, axes = plt.subplots(1, 4, figsize=(16, 4))
 titles = ["xy_corner_valid", "xy_corner_y_wall", "xy_corner_x_wall", "xy_corner_convex"]
 fields = [
-    masks_island.xy_corner_valid,
-    masks_island.xy_corner_y_wall,
-    masks_island.xy_corner_x_wall,
-    masks_island.xy_corner_convex,
+    masks_island.wet(at="X", kind="valid"),
+    masks_island.wet(at="X", kind="y_wall"),
+    masks_island.wet(at="X", kind="x_wall"),
+    masks_island.wet(at="X", kind="convex"),
 ]
 for ax, title, field in zip(axes, titles, fields, strict=True):
     ax.imshow(np.asarray(field), origin="lower", cmap="Blues", interpolation="nearest")
@@ -320,8 +320,8 @@ plt.show()
 # %%
 masks_simple = Mask2D.from_dimensions(ny=12, nx=12)
 print(
-    f"All-ocean: h shape = {masks_simple.h.shape}, "
-    f"all wet = {bool(masks_simple.h.all())}, "
+    f"All-ocean: h shape = {masks_simple.wet().shape}, "
+    f"all wet = {bool(masks_simple.wet().all())}, "
     f"classification range = [{int(masks_simple.classification.min())}, "
     f"{int(masks_simple.classification.max())}]"
 )
@@ -371,10 +371,10 @@ masks = Mask2D.from_dimensions(ny=grid.Ny, nx=grid.Nx)
 print(f"Grid: {grid.Ny}x{grid.Nx} (8 interior + 2 ghost = 10 per side)")
 print(f"  dx = {grid.spacing("x"):.0f} m, dy = {grid.spacing("y"):.0f} m")
 print(
-    f"Masks: h={int(masks.h.sum())} wet, "
-    f"u={int(masks.u.sum())} wet, "
-    f"v={int(masks.v.sum())} wet, "
-    f"xy_corner_strict={int(masks.xy_corner_strict.sum())} wet"
+    f"Masks: h={int(masks.wet().sum())} wet, "
+    f"u={int(masks.wet(at="U").sum())} wet, "
+    f"v={int(masks.wet(at="V").sum())} wet, "
+    f"xy_corner_strict={int(masks.wet(at="X", kind="strict").sum())} wet"
 )
 
 # %% [markdown]

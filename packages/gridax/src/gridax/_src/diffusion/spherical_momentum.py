@@ -85,7 +85,7 @@ class SphericalMomentumAdvection2D:
         are constructed with the same mask, so every intermediate
         staggered field carries the correct post-compute zero.  The
         final tendencies are additionally post-multiplied by
-        ``mask.u`` / ``mask.v``.  Per #209 Q2 a Cartesian ``Mask2D`` is
+        ``mask.wet(at="U")`` / ``mask.wet(at="V")``.  Per #209 Q2 a Cartesian ``Mask2D`` is
         used pending a dedicated ``SphericalMask2D`` follow-up.
 
     Examples
@@ -225,8 +225,8 @@ class SphericalMomentumAdvection2D:
         dv_adv = interior(-zu_v[2:-2, 2:-2] - dK_dlat[2:-2, 2:-2], v, ghost=2)
 
         if self.mask is not None:
-            du_adv = du_adv * self.mask.u
-            dv_adv = dv_adv * self.mask.v
+            du_adv = du_adv * self.mask.wet(at="U")
+            dv_adv = dv_adv * self.mask.wet(at="V")
         return du_adv, dv_adv
 
 
@@ -246,7 +246,7 @@ class SphericalMomentumAdvection3D:
         Optional 3-D land/ocean mask.  Pattern A (post-compute) — the
         inner :class:`SphericalMomentumAdvection2D` is always built
         ``mask=None`` and the vmap'd 3-D result is post-multiplied by
-        ``mask.u`` / ``mask.v``.
+        ``mask.wet(at="U")`` / ``mask.wet(at="V")``.
     """
 
     grid: SphericalCGrid3D
@@ -293,6 +293,6 @@ class SphericalMomentumAdvection3D:
         du_adv = zero_z_ghosts(du_adv)
         dv_adv = zero_z_ghosts(dv_adv)
         if self.mask is not None:
-            du_adv = du_adv * self.mask.u
-            dv_adv = dv_adv * self.mask.v
+            du_adv = du_adv * self.mask.wet(at="U")
+            dv_adv = dv_adv * self.mask.wet(at="V")
         return du_adv, dv_adv

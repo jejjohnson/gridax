@@ -68,14 +68,14 @@ Masking
 The class operators ``Diffusion2D`` / ``Diffusion3D`` take an optional
 ``mask`` class attribute.  Unlike the simpler post-compute pattern used
 by most other operators in this package, diffusion needs *intermediate*
-flux masking — multiplying the already-computed tendency by ``mask.h``
+flux masking — multiplying the already-computed tendency by ``mask.wet()``
 would leave wet T-cells adjacent to land contaminated by the polluted
 dry-side flux contributions.  The class wrappers therefore apply the
 mask via the three-step pattern:
 
-* ``flux_x *= mask.u`` at the U-face stage,
-* ``flux_y *= mask.v`` at the V-face stage,
-* ``tendency *= mask.h`` on the final output.
+* ``flux_x *= mask.wet(at="U")`` at the U-face stage,
+* ``flux_y *= mask.wet(at="V")`` at the V-face stage,
+* ``tendency *= mask.wet()`` on the final output.
 
 The ``diffusion_2d`` free function stays **mask-free** by design, per the
 layering rule that functional helpers don't know about masks (#209).
@@ -363,9 +363,9 @@ class Diffusion2D:
         intermediate-flux masking pattern is applied inside both
         :meth:`__call__` and :meth:`fluxes`:
 
-        * ``flux_x *= mask.u`` at the U-face stage,
-        * ``flux_y *= mask.v`` at the V-face stage,
-        * tendency ``*= mask.h`` on the final output (``__call__`` only).
+        * ``flux_x *= mask.wet(at="U")`` at the U-face stage,
+        * ``flux_y *= mask.wet(at="V")`` at the V-face stage,
+        * tendency ``*= mask.wet()`` on the final output (``__call__`` only).
 
         Unlike most other operators in this package, diffusion cannot
         use the simpler post-compute pattern because the divergence at
@@ -450,9 +450,9 @@ class Diffusion2D:
             kappa,
             _spacing(self.grid, "x", h),
             _spacing(self.grid, "y", h),
-            mh=self.mask.h,
-            mu=self.mask.u,
-            mv=self.mask.v,
+            mh=self.mask.wet(),
+            mu=self.mask.wet(at="U"),
+            mv=self.mask.wet(at="V"),
             wall=wall,
         )
 
@@ -489,8 +489,8 @@ class Diffusion2D:
         tuple[Float[Array, "Ny Nx"], Float[Array, "Ny Nx"]]
             ``(flux_x, flux_y)`` — east-face fluxes at U-points and
             north-face fluxes at V-points.  When ``self.mask`` is set,
-            ``flux_x`` is multiplied by ``mask.u`` and ``flux_y`` by
-            ``mask.v``.
+            ``flux_x`` is multiplied by ``mask.wet(at="U")`` and ``flux_y`` by
+            ``mask.wet(at="V")``.
         """
         _check_diffusion_wall(wall, self.mask)
         if self.mask is None:
@@ -508,8 +508,8 @@ class Diffusion2D:
             kappa,
             _spacing(self.grid, "x", h),
             _spacing(self.grid, "y", h),
-            mu=self.mask.u,
-            mv=self.mask.v,
+            mu=self.mask.wet(at="U"),
+            mv=self.mask.wet(at="V"),
             wall=wall,
         )
 
@@ -528,8 +528,8 @@ class Diffusion3D:
     mask : Mask3D or None, optional
         Optional 3-D land/ocean mask.  When provided, the intermediate
         flux masking pattern from :class:`Diffusion2D` is applied at
-        every z-level via vmap with per-z slices of ``mask.h``,
-        ``mask.u``, ``mask.v`` (Pattern B per issue #209 — the only
+        every z-level via vmap with per-z slices of ``mask.wet()``,
+        ``mask.wet(at="U")``, ``mask.wet(at="V")`` (Pattern B per issue #209 — the only
         way to get correct divergence at wet T-cells adjacent to
         coastlines).  ``None`` (default) matches the pre-existing
         unmasked behaviour bit for bit.
@@ -595,10 +595,10 @@ class Diffusion3D:
             out = vmap(_apply_unmasked, in_axes=(0, kappa_ax))(h, kappa_arr)
             return zero_z_ghosts(out)
 
-        # Masked path: vmap with per-z slices of mask.h / mask.u / mask.v.
-        mh = self.mask.h  # (Nz, Ny, Nx)
-        mu = self.mask.u
-        mv = self.mask.v
+        # Masked path: vmap with per-z slices of mask.wet() / mask.wet(at="U") / mask.wet(at="V").
+        mh = self.mask.wet()  # (Nz, Ny, Nx)
+        mu = self.mask.wet(at="U")
+        mv = self.mask.wet(at="V")
 
         def _apply_masked(h_k, kap_k, mh_k, mu_k, mv_k):
             return _diffusion_2d_impl(h_k, kap_k, dx, dy, mh=mh_k, mu=mu_k, mv=mv_k)
@@ -631,8 +631,8 @@ class Diffusion3D:
         tuple[Float[Array, "Nz Ny Nx"], Float[Array, "Nz Ny Nx"]]
             ``(flux_x, flux_y)`` — east-face fluxes at U-points and
             north-face fluxes at V-points.  When ``self.mask`` is set,
-            ``flux_x`` is multiplied by ``mask.u`` and ``flux_y`` by
-            ``mask.v`` at each z-level.
+            ``flux_x`` is multiplied by ``mask.wet(at="U")`` and ``flux_y`` by
+            ``mask.wet(at="V")`` at each z-level.
         """
         xp = array_namespace(h, kappa)
         _check_diffusion_wall(wall, self.mask)
@@ -650,8 +650,8 @@ class Diffusion3D:
             fx, fy = vmap(_apply_unmasked, in_axes=(0, kappa_ax))(h, kappa_arr)
             return zero_z_ghosts(fx), zero_z_ghosts(fy)
 
-        mu = self.mask.u
-        mv = self.mask.v
+        mu = self.mask.wet(at="U")
+        mv = self.mask.wet(at="V")
 
         def _apply_masked(h_k, kap_k, mu_k, mv_k):
             return _diffusion_2d_fluxes_impl(h_k, kap_k, dx, dy, mu=mu_k, mv=mv_k)
@@ -697,8 +697,8 @@ class BiharmonicDiffusion2D:
     mask : Mask2D or None, optional
         Optional land/ocean mask.  When provided, the tendency is
         ``−κ · Dm(Dm(h))`` with ``Dm`` the masked no-flux Laplacian of
-        :class:`Diffusion2D` (fluxes zeroed on faces with ``mask.u`` /
-        ``mask.v`` dry, output zeroed where ``mask.h`` is dry): the coast
+        :class:`Diffusion2D` (fluxes zeroed on faces with ``mask.wet(at="U")`` /
+        ``mask.wet(at="V")`` dry, output zeroed where ``mask.wet()`` is dry): the coast
         is a no-flux wall for ``h`` and for ``∇²h``, exactly like the
         domain walls.  Dry inputs are zeroed with ``jnp.where`` first, so
         land may hold any value (``NaN``, ``1e10``) without entering the
@@ -765,7 +765,7 @@ class BiharmonicDiffusion2D:
         if self.mask is not None:
             # land may hold NaN / 1e10: zero it before any stencil reads it
             # (NaN * 0 = NaN in the flux masking, and in its gradient)
-            h = xp.where(self.mask.h, h, 0.0)
+            h = xp.where(self.mask.wet(), h, 0.0)
         # First Laplacian pass: kappa=1.0 gives pure nabla^2 h (Dm h when
         # masked: zero on dry cells, no flux through the coast).
         # _materialize: the second pass reads lap1 at four offsets; keep it as
@@ -858,7 +858,7 @@ class BiharmonicDiffusion3D:
         xp = array_namespace(h)
         if self.mask is not None:
             # zero land (NaN / 1e10) before any stencil reads it
-            h = xp.where(self.mask.h, h, 0.0)
+            h = xp.where(self.mask.wet(), h, 0.0)
         # _materialize: the second pass reads lap1 at four offsets; keep it as
         # one buffer rather than letting XLA recompute it per offset.
         lap1 = _materialize(self._harm(h, kappa=1.0))

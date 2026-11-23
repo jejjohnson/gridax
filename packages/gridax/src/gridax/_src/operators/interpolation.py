@@ -58,7 +58,7 @@ class Interpolation1D:
     mask : Mask1D or None, optional
         Optional land/ocean mask.  When provided, every method
         post-multiplies its output by the mask field matching the
-        output stagger (``mask.h`` for T-output, ``mask.u`` for
+        output stagger (``mask.wet()`` for T-output, ``mask.wet(at="U")`` for
         U-output).  ``None`` (default) leaves outputs untouched.
     """
 
@@ -79,11 +79,11 @@ class Interpolation1D:
         -------
         Float[Array, "Nx"]
             Scalar interpolated to U-points.  When ``self.mask`` is
-            set, the output is zeroed at dry U-faces via ``* mask.u``.
+            set, the output is zeroed at dry U-faces via ``* mask.wet(at="U")``.
         """
         out = interior(avg_x_fwd_1d(h), h)
         if self.mask is not None:
-            out = out * self.mask.u
+            out = out * self.mask.wet(at="U")
         return out
 
     def U_to_T(self, u: Float[Array, "Nx"]) -> Float[Array, "Nx"]:
@@ -100,11 +100,11 @@ class Interpolation1D:
         -------
         Float[Array, "Nx"]
             Velocity interpolated to T-points.  When ``self.mask`` is
-            set, the output is zeroed at dry T-cells via ``* mask.h``.
+            set, the output is zeroed at dry T-cells via ``* mask.wet()``.
         """
         out = interior(avg_x_bwd_1d(u), u)
         if self.mask is not None:
-            out = out * self.mask.h
+            out = out * self.mask.wet()
         return out
 
 
@@ -121,10 +121,10 @@ class Interpolation2D:
         post-multiplies its output by the mask field matching its
         output stagger:
 
-        * T-output → ``mask.h`` (U_to_T, V_to_T, X_to_T)
-        * U-output → ``mask.u`` (T_to_U, X_to_U, V_to_U)
-        * V-output → ``mask.v`` (T_to_V, X_to_V, U_to_V)
-        * X-output → ``mask.xy_corner_strict`` (T_to_X, U_to_X, V_to_X)
+        * T-output → ``mask.wet()`` (U_to_T, V_to_T, X_to_T)
+        * U-output → ``mask.wet(at="U")`` (T_to_U, X_to_U, V_to_U)
+        * V-output → ``mask.wet(at="V")`` (T_to_V, X_to_V, U_to_V)
+        * X-output → ``mask.wet(at="X", kind="strict")`` (T_to_X, U_to_X, V_to_X)
 
         **Cross-face methods (U_to_V, V_to_U, U_to_X, V_to_X, X_to_U,
         X_to_V):** the post-compute multiply zeros the *dry* output
@@ -150,7 +150,7 @@ class Interpolation2D:
         """
         out = interior(avg_x_fwd_2d(h), h)
         if self.mask is not None:
-            out = out * self.mask.u
+            out = out * self.mask.wet(at="U")
         return out
 
     def T_to_V(self, h: Float[Array, "*batch Ny Nx"]) -> Float[Array, "*batch Ny Nx"]:
@@ -160,7 +160,7 @@ class Interpolation2D:
         """
         out = interior(avg_y_fwd_2d(h), h)
         if self.mask is not None:
-            out = out * self.mask.v
+            out = out * self.mask.wet(at="V")
         return out
 
     def T_to_X(self, h: Float[Array, "*batch Ny Nx"]) -> Float[Array, "*batch Ny Nx"]:
@@ -170,7 +170,7 @@ class Interpolation2D:
         """
         out = interior(avg_xfwd_yfwd_2d(h), h)
         if self.mask is not None:
-            out = out * self.mask.xy_corner_strict
+            out = out * self.mask.wet(at="X", kind="strict")
         return out
 
     # ------------------------------------------------------------------
@@ -184,7 +184,7 @@ class Interpolation2D:
         """
         out = interior(avg_y_bwd_2d(q), q)
         if self.mask is not None:
-            out = out * self.mask.u
+            out = out * self.mask.wet(at="U")
         return out
 
     def X_to_V(self, q: Float[Array, "*batch Ny Nx"]) -> Float[Array, "*batch Ny Nx"]:
@@ -194,7 +194,7 @@ class Interpolation2D:
         """
         out = interior(avg_x_bwd_2d(q), q)
         if self.mask is not None:
-            out = out * self.mask.v
+            out = out * self.mask.wet(at="V")
         return out
 
     # ------------------------------------------------------------------
@@ -208,7 +208,7 @@ class Interpolation2D:
         """
         out = interior(avg_x_bwd_2d(u), u)
         if self.mask is not None:
-            out = out * self.mask.h
+            out = out * self.mask.wet()
         return out
 
     def V_to_T(self, v: Float[Array, "*batch Ny Nx"]) -> Float[Array, "*batch Ny Nx"]:
@@ -218,7 +218,7 @@ class Interpolation2D:
         """
         out = interior(avg_y_bwd_2d(v), v)
         if self.mask is not None:
-            out = out * self.mask.h
+            out = out * self.mask.wet()
         return out
 
     def X_to_T(self, q: Float[Array, "*batch Ny Nx"]) -> Float[Array, "*batch Ny Nx"]:
@@ -229,7 +229,7 @@ class Interpolation2D:
         """
         out = interior(avg_xbwd_ybwd_2d(q), q)
         if self.mask is not None:
-            out = out * self.mask.h
+            out = out * self.mask.wet()
         return out
 
     # ------------------------------------------------------------------
@@ -243,7 +243,7 @@ class Interpolation2D:
         """
         out = interior(avg_y_fwd_2d(u), u)
         if self.mask is not None:
-            out = out * self.mask.xy_corner_strict
+            out = out * self.mask.wet(at="X", kind="strict")
         return out
 
     def V_to_X(self, v: Float[Array, "*batch Ny Nx"]) -> Float[Array, "*batch Ny Nx"]:
@@ -253,7 +253,7 @@ class Interpolation2D:
         """
         out = interior(avg_x_fwd_2d(v), v)
         if self.mask is not None:
-            out = out * self.mask.xy_corner_strict
+            out = out * self.mask.wet(at="X", kind="strict")
         return out
 
     # ------------------------------------------------------------------
@@ -268,7 +268,7 @@ class Interpolation2D:
         """
         out = interior(avg_xbwd_yfwd_2d(u), u)
         if self.mask is not None:
-            out = out * self.mask.v
+            out = out * self.mask.wet(at="V")
         return out
 
     def V_to_U(self, v: Float[Array, "*batch Ny Nx"]) -> Float[Array, "*batch Ny Nx"]:
@@ -279,7 +279,7 @@ class Interpolation2D:
         """
         out = interior(avg_xfwd_ybwd_2d(v), v)
         if self.mask is not None:
-            out = out * self.mask.u
+            out = out * self.mask.wet(at="U")
         return out
 
 
@@ -297,7 +297,7 @@ class Interpolation3D:
     mask : Mask3D or None, optional
         Optional land/ocean mask.  When provided, every method
         post-multiplies its output by the mask field matching the
-        output stagger (``mask.h`` / ``mask.u`` / ``mask.v``).
+        output stagger (``mask.wet()`` / ``mask.wet(at="U")`` / ``mask.wet(at="V")``).
     """
 
     grid: CurvilinearGrid3D
@@ -310,7 +310,7 @@ class Interpolation3D:
         """
         out = interior(avg_x_fwd_3d(h), h)
         if self.mask is not None:
-            out = out * self.mask.u
+            out = out * self.mask.wet(at="U")
         return out
 
     def T_to_V(self, h: Float[Array, "Nz Ny Nx"]) -> Float[Array, "Nz Ny Nx"]:
@@ -320,7 +320,7 @@ class Interpolation3D:
         """
         out = interior(avg_y_fwd_3d(h), h)
         if self.mask is not None:
-            out = out * self.mask.v
+            out = out * self.mask.wet(at="V")
         return out
 
     def U_to_T(self, u: Float[Array, "Nz Ny Nx"]) -> Float[Array, "Nz Ny Nx"]:
@@ -330,7 +330,7 @@ class Interpolation3D:
         """
         out = interior(avg_x_bwd_3d(u), u)
         if self.mask is not None:
-            out = out * self.mask.h
+            out = out * self.mask.wet()
         return out
 
     def V_to_T(self, v: Float[Array, "Nz Ny Nx"]) -> Float[Array, "Nz Ny Nx"]:
@@ -340,5 +340,5 @@ class Interpolation3D:
         """
         out = interior(avg_y_bwd_3d(v), v)
         if self.mask is not None:
-            out = out * self.mask.h
+            out = out * self.mask.wet()
         return out

@@ -471,7 +471,7 @@ class TestAdvection2DMasked:
     @pytest.mark.slow
     def test_non_dispatchable_method_with_all_ocean_matches_unmasked(self):
         """Methods like weno7 take the unmasked code path; for an all-ocean
-        mask the post-compute ``* mask.h`` is a no-op and the output must
+        mask the post-compute ``* mask.wet()`` is a no-op and the output must
         bit-match the unmasked path."""
         Ny, Nx = 14, 14
         grid = CartesianCGrid2D.from_interior(Ny - 2, Nx - 2, 1.0, 1.0)

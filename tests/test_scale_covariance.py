@@ -706,7 +706,7 @@ class TestScaleCovariance:
         The cells to check are found by differencing against an
         *unmasked* run rather than by reading the mask: an operator's
         output stagger is not declared on the case, so which of
-        ``mask.h`` / ``.u`` / ``.v`` applies is not known here. Cells
+        ``mask.wet()`` / ``.u`` / ``.v`` applies is not known here. Cells
         that the masked run zeroes and the unmasked run does not are
         exactly the ones masking is responsible for — which also makes
         the check fail if an operator stops masking at all, instead of

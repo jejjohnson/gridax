@@ -40,6 +40,7 @@ from gridax._src.grid import (
     SphericalCGrid2D,
     SphericalCGrid3D,
 )
+from gridax._src.grid.points import Stagger
 from gridax._src.mask import Mask2D, Mask3D
 from gridax._src.operators._utils import _metric_like
 from gridax._src.pytree import array_namespace
@@ -198,7 +199,7 @@ def _apply_mask_2d(
 ) -> tuple[Float[Array, "Ny Nx"], Float[Array, "Ny Nx"]]:
     """Zero out dry cells in ``field`` and ``weights`` (2-D).
 
-    Uses ``jnp.where(mask.h, x, 0.0)`` rather than a multiplicative
+    Uses ``jnp.where(mask.wet(), x, 0.0)`` rather than a multiplicative
     float-cast mask, so that NaN/Inf values on dry T-cells — common
     for land cells in realistic data — cannot contaminate the wet-cell
     totals.  Returns the inputs unchanged when ``mask is None``.  The
@@ -207,7 +208,7 @@ def _apply_mask_2d(
     xp = array_namespace(field, weights)
     if mask is None:
         return field, weights
-    m = mask.h  # Bool[Array, "Ny Nx"]
+    m = mask.wet()  # Bool[Array, "Ny Nx"]
     # Use plain 0.0 (weak-typed) so the mask path does not introduce an
     # upcast to float64 on top of the input dtype; the actual dtype
     # comes from the field/weights arrays themselves.
@@ -226,7 +227,7 @@ def area_sum(
     Computes ``Σ_j Σ_i A[j, i] · field[j, i]`` summed over the
     interior ``[1:-1, 1:-1]`` only.  When ``mask`` is supplied, dry
     T-cells are zeroed out *before* multiplication using
-    ``jnp.where(mask.h, field, 0.0)`` so NaN/Inf sentinels stored on
+    ``jnp.where(mask.wet(), field, 0.0)`` so NaN/Inf sentinels stored on
     land cells cannot contaminate the result.
 
     Parameters
@@ -259,7 +260,7 @@ def area_mean(
 
     Returns ``(Σ A·field) / (Σ A)`` over wet T-cells.  Dry cells are
     excluded from both numerator and denominator via
-    ``jnp.where(mask.h, ..., 0.0)``, so NaN/Inf on land does not
+    ``jnp.where(mask.wet(), ..., 0.0)``, so NaN/Inf on land does not
     contaminate the mean.  When the total wet area is zero, returns
     NaN rather than ±inf.
 
@@ -307,7 +308,7 @@ def _apply_mask_3d(
     xp = array_namespace(field, weights)
     if mask is None:
         return field, weights
-    m = mask.h  # Bool[Array, "Nz Ny Nx"]
+    m = mask.wet()  # Bool[Array, "Nz Ny Nx"]
     # See _apply_mask_2d for the weak-typed 0.0 rationale.
     safe_field = xp.where(m, field, 0.0)
     safe_weights = xp.where(m, weights, 0.0)
@@ -324,7 +325,7 @@ def volume_sum(
     Same semantics as :func:`area_sum` but with the per-cell volume
     metric ``V[k, j, i] = A[j, i] · dz`` and interior
     ``[1:-1, 1:-1, 1:-1]``.  NaN/Inf-safe under masking — dry cells
-    are zeroed via ``jnp.where(mask.h, field, 0.0)`` before
+    are zeroed via ``jnp.where(mask.wet(), field, 0.0)`` before
     multiplication.
 
     Parameters
@@ -444,34 +445,11 @@ def spherical_volume_mean(
 # Masked sample statistics
 # ----------------------------------------------------------------------
 
-#: Staggering locations whose mask a sample statistic may be taken at.
-#: ``"w"`` exists only on :class:`Mask3D`.
-_MASK_LOCATIONS: tuple[str, ...] = ("h", "u", "v", "xy_corner", "w")
-
-
-def _location_mask(
-    mask: Mask2D | Mask3D,
-    location: str,
-) -> Bool[Array, "..."]:
-    """Pick the boolean field of ``mask`` for a staggering location."""
-    if location not in _MASK_LOCATIONS:
-        raise ValueError(
-            f"masked statistics: unknown location {location!r}. "
-            f"Expected one of {_MASK_LOCATIONS}."
-        )
-    m = getattr(mask, location, None)
-    if m is None:
-        raise ValueError(
-            f"masked statistics: {type(mask).__name__} has no {location!r} "
-            "mask. (Only Mask3D carries a 'w' mask.)"
-        )
-    return m
-
 
 def _sample_counts(
     samples: Float[Array, "N ..."],
     mask: Mask2D | Mask3D | None,
-    location: str,
+    at: str | Stagger,
     axis: int | tuple[int, ...],
 ) -> tuple[Float[Array, "N ..."], Float[Array, "..."], Bool[Array, "..."] | None]:
     """Mask-safe samples, per-output sample counts, and the wet indicator.
@@ -495,7 +473,7 @@ def _sample_counts(
             count *= samples.shape[reduced]
         return samples.astype(dtype), xp.asarray(count, dtype=dtype), None
 
-    m = _location_mask(mask, location)
+    m = mask.wet(at=at)
     wet = xp.broadcast_to(m, samples.shape)
     safe = xp.where(wet, samples, 0.0).astype(dtype)
     count = xp.sum(wet.astype(dtype), axis=axis)
@@ -525,7 +503,7 @@ def masked_mean(
     samples: Float[Array, "N ..."],
     mask: Mask2D | Mask3D | None = None,
     *,
-    location: str = "h",
+    at: str | Stagger = "T",
     axis: int | tuple[int, ...] = 0,
 ) -> Float[Array, "..."]:
     """Mean over ``axis``, excluding dry cells.
@@ -547,9 +525,9 @@ def masked_mean(
     mask : Mask2D or Mask3D or None, optional
         Land/ocean mask, broadcast against the trailing axes of
         ``samples``.  ``None`` means every cell is wet.
-    location : str, optional
-        Staggering location whose mask to use: ``"h"`` (default),
-        ``"u"``, ``"v"``, ``"xy_corner"``, or ``"w"`` (3-D only).
+    at : str or Stagger, optional
+        The point of the samples, whose wet points to use: ``"T"`` (default),
+        ``"U"``, ``"V"``, ``"X"``, ``"W"`` (3-D only) or a field's stagger.
     axis : int or tuple of int, optional
         Axis or axes to reduce over.  Default ``0``.
 
@@ -564,7 +542,7 @@ def masked_mean(
         map stays well defined.
     """
     xp = array_namespace(samples)
-    safe, count, _ = _sample_counts(samples, mask, location, axis)
+    safe, count, _ = _sample_counts(samples, mask, at, axis)
     total = xp.sum(safe, axis=axis)
     empty = count == 0
     return xp.where(empty, 0.0, total / xp.where(empty, 1.0, count))
@@ -574,7 +552,7 @@ def masked_std(
     samples: Float[Array, "N ..."],
     mask: Mask2D | Mask3D | None = None,
     *,
-    location: str = "h",
+    at: str | Stagger = "T",
     axis: int | tuple[int, ...] = 0,
     eps: float = 1e-8,
     ddof: int = 0,
@@ -595,7 +573,7 @@ def masked_std(
     ----------
     samples : Float[Array, "N ..."]
     mask : Mask2D or Mask3D or None, optional
-    location : str, optional
+    at : str or Stagger, optional
         See :func:`masked_mean`.
     axis : int or tuple of int, optional
     eps : float, optional
@@ -616,7 +594,7 @@ def masked_std(
         whichever is wider — see :func:`_accumulation_dtype`.
     """
     xp = array_namespace(samples)
-    safe, count, wet = _sample_counts(samples, mask, location, axis)
+    safe, count, wet = _sample_counts(samples, mask, at, axis)
     empty = count == 0
 
     mean = xp.where(empty, 0.0, xp.sum(safe, axis=axis) / xp.where(empty, 1.0, count))
@@ -664,7 +642,7 @@ def masked_moments(
     samples: Float[Array, "N ..."],
     mask: Mask2D | Mask3D | None = None,
     *,
-    location: str = "h",
+    at: str | Stagger = "T",
     axis: int | tuple[int, ...] = 0,
     eps: float = 1e-8,
     ddof: int = 0,
@@ -679,6 +657,6 @@ def masked_moments(
         transforms need as ``loc`` and ``scale``.
     """
     return (
-        masked_mean(samples, mask, location=location, axis=axis),
-        masked_std(samples, mask, location=location, axis=axis, eps=eps, ddof=ddof),
+        masked_mean(samples, mask, at=at, axis=axis),
+        masked_std(samples, mask, at=at, axis=axis, eps=eps, ddof=ddof),
     )

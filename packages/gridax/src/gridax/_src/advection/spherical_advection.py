@@ -257,7 +257,7 @@ class SphericalAdvection2D:
         ``jnp.where``, the upwind-biased methods go through
         :func:`upwind_flux` with the ``(2, 4, 6, 8, 10)`` adaptive
         stencil hierarchies pre-built once in ``__init__``, the face
-        fluxes on dry faces (``mask.u`` / ``mask.v`` false) are zeroed
+        fluxes on dry faces (``mask.wet(at="U")`` / ``mask.wet(at="V")`` false) are zeroed
         before the divergence, and dry T-cells are exactly zero.
         ``None`` (default) gives the unmasked behaviour.  Per #209 Q2 a
         Cartesian ``Mask2D`` is used pending a dedicated
@@ -356,9 +356,9 @@ class SphericalAdvection2D:
         _validate_wall(wall, self.mask)
         if self.mask is not None:
             # Zero the dry inputs before any stencil reads them (NaN-safe).
-            h = xp.where(self.mask.h, h, 0.0)  # [Ny, Nx]
-            u = xp.where(self.mask.u, u, 0.0)  # [Ny, Nx]
-            v = xp.where(self.mask.v, v, 0.0)  # [Ny, Nx]
+            h = xp.where(self.mask.wet(), h, 0.0)  # [Ny, Nx]
+            u = xp.where(self.mask.wet(at="U"), u, 0.0)  # [Ny, Nx]
+            v = xp.where(self.mask.wet(at="V"), v, 0.0)  # [Ny, Nx]
         mh_x = self._mask_hierarchy_x
         mh_y = self._mask_hierarchy_y
         if mh_x is not None and mh_y is not None and method in _MASK_DISPATCHABLE:
@@ -370,9 +370,9 @@ class SphericalAdvection2D:
         else:
             fe, fn = _reconstruct_faces_2d(self.recon, h, u, v, method)
         if self.mask is not None:
-            # No flux through a dry face (mask.u / mask.v false).
-            fe = xp.where(self.mask.u, fe, 0.0)  # [Ny, Nx]
-            fn = xp.where(self.mask.v, fn, 0.0)  # [Ny, Nx]
+            # No flux through a dry face (mask.wet(at="U") / mask.wet(at="V") false).
+            fe = xp.where(self.mask.wet(at="U"), fe, 0.0)  # [Ny, Nx]
+            fn = xp.where(self.mask.wet(at="V"), fn, 0.0)  # [Ny, Nx]
 
         if wall == "open":
             fe, fn = _open_wall_fluxes(h, u, v, fe, fn)
@@ -383,7 +383,7 @@ class SphericalAdvection2D:
             _spherical_flux_divergence(fe, fn, self.grid, ghost), h, ghost=ghost
         )
         if self.mask is not None:
-            out = xp.where(self.mask.h, out, 0.0)
+            out = xp.where(self.mask.wet(), out, 0.0)
         return out
 
 
@@ -475,9 +475,9 @@ class SphericalAdvection3D:
         _validate_wall(wall, self.mask)
         if self.mask is not None:
             # Zero the dry inputs before any stencil reads them (NaN-safe).
-            h = xp.where(self.mask.h, h, 0.0)  # [Nz, Ny, Nx]
-            u = xp.where(self.mask.u, u, 0.0)  # [Nz, Ny, Nx]
-            v = xp.where(self.mask.v, v, 0.0)  # [Nz, Ny, Nx]
+            h = xp.where(self.mask.wet(), h, 0.0)  # [Nz, Ny, Nx]
+            u = xp.where(self.mask.wet(at="U"), u, 0.0)  # [Nz, Ny, Nx]
+            v = xp.where(self.mask.wet(at="V"), v, 0.0)  # [Nz, Ny, Nx]
         mh_x = self._mask_hierarchy_x
         mh_y = self._mask_hierarchy_y
         if mh_x is not None and mh_y is not None and method in _MASK_DISPATCHABLE:
@@ -489,9 +489,9 @@ class SphericalAdvection3D:
         else:
             fe, fn = _reconstruct_faces_3d(self.recon, h, u, v, method)
         if self.mask is not None:
-            # No flux through a dry face (mask.u / mask.v false).
-            fe = xp.where(self.mask.u, fe, 0.0)  # [Nz, Ny, Nx]
-            fn = xp.where(self.mask.v, fn, 0.0)  # [Nz, Ny, Nx]
+            # No flux through a dry face (mask.wet(at="U") / mask.wet(at="V") false).
+            fe = xp.where(self.mask.wet(at="U"), fe, 0.0)  # [Nz, Ny, Nx]
+            fn = xp.where(self.mask.wet(at="V"), fn, 0.0)  # [Nz, Ny, Nx]
 
         if wall == "open":
             fe, fn = _open_wall_fluxes(h, u, v, fe, fn)
@@ -503,5 +503,5 @@ class SphericalAdvection3D:
         horiz = _spherical_flux_divergence(fe[1:-1], fn[1:-1], self.grid, g)
         out = set_at(xp.zeros_like(h), np.s_[1:-1, g:-g, g:-g], horiz)
         if self.mask is not None:
-            out = xp.where(self.mask.h, out, 0.0)
+            out = xp.where(self.mask.wet(), out, 0.0)
         return out

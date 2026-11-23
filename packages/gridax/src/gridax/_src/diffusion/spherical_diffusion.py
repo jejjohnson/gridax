@@ -58,9 +58,9 @@ Like the Cartesian :class:`Diffusion2D`, the spherical operator applies
 the three-step intermediate-flux masking pattern when a ``Mask2D`` /
 ``Mask3D`` is provided (`#209 <https://github.com/jejjohnson/gridax/issues/209>`_):
 
-* ``F_λ *= mask.u``
-* ``F_φ *= mask.v``
-* tendency ``*= mask.h``
+* ``F_λ *= mask.wet(at="U")``
+* ``F_φ *= mask.wet(at="V")``
+* tendency ``*= mask.wet()``
 
 Per issue #209 Q2, spherical 2-D operators take a Cartesian ``Mask2D``
 pending a dedicated ``SphericalMask2D`` follow-up.
@@ -203,9 +203,9 @@ class SphericalDiffusion2D:
         intermediate-flux masking pattern is applied inside both
         :meth:`__call__` and :meth:`fluxes`:
 
-        * ``flux_x *= mask.u`` at the U-face stage,
-        * ``flux_y *= mask.v`` at the V-face stage,
-        * tendency ``*= mask.h`` on the final output (``__call__`` only).
+        * ``flux_x *= mask.wet(at="U")`` at the U-face stage,
+        * ``flux_y *= mask.wet(at="V")`` at the V-face stage,
+        * tendency ``*= mask.wet()`` on the final output (``__call__`` only).
 
         Per #209 Q2, this is a Cartesian ``Mask2D`` pending a dedicated
         ``SphericalMask2D`` follow-up.  ``None`` (default) gives the
@@ -254,9 +254,9 @@ class SphericalDiffusion2D:
         Float[Array, "Ny Nx"]
             Diffusion tendency at T-points.  Ghost ring is zero.
         """
-        mh = None if self.mask is None else self.mask.h
-        mu = None if self.mask is None else self.mask.u
-        mv = None if self.mask is None else self.mask.v
+        mh = None if self.mask is None else self.mask.wet()
+        mu = None if self.mask is None else self.mask.wet(at="U")
+        mv = None if self.mask is None else self.mask.wet(at="V")
         return _spherical_diffusion_2d_impl(
             h,
             kappa,
@@ -294,11 +294,11 @@ class SphericalDiffusion2D:
         Returns
         -------
         tuple[Float[Array, "Ny Nx"], Float[Array, "Ny Nx"]]
-            ``(flux_x, flux_y)``.  Masked by ``mask.u`` / ``mask.v``
+            ``(flux_x, flux_y)``.  Masked by ``mask.wet(at="U")`` / ``mask.wet(at="V")``
             when ``self.mask`` is set.
         """
-        mu = None if self.mask is None else self.mask.u
-        mv = None if self.mask is None else self.mask.v
+        mu = None if self.mask is None else self.mask.wet(at="U")
+        mv = None if self.mask is None else self.mask.wet(at="V")
         return _spherical_diffusion_2d_fluxes_impl(
             h,
             kappa,
@@ -324,8 +324,8 @@ class SphericalDiffusion3D:
     mask : Mask3D or None, optional
         Optional 3-D land/ocean mask.  When provided, the intermediate
         flux masking pattern from :class:`SphericalDiffusion2D` is
-        applied at every z-level with per-z slices of ``mask.h``,
-        ``mask.u``, ``mask.v`` — same approach as :class:`Diffusion3D`.
+        applied at every z-level with per-z slices of ``mask.wet()``,
+        ``mask.wet(at="U")``, ``mask.wet(at="V")`` — same approach as :class:`Diffusion3D`.
     """
 
     grid: SphericalCGrid3D
@@ -366,9 +366,9 @@ class SphericalDiffusion3D:
             out = vmap(_apply, in_axes=(0, kappa_ax))(h, kappa_arr)
             return zero_z_ghosts(out)
 
-        mh = self.mask.h
-        mu = self.mask.u
-        mv = self.mask.v
+        mh = self.mask.wet()
+        mu = self.mask.wet(at="U")
+        mv = self.mask.wet(at="V")
 
         def _apply_masked(h_k, kap_k, mh_k, mu_k, mv_k):
             return _spherical_diffusion_2d_impl(
@@ -413,8 +413,8 @@ class SphericalDiffusion3D:
             fx, fy = vmap(_apply, in_axes=(0, kappa_ax))(h, kappa_arr)
             return zero_z_ghosts(fx), zero_z_ghosts(fy)
 
-        mu = self.mask.u
-        mv = self.mask.v
+        mu = self.mask.wet(at="U")
+        mv = self.mask.wet(at="V")
 
         def _apply_masked(h_k, kap_k, mu_k, mv_k):
             return _spherical_diffusion_2d_fluxes_impl(
@@ -519,7 +519,7 @@ class SphericalBiharmonicDiffusion2D:
         xp = array_namespace(h)
         if self.mask is not None:
             # zero land (NaN / 1e10) before any stencil reads it
-            h = xp.where(self.mask.h, h, 0.0)
+            h = xp.where(self.mask.wet(), h, 0.0)
         lap1 = self._harm(h, kappa=1.0)
         lap2 = self._harm(lap1, kappa=1.0)
         return -kappa * lap2
@@ -586,7 +586,7 @@ class SphericalBiharmonicDiffusion3D:
         xp = array_namespace(h)
         if self.mask is not None:
             # zero land (NaN / 1e10) before any stencil reads it
-            h = xp.where(self.mask.h, h, 0.0)
+            h = xp.where(self.mask.wet(), h, 0.0)
         lap1 = self._harm(h, kappa=1.0)
         lap2 = self._harm(lap1, kappa=1.0)
         return -kappa * lap2

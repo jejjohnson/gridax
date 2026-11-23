@@ -247,10 +247,12 @@ class TestSameValues:
         wet[3:5, 4:7] = False
         mask = fvx.Mask2D.from_mask(wet)
         dx, dy = self.g2.spacing("x"), self.g2.spacing("y")
-        fx, fy = _diffusion_2d_fluxes_impl(h, 0.7, dx, dy, mask.u, mask.v)
+        fx, fy = _diffusion_2d_fluxes_impl(
+            h, 0.7, dx, dy, mask.wet(at="U"), mask.wet(at="V")
+        )
         du = (fx[1:-1, 1:-1] - fx[1:-1, :-2]) / dx
         dv = (fy[1:-1, 1:-1] - fy[:-2, 1:-1]) / dy
-        ref = interior(du + dv, h) * mask.h
+        ref = interior(du + dv, h) * mask.wet()
         out = fvx.Diffusion2D(self.g2, mask=mask)(h, 0.7)
         np.testing.assert_array_equal(out, ref)
 

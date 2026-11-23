@@ -276,9 +276,9 @@ class TestMaskedFlux:
     @pytest.mark.parametrize("method", ["weno3", "weno5", "wenoz5", "minmod"])
     def test_masked_runs(self, masked_setup, method):
         grid, mask, Ny, Nx = masked_setup
-        h = _smooth_field(Ny, Nx) * jnp.asarray(mask.h, dtype=float)
-        u = jnp.ones((Ny, Nx)) * jnp.asarray(mask.u, dtype=float)
-        v = jnp.ones((Ny, Nx)) * jnp.asarray(mask.v, dtype=float)
+        h = _smooth_field(Ny, Nx) * jnp.asarray(mask.wet(), dtype=float)
+        u = jnp.ones((Ny, Nx)) * jnp.asarray(mask.wet(at="U"), dtype=float)
+        v = jnp.ones((Ny, Nx)) * jnp.asarray(mask.wet(at="V"), dtype=float)
         fe, fn = uv_center_flux(h, u, v, grid, method=method, mask=mask)
         assert jnp.all(jnp.isfinite(fe))
         assert jnp.all(jnp.isfinite(fn))
@@ -286,9 +286,9 @@ class TestMaskedFlux:
     def test_masked_matches_advection(self, masked_setup):
         """Masked face fluxes reproduce Advection2D masked tendency."""
         grid, mask, Ny, Nx = masked_setup
-        h = _smooth_field(Ny, Nx) * jnp.asarray(mask.h, dtype=float)
-        u = 0.5 * jnp.ones((Ny, Nx)) * jnp.asarray(mask.u, dtype=float)
-        v = 0.3 * jnp.ones((Ny, Nx)) * jnp.asarray(mask.v, dtype=float)
+        h = _smooth_field(Ny, Nx) * jnp.asarray(mask.wet(), dtype=float)
+        u = 0.5 * jnp.ones((Ny, Nx)) * jnp.asarray(mask.wet(at="U"), dtype=float)
+        v = 0.3 * jnp.ones((Ny, Nx)) * jnp.asarray(mask.wet(at="V"), dtype=float)
 
         adv = Advection2D(grid, mask=mask)
         tendency = adv(h, u, v, method="weno5")

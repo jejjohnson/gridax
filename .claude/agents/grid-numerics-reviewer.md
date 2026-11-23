@@ -33,7 +33,7 @@ the forward / backward asymmetry in contract 1 above all) and
    through a `3D` operator (or a 3-D field through a layer `vmap`);
    `wall="open"` combined with a mask.
 3. **Masks.** The output masked with the mask of **its own** stagger
-   (`h` / `u` / `v` / `xy_corner_strict`); `mask=None` must give the old
+   (`mask.wet(at=…)`, with `kind="strict"` at X); `mask=None` must give the old
    result bit for bit (golden tests); inputs that may be `NaN` on land
    zeroed with `jnp.where` **before** the stencil (output-only masking
    still gives a `NaN` gradient; a float-mask multiply keeps `NaN`);

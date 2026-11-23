@@ -143,7 +143,9 @@ class Vorticity2D:
             # corners.  Wet corners keep their real denominator (and the
             # NaN sentinel for zero thickness).
             # den[j, i] = den[j, i] if xy_corner_strict[j+1, i+1] else 1
-            den = xp.where(self.mask.xy_corner_strict[..., 1:-1, 1:-1], den, 1.0)
+            den = xp.where(
+                self.mask.wet(at="X", kind="strict")[..., 1:-1, 1:-1], den, 1.0
+            )
         pv = xp.where(den == 0, xp.nan, num / den)
         out = interior(pv, h)
         if self.mask is not None:
@@ -152,7 +154,7 @@ class Vorticity2D:
             # mask artefact, not a degenerate-thickness bug.  Restore the
             # post-compute-zero semantic: dry corners exactly 0, wet
             # corners keep any NaN they got.
-            out = xp.where(self.mask.xy_corner_strict, out, 0.0)
+            out = xp.where(self.mask.wet(at="X", kind="strict"), out, 0.0)
         return out
 
     def enstrophy(
@@ -184,13 +186,13 @@ class Vorticity2D:
         xp = array_namespace(u, v)
         if self.mask is not None:
             # u[j, i] = 0 on dry interior U-faces; v[j, i] = 0 on dry V-faces
-            u = _sanitize(self.mask.u, u)
-            v = _sanitize(self.mask.v, v)
+            u = _sanitize(self.mask.wet(at="U"), u)
+            v = _sanitize(self.mask.wet(at="V"), v)
         out = enstrophy(self.relative_vorticity(u, v))
         if self.mask is not None:
             # xp.where, not a multiply: a NaN land velocity makes zeta NaN
             # at dry corners, and NaN * 0 is still NaN.
-            out = xp.where(self.mask.xy_corner_strict, out, 0.0)
+            out = xp.where(self.mask.wet(at="X", kind="strict"), out, 0.0)
         return out
 
     def potential_enstrophy(
@@ -233,17 +235,17 @@ class Vorticity2D:
         if self.mask is not None:
             # Zero dry interior inputs so NaN land values cannot enter the
             # arithmetic (or its gradient); wet corners only read wet cells.
-            u = _sanitize(self.mask.u, u)
-            v = _sanitize(self.mask.v, v)
-            f = _sanitize(self.mask.h, f)
-            h = _sanitize(self.mask.h, h)
+            u = _sanitize(self.mask.wet(at="U"), u)
+            v = _sanitize(self.mask.wet(at="V"), v)
+            f = _sanitize(self.mask.wet(), f)
+            h = _sanitize(self.mask.wet(), h)
         q = self.potential_vorticity(u, v, h, f)  # q at X-points
         h_on_q = self.interp.T_to_X(h)  # h interpolated to X-points
         out = potential_enstrophy(q, h_on_q)
         if self.mask is not None:
             # q is already exactly 0 at dry corners; the select keeps that
             # guarantee explicit, mirroring potential_vorticity.
-            out = xp.where(self.mask.xy_corner_strict, out, 0.0)
+            out = xp.where(self.mask.wet(at="X", kind="strict"), out, 0.0)
         return out
 
     def pv_flux_energy_conserving(
@@ -291,16 +293,16 @@ class Vorticity2D:
         tuple
             (qu at U-points, qv at V-points), zero ghost ring.  Under a
             mask the corner products are zeroed on dry *interior* corners
-            and the outputs multiplied by ``mask.u`` / ``mask.v``.
+            and the outputs multiplied by ``mask.wet(at="U")`` / ``mask.wet(at="V")``.
         """
         mask = self.mask
         return _pv_flux_corner_product(
             q,
             u,
             v,
-            wet_x=None if mask is None else mask.xy_corner_strict,
-            wet_u=None if mask is None else mask.u,
-            wet_v=None if mask is None else mask.v,
+            wet_x=None if mask is None else mask.wet(at="X", kind="strict"),
+            wet_u=None if mask is None else mask.wet(at="U"),
+            wet_v=None if mask is None else mask.wet(at="V"),
         )
 
     def pv_flux_enstrophy_conserving(
@@ -455,7 +457,7 @@ class Vorticity3D:
     mask : Mask3D or None, optional
         Optional land/ocean mask.  When provided, the result of
         :meth:`relative_vorticity` is post-multiplied by
-        ``mask.xy_corner_strict``.  Applied externally rather than
+        ``mask.wet(at="X", kind="strict")``.  Applied externally rather than
         pass-down because the underlying ``_curl_2d`` is a free
         function (no sub-operator to inject a mask into).
     """
@@ -484,7 +486,7 @@ class Vorticity3D:
         -------
         Float[Array, "Nz Ny Nx"]
             Relative vorticity at X-points.  When ``self.mask`` is
-            set, dry X-corners are zero via ``* mask.xy_corner_strict``.
+            set, dry X-corners are zero via ``* mask.wet(at="X", kind="strict")``.
         """
         dx = _spacing(self.grid, "x", v, at="X")
         dy = _spacing(self.grid, "y", u, at="X")
@@ -492,7 +494,7 @@ class Vorticity3D:
         # Zero z-ghost slices to match 3D ghost-ring convention.
         out = zero_z_ghosts(out)
         if self.mask is not None:
-            out = out * self.mask.xy_corner_strict
+            out = out * self.mask.wet(at="X", kind="strict")
         return out
 
 

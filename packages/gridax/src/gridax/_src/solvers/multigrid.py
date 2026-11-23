@@ -1083,10 +1083,10 @@ def build_multigrid_solver(
       keeps its coefficient.  With ``coeff=None`` the finest-level operator
       is exactly :func:`~gridax.solvers.masked_laplacian` with dry neighbours
       zero — the streamfunction problem, ``psi = 0`` on the wall / coast
-      X nodes of ``Mask2D.xy_corner_strict``.  Non-singular for every
+      X nodes of ``Mask2D.wet(at="X", kind="strict")``.  Non-singular for every
       ``lambda_ >= 0``.
     * ``"neumann"``: zero flux through wet–dry faces — the pressure /
-      free-surface problem at T points (pass ``mask.h``).  At
+      free-surface problem at T points (pass ``mask.wet()``).  At
       ``lambda_ = 0`` the operator is singular (a constant per connected
       wet component); the solver then projects ``rhs`` and the solution
       onto zero mean on each component.
@@ -1098,7 +1098,7 @@ def build_multigrid_solver(
         pass ``np.ones((Ny, Nx))`` for a rectangular domain.
         When a :class:`Mask2D` is passed, the ψ mask
         ``xy_corner_strict`` is extracted (pair it with the default
-        ``bc="dirichlet"``); for a T-point problem pass ``mask.h``.
+        ``bc="dirichlet"``); for a T-point problem pass ``mask.wet()``.
     dx, dy : float
         Fine-grid spacings (metres or non-dimensional).
     lambda_ : float
@@ -1151,7 +1151,7 @@ def build_multigrid_solver(
 
     # --- Extract mask as a NumPy float64 array ---
     if isinstance(mask, Mask2D):
-        mask_np = np.asarray(mask.xy_corner_strict, dtype=np.float64)
+        mask_np = np.asarray(mask.wet(at="X", kind="strict"), dtype=np.float64)
     else:
         mask_np = np.asarray(mask, dtype=np.float64)
 

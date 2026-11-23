@@ -427,7 +427,7 @@ class SphericalCGrid3D(_SphericalMetric, CurvilinearGrid3D):
     As with the Cartesian :class:`CartesianCGrid3D`, only the horizontal
     axes are staggered (T, U, V, X share the same ``k * dz``); W-point fields (vertical velocity at z-interfaces) use the same
     ``[Nz, Ny, Nx]`` shape, ``w[k]`` on the top face of ``T[k]`` (as
-    ``Mask3D.w`` and ``vertical_velocity``).
+    ``Mask3D.wet(at="W")`` and ``vertical_velocity``).
 
     Parameters
     ----------

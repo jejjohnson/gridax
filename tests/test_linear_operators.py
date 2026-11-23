@@ -222,7 +222,7 @@ class TestMaskedHelmholtzOperator:
         h[1:-1, 1:-1] = True
         mask = Mask2D.from_mask(h)
         A_m = masked_helmholtz_operator(mask, DX, DY)
-        assert A_m.in_size() == int(np.asarray(mask.xy_corner_strict).sum())
+        assert A_m.in_size() == int(np.asarray(mask.wet(at="X", kind="strict")).sum())
 
     def test_tags(self):
         A_m = masked_helmholtz_operator(_basin(), DX, DY, lambda_=LAM)

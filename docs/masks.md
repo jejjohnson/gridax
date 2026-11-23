@@ -91,7 +91,19 @@ masks = Mask2D.from_v_face(v_field, mode="permissive")
 masks = Mask2D.from_corner(vorticity_field, mode="conservative")
 ```
 
+[`Mask2D.from_grid(grid, wet_t)`](xref:api#gridax.Mask2D) is `from_mask` with the shape checked against the grid.
+
 ## Staggered variable locations
+
+The wet points are read by point of the staggering, with the same names the grid and the fields use, or a field's stagger:
+
+```python
+masks.wet()  # T: the cell centres
+masks.wet(at="U"), masks.wet(at="V")  # a face is wet where both its cells are
+masks.wet(at="X")  # a corner with at least one wet cell
+masks.wet(at="X", kind="strict")  # a corner whose four cells are wet
+masks.wet(at="X", kind="y_wall")  # also "x_wall", "convex" and "valid"
+```
 
 Each variable type sits at a different position within a grid cell.
 The figures below show the actual staggered positions for several
@@ -243,12 +255,12 @@ Diagnostics **without** a class form:
   Pass them fields that are already masked (e.g. from the class forms
   above) so dry cells contribute zero.
 - `vertical_velocity` takes a per-call `mask=Mask3D`: it zeroes the
-  divergence on dry T-points (`mask.h`) and its output on dry W-faces
-  (`mask.w`); the output has the same `[Nz, Ny, Nx]` shape as `mask.w`.
+  divergence on dry T-points (`mask.wet()`) and its output on dry W-faces
+  (`mask.wet(at="W")`); the output has the same `[Nz, Ny, Nx]` shape as `mask.wet(at="W")`.
 
 If you do call a Layer-2 helper directly and want masked output, apply
-the mask at the call site: `ke = jnp.where(mask.h, kinetic_energy(u, v), 0.0)`
-(a plain `* mask.h` also works when the inputs are finite on land).  For
+the mask at the call site: `ke = jnp.where(mask.wet(), kinetic_energy(u, v), 0.0)`
+(a plain `* mask.wet()` also works when the inputs are finite on land).  For
 pointwise helpers whose inputs live on different staggers (e.g.
 `okubo_weiss(sn, ss, omega)` with `sn` at T-points and `ss`, `omega` at
 X-points), the class form also does the X → T averaging for you.
@@ -276,15 +288,15 @@ mapping:
 
 | Output stagger | Mask field | Operators / methods |
 |---|---|---|
-| T (cell centre) | `mask.h` | divergence, laplacian, U→T / V→T / X→T differences and interpolations, `Advection*`, `Diffusion*`, `BiharmonicDiffusion*`, `Energetics2D.*`, `Strain2D.tensor` / `.magnitude_squared` / `.okubo_weiss`, `QGPotentialVorticity2D.*`, `ArakawaJacobian2D` |
-| U (east face) | `mask.u` | T→U / X→U / V→U differences and interpolations, `grad_perp` u-component, `Coriolis*` du_cor, `MomentumAdvection*` du_adv, `SphericalDifference2D.geostrophic_velocity` u_g |
-| V (north face) | `mask.v` | T→V / X→V / U→V, `grad_perp` v-component, `Coriolis*` dv_cor, `MomentumAdvection*` dv_adv, `SphericalDifference2D.geostrophic_velocity` v_g |
-| X (NE corner) | `mask.xy_corner_strict` | curl, T→X / U→X / V→X, relative & potential vorticity, `Vorticity2D.enstrophy` / `.potential_enstrophy`, `Strain2D.shear`, `pv_flux_*` U/V-stagger outputs where applicable |
+| T (cell centre) | `mask.wet()` | divergence, laplacian, U→T / V→T / X→T differences and interpolations, `Advection*`, `Diffusion*`, `BiharmonicDiffusion*`, `Energetics2D.*`, `Strain2D.tensor` / `.magnitude_squared` / `.okubo_weiss`, `QGPotentialVorticity2D.*`, `ArakawaJacobian2D` |
+| U (east face) | `mask.wet(at="U")` | T→U / X→U / V→U differences and interpolations, `grad_perp` u-component, `Coriolis*` du_cor, `MomentumAdvection*` du_adv, `SphericalDifference2D.geostrophic_velocity` u_g |
+| V (north face) | `mask.wet(at="V")` | T→V / X→V / U→V, `grad_perp` v-component, `Coriolis*` dv_cor, `MomentumAdvection*` dv_adv, `SphericalDifference2D.geostrophic_velocity` v_g |
+| X (NE corner) | `mask.wet(at="X", kind="strict")` | curl, T→X / U→X / V→X, relative & potential vorticity, `Vorticity2D.enstrophy` / `.potential_enstrophy`, `Strain2D.shear`, `pv_flux_*` U/V-stagger outputs where applicable |
 
 The X-output mapping uses the **strict** 4-of-4 corner mask
-(`xy_corner_strict`) because a corner-output value is trusted only when
+(`mask.wet(at="X", kind="strict")`) because a corner-output value is trusted only when
 all four surrounding T-cells are wet.  The lenient
-`xy_corner` mask is not currently consumed by any operator — it's
+`mask.wet(at="X")` mask is not currently consumed by any operator — it's
 available for users building their own.
 
 ### Four patterns for mask application
@@ -319,7 +331,7 @@ pass-down and typically doesn't need an extra multiply.
   under pass-down (because `h_on_q == 0`).  The method preserves the
   existing "NaN at wet zero-thickness" sentinel but replaces
   mask-induced NaNs with exact 0 via a final
-  `jnp.where(mask.xy_corner_strict, out, 0)`.  Same fix applies to
+  `jnp.where(mask.wet(at="X", kind="strict"), out, 0)`.  Same fix applies to
   `SphericalVorticity2D.potential_vorticity` and
   `Vorticity2D.potential_enstrophy` (built on it).
   `SphericalDifference2D.geostrophic_velocity` faces the same division
@@ -336,9 +348,9 @@ be contaminated by polluted dry-side face fluxes.  Instead the class
 wrappers apply the mask in three steps:
 
 ```
-flux_x *= mask.u        # U-face stage
-flux_y *= mask.v        # V-face stage
-tendency *= mask.h      # final output
+flux_x *= mask.wet(at="U")        # U-face stage
+flux_y *= mask.wet(at="V")        # V-face stage
+tendency *= mask.wet()      # final output
 ```
 
 The shared kernel is `_diffusion_2d_impl(h, kappa, dx, dy, mh, mu, mv)`
@@ -356,7 +368,7 @@ the intermediate `Dm(h)` are never read: the coast is a no-flux wall for
 both `h` and `∇²h`, exactly like the closed domain walls.  The result is
 conservative (`Σ_wet ∂h/∂t = 0`) and symmetric on the wet cells, and no
 land value reaches a wet cell.  (Before #292 the inner Laplacian was
-unmasked and post-multiplied by `mask.h`, which read land values and was
+unmasked and post-multiplied by `mask.wet()`, which read land values and was
 not conservative.)
 
 ### Pattern A vs Pattern B for 3-D operators
@@ -465,7 +477,7 @@ raw-array `mask_h` / `mask_u` / `mask_v` keyword arguments.  Those are
   mask-free.  Apply masks at the call site:
 
   ```python
-  ke = fvx.kinetic_energy(u, v) * mask.h
-  z  = fvx.enstrophy(omega)     * mask.xy_corner_strict
-  pe = fvx.potential_enstrophy(q, h) * mask.xy_corner_strict
+  ke = fvx.kinetic_energy(u, v) * mask.wet()
+  z  = fvx.enstrophy(omega)     * mask.wet(at="X", kind="strict")
+  pe = fvx.potential_enstrophy(q, h) * mask.wet(at="X", kind="strict")
   ```

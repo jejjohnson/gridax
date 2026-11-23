@@ -53,7 +53,7 @@ class TestNeumannOperator:
         """On the rectangle's T mask the operator is the DCT-II one exactly."""
         dx, dy = _grid()
         mask = _rect_mask()
-        wet = np.asarray(mask.h) > 0.5
+        wet = np.asarray(mask.wet()) > 0.5
         b = _rhs()
         # spectral DCT-II on the T interior, zero ghost ring
         p = (
@@ -61,7 +61,7 @@ class TestNeumannOperator:
             .at[1:-1, 1:-1]
             .set(gs.solve_helmholtz_dct2(b[1:-1, 1:-1], dx, dy, 0.0))
         )
-        lap = gs.masked_neumann_laplacian(p, mask.h.astype(b.dtype), dx, dy)
+        lap = gs.masked_neumann_laplacian(p, mask.wet().astype(b.dtype), dx, dy)
         b_proj = _demeaned(b, wet)  # the DCT solve drops the mean of b
         # roundoff of a 34x34 transform round trip
         np.testing.assert_allclose(np.asarray(lap)[wet], b_proj, atol=1e-12)
@@ -69,8 +69,8 @@ class TestNeumannOperator:
     def test_symmetric_negative_semidefinite_single_null_vector(self):
         dx, dy = _grid()
         mask = _island_basin()
-        mf = mask.h.astype(jnp.float64)
-        idx = np.flatnonzero(np.asarray(mask.h).ravel())
+        mf = mask.wet().astype(jnp.float64)
+        idx = np.flatnonzero(np.asarray(mask.wet()).ravel())
         cols = []
         for k in idx:
             e = jnp.zeros(N * N).at[k].set(1.0).reshape(N, N)
@@ -87,12 +87,12 @@ class TestNeumannOperator:
         """The third copy of the zero-flux operator: Diffusion2D with kappa = 1."""
         mask = _island_basin()
         g = fvx.CartesianCGrid2D.from_interior(N - 2, N - 2, Lx=1.0, Ly=1.3)
-        p = _rhs(9) * mask.h
+        p = _rhs(9) * mask.wet()
         lap = gs.masked_neumann_laplacian(
-            p, mask.h.astype(p.dtype), g.spacing("x"), g.spacing("y")
+            p, mask.wet().astype(p.dtype), g.spacing("x"), g.spacing("y")
         )
         diff = fvx.Diffusion2D(g, mask=mask)(p, 1.0)
-        wet = np.asarray(mask.h) > 0.5
+        wet = np.asarray(mask.wet()) > 0.5
         np.testing.assert_allclose(
             np.asarray(lap)[wet], np.asarray(diff)[wet], atol=1e-10
         )
@@ -101,7 +101,7 @@ class TestNeumannOperator:
         """p = 0 on the faces: the T-point DST-II solve satisfies it exactly."""
         dx, dy = _grid()
         mask = _rect_mask()
-        wet = np.asarray(mask.h) > 0.5
+        wet = np.asarray(mask.wet()) > 0.5
         b = _rhs(10)
         # spectral DST-II on the T interior, zero ghost ring
         p = (
@@ -109,6 +109,6 @@ class TestNeumannOperator:
             .at[1:-1, 1:-1]
             .set(gs.solve_helmholtz_dst2(b[1:-1, 1:-1], dx, dy, 0.0))
         )
-        lap = gs.masked_face_dirichlet_laplacian(p, mask.h.astype(b.dtype), dx, dy)
+        lap = gs.masked_face_dirichlet_laplacian(p, mask.wet().astype(b.dtype), dx, dy)
         # roundoff of a 34x34 transform round trip
         np.testing.assert_allclose(np.asarray(lap)[wet], np.asarray(b)[wet], atol=1e-11)

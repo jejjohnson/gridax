@@ -542,10 +542,10 @@ class TestDryCellNaNSafety:
 class TestDtypePreservation:
     """The mask path must not silently upcast beyond the unmasked path.
 
-    The OLD code forced ``mask.h`` to ``float64`` via
-    ``jnp.asarray(mask.h, dtype=jnp.float64)``, so enabling a mask
+    The OLD code forced ``mask.wet()`` to ``float64`` via
+    ``jnp.asarray(mask.wet(), dtype=jnp.float64)``, so enabling a mask
     would silently upgrade a float32 workload to float64.  The fix
-    uses ``jnp.where(mask.h, …, 0.0)``, leaving dtype selection
+    uses ``jnp.where(mask.wet(), …, 0.0)``, leaving dtype selection
     entirely to JAX's normal promotion rules (driven by ``field`` and
     the grid-derived weights).  These tests pin that "masked == unmasked
     dtype" invariant across both sum and mean, 2-D and 3-D, Cartesian

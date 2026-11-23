@@ -235,7 +235,7 @@ def masked_helmholtz_operator(
     >>> psi = jnp.zeros(mask.size).at[wet].set(psi_wet).reshape(mask.shape)
     """
     if isinstance(mask, Mask2D):
-        mask = mask.xy_corner_strict
+        mask = mask.wet(at="X", kind="strict")
     wet = np.asarray(mask).astype(bool)  # [Ny, Nx], concrete
     # B = (∇² - λ) on the rectangle; "dst" matches masked_laplacian's zero pad
     base = helmholtz_operator(wet.shape, dx, dy, lambda_=lambda_, bc=bc)

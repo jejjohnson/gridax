@@ -84,7 +84,7 @@ class Divergence2D:
         Optional land/ocean mask.  When provided, the internal
         ``Difference2D`` is constructed with the same mask, so the
         divergence output is already zeroed at dry T-cells via
-        ``* mask.h`` (applied inside :meth:`Difference2D.divergence`).
+        ``* mask.wet()`` (applied inside :meth:`Difference2D.divergence`).
 
     Examples
     --------
@@ -132,7 +132,7 @@ class Divergence2D:
         -------
         Float[Array, "*batch Ny Nx"]
             Divergence at T-points.  When ``self.mask`` is set, the
-            output is zeroed at dry T-cells via ``* mask.h`` (applied
+            output is zeroed at dry T-cells via ``* mask.wet()`` (applied
             inside ``self.diff.divergence``).
         """
         return self.diff.divergence(u, v)

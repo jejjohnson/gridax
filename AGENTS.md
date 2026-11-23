@@ -249,23 +249,17 @@ apply BCs to intermediate fields before chaining operators.
 
 ### 3. Masks
 
-- Build masks once, eagerly, from a binary T-point mask:
-  `Mask2D.from_mask(h_mask)` derives `h`, `u`, `v`, `xy_corner` (lenient),
-  `xy_corner_strict`, the coast classification and the stencil capability
-  with numpy / scipy, and stores them as NumPy arrays (a `pytree_dataclass`,
-  so the mask modules import without JAX); `Mask2D.from_bathymetry(depth,
-  min_depth)` thresholds a depth array first. `True` = wet. The `not_*`
-  inverses are properties, not stored fields.
+- Build masks once, eagerly, from a binary T-point mask: `Mask2D.from_grid(grid, wet_t)` (which checks the shape against the grid) or `Mask2D.from_mask(wet_t)` derives the wet U, V and X points, the coast classification and the stencil capability with numpy / scipy, and stores them as NumPy arrays (a `pytree_dataclass`, so the mask modules import without JAX); `Mask2D.from_bathymetry(depth, min_depth)` thresholds a depth array first. Read them by point: `mask.wet(at="U")` (`True` = wet), with `kind="strict"` (all four cells wet) and the wall kinds at X; `at=` also takes a field's stagger.
 - A class operator with a mask zeroes its output on the dry points **of its
-  output stagger** (`mask.h` for T, `mask.u` for U, `mask.v` for V,
-  `mask.xy_corner_strict` for X). `mask=None` must reproduce the unmasked
+  output stagger** (`mask.wet()` for T, `mask.wet(at="U")` for U, `mask.wet(at="V")` for V,
+  `mask.wet(at="X", kind="strict")` for X). `mask=None` must reproduce the unmasked
   result bit for bit, and an all-ocean mask must equal `mask=None`.
 - Masked advection (`Advection1D/2D/3D`, `SphericalAdvection2D/3D`) is
   land-safe for every method: dry inputs are zeroed with `jnp.where`, every
   upwind-biased method falls back to narrower stencils near the coast
   through `upwind_flux` and the `(2, 4, 6, 8, 10)` adaptive hierarchy
   (`naive` reads only the two cells beside a face), and the fluxes on dry
-  faces (`mask.u` / `mask.v` false) are zeroed before the divergence, as in
+  faces (`mask.wet(at="U")` / `mask.wet(at="V")` false) are zeroed before the divergence, as in
   `Diffusion2D`.
 - Where land may hold `NaN` (e.g. `Mask2D.from_center`), zero the dry
   inputs with `jnp.where` before any stencil reads them **and** mask the

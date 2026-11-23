@@ -9,7 +9,7 @@ land-safe: dry inputs are zeroed with ``jnp.where`` before any stencil
 reads them, the upwind reconstructions fall back to a lower-order stencil
 near irregular boundaries (using :func:`~gridax.upwind_flux` as the
 unified dispatch mechanism), and the face fluxes on every dry face
-(wet→dry and dry→dry, ``mask.u`` / ``mask.v`` false) are zeroed before the
+(wet→dry and dry→dry, ``mask.wet(at="U")`` / ``mask.wet(at="V")`` false) are zeroed before the
 divergence, as in :class:`~gridax.Diffusion2D`.  The wet tendencies
 therefore never depend on the values stored on land, and no mass crosses
 the coastline.
@@ -237,7 +237,7 @@ class Advection1D:
         leak), the upwind-biased methods go through ``upwind_flux`` with
         the pre-built adaptive stencil hierarchy (falling back to
         narrower stencils near coastlines, so no chosen stencil reads a
-        dry cell), the face fluxes on dry faces (``mask.u`` false) are
+        dry cell), the face fluxes on dry faces (``mask.wet(at="U")`` false) are
         zeroed before the divergence (no flux through the coast), and
         dry T-cells are exactly zero.  ``None`` (default) matches the
         unmasked behaviour bit for bit.
@@ -308,8 +308,8 @@ class Advection1D:
         if self.mask is not None:
             # Zero the dry inputs before any stencil reads them, so land
             # values (even NaN) reach neither the output nor its gradient.
-            h = xp.where(self.mask.h, h, 0.0)  # [Nx]
-            u = xp.where(self.mask.u, u, 0.0)  # [Nx]
+            h = xp.where(self.mask.wet(), h, 0.0)  # [Nx]
+            u = xp.where(self.mask.wet(at="U"), u, 0.0)  # [Nx]
         # ── masked path: route through upwind_flux with adaptive stencils ─
         if self._mask_hierarchy_x is not None and method in _MASK_DISPATCHABLE:
             rfx, sizes = _rec_funcs_for_method_1d(self.recon, method)
@@ -340,8 +340,8 @@ class Advection1D:
             raise ValueError(f"Unknown method: {method!r}")
         if self.mask is not None:
             # No flux through a dry face: fe[i+1/2] = 0 unless both h[i]
-            # and h[i+1] are wet (mask.u), as in Diffusion2D.
-            fe = xp.where(self.mask.u, fe, 0.0)  # [Nx]
+            # and h[i+1] are wet (mask.wet(at="U")), as in Diffusion2D.
+            fe = xp.where(self.mask.wet(at="U"), fe, 0.0)  # [Nx]
 
         out = xp.zeros_like(h)
         # dh[i] = -(fe[i+1/2] - fe[i-1/2]) / dx
@@ -363,7 +363,7 @@ class Advection1D:
                 out, np.s_[2:-2], -(fe[2:-2] - fe[1:-3]) / _spacing(self.grid, "x", fe)
             )
         if self.mask is not None:
-            out = xp.where(self.mask.h, out, 0.0)
+            out = xp.where(self.mask.wet(), out, 0.0)
         return out
 
 
@@ -385,7 +385,7 @@ class Advection2D:
         upwind-biased methods (everything but ``naive``) go through
         ``upwind_flux`` with the stored hierarchy narrowed to the
         method's stencil sizes, so no chosen stencil reads a dry cell;
-        the face fluxes on dry faces (``mask.u`` / ``mask.v`` false) are
+        the face fluxes on dry faces (``mask.wet(at="U")`` / ``mask.wet(at="V")`` false) are
         zeroed before the divergence, as in :class:`Diffusion2D`, so no
         mass crosses the coast; and dry T-cells are exactly zero.
         ``None`` (default) matches the unmasked behaviour bit for bit.
@@ -465,9 +465,9 @@ class Advection2D:
         if self.mask is not None:
             # Zero the dry inputs before any stencil reads them, so land
             # values (even NaN) reach neither the output nor its gradient.
-            h = xp.where(self.mask.h, h, 0.0)  # [Ny, Nx]
-            u = xp.where(self.mask.u, u, 0.0)  # [Ny, Nx]
-            v = xp.where(self.mask.v, v, 0.0)  # [Ny, Nx]
+            h = xp.where(self.mask.wet(), h, 0.0)  # [Ny, Nx]
+            u = xp.where(self.mask.wet(at="U"), u, 0.0)  # [Ny, Nx]
+            v = xp.where(self.mask.wet(at="V"), v, 0.0)  # [Ny, Nx]
         # ── masked path: route through upwind_flux with pre-built hier. ──
         mh_x = self._mask_hierarchy_x
         mh_y = self._mask_hierarchy_y
@@ -512,10 +512,10 @@ class Advection2D:
             raise ValueError(f"Unknown method: {method!r}")
         if self.mask is not None:
             # No flux through a dry face: fe[j, i+1/2] = 0 unless h[j, i] and
-            # h[j, i+1] are both wet (mask.u), fn[j+1/2, i] likewise with
-            # mask.v — the Diffusion2D face-flux masking.
-            fe = xp.where(self.mask.u, fe, 0.0)  # [Ny, Nx]
-            fn = xp.where(self.mask.v, fn, 0.0)  # [Ny, Nx]
+            # h[j, i+1] are both wet (mask.wet(at="U")), fn[j+1/2, i] likewise with
+            # mask.wet(at="V") — the Diffusion2D face-flux masking.
+            fe = xp.where(self.mask.wet(at="U"), fe, 0.0)  # [Ny, Nx]
+            fn = xp.where(self.mask.wet(at="V"), fn, 0.0)  # [Ny, Nx]
 
         # dh[j, i] = -( (fe[j, i+1/2] - fe[j, i-1/2])/dx
         #             + (fn[j+1/2, i] - fn[j-1/2, i])/dy )
@@ -555,7 +555,7 @@ class Advection2D:
                 ghost=2,
             )
         if self.mask is not None:
-            out = xp.where(self.mask.h, out, 0.0)
+            out = xp.where(self.mask.wet(), out, 0.0)
         return out
 
 
@@ -576,7 +576,7 @@ class Advection3D:
         ``upwind_flux`` with the stored 3-D hierarchies narrowed to the
         method's stencil sizes — the z axis is treated as a batch
         dimension throughout — and the face fluxes on dry faces
-        (``mask.u`` / ``mask.v`` false) are zeroed before the divergence.
+        (``mask.wet(at="U")`` / ``mask.wet(at="V")`` false) are zeroed before the divergence.
 
         Pivoted from ``Mask2D`` to ``Mask3D`` per issue #209 Q4 for
         type-uniformity with the rest of the 3-D operator suite.  A
@@ -659,9 +659,9 @@ class Advection3D:
         if self.mask is not None:
             # Zero the dry inputs before any stencil reads them, so land
             # values (even NaN) reach neither the output nor its gradient.
-            h = xp.where(self.mask.h, h, 0.0)  # [Nz, Ny, Nx]
-            u = xp.where(self.mask.u, u, 0.0)  # [Nz, Ny, Nx]
-            v = xp.where(self.mask.v, v, 0.0)  # [Nz, Ny, Nx]
+            h = xp.where(self.mask.wet(), h, 0.0)  # [Nz, Ny, Nx]
+            u = xp.where(self.mask.wet(at="U"), u, 0.0)  # [Nz, Ny, Nx]
+            v = xp.where(self.mask.wet(at="V"), v, 0.0)  # [Nz, Ny, Nx]
         # ── masked path: route through upwind_flux with pre-built 3-D hier. ──
         mh_x = self._mask_hierarchy_x
         mh_y = self._mask_hierarchy_y
@@ -700,9 +700,9 @@ class Advection3D:
         else:
             raise ValueError(f"Unknown method: {method!r}")
         if self.mask is not None:
-            # No flux through a dry face (mask.u / mask.v false).
-            fe = xp.where(self.mask.u, fe, 0.0)  # [Nz, Ny, Nx]
-            fn = xp.where(self.mask.v, fn, 0.0)  # [Nz, Ny, Nx]
+            # No flux through a dry face (mask.wet(at="U") / mask.wet(at="V") false).
+            fe = xp.where(self.mask.wet(at="U"), fe, 0.0)  # [Nz, Ny, Nx]
+            fn = xp.where(self.mask.wet(at="V"), fn, 0.0)  # [Nz, Ny, Nx]
 
         out = xp.zeros_like(h)
         # dh[k, j, i] = -( (fe[k,j,i+1/2] - fe[k,j,i-1/2])/dx
@@ -759,5 +759,5 @@ class Advection3D:
                 ),
             )
         if self.mask is not None:
-            out = xp.where(self.mask.h, out, 0.0)
+            out = xp.where(self.mask.wet(), out, 0.0)
         return out

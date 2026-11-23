@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import dataclasses
 from pathlib import Path
+from typing import ClassVar
 
 import equinox as eqx
 from gridax import (
@@ -22,6 +23,8 @@ from gridax import (
     CartesianCGrid3D,
     Mask1D,
     Mask2D,
+    Mask3D,
+    SphericalCGrid2D,
 )
 import jax
 import jax.numpy as jnp
@@ -50,7 +53,7 @@ class TestDataclass:
         assert dataclasses.is_dataclass(mask)
         assert not isinstance(mask, eqx.Module)
         with pytest.raises(dataclasses.FrozenInstanceError):
-            mask.h = mask.h
+            mask._h = mask.wet()
         for leaf in jax.tree_util.tree_leaves(mask):
             assert isinstance(leaf, np.ndarray)
 
@@ -59,16 +62,85 @@ class TestDataclass:
         assert "sponge" not in names
         assert not any("irrbound" in n or n.startswith("not_") for n in names)
 
-    def test_not_fields_are_inverses(self, mask):
-        for name in ("h", "u"):
-            np.testing.assert_array_equal(
-                getattr(mask, f"not_{name}"), ~getattr(mask, name)
-            )
-
     def test_narrow_integer_storage(self, mask):
         assert mask.classification.dtype == np.int8
         for field in dataclasses.fields(mask.stencil_capability):
             assert getattr(mask.stencil_capability, field.name).dtype == np.int8
+
+
+#: The arguments of ``wet`` that give each of the masks' old attributes.
+WET = {
+    "h": {},
+    "u": {"at": "U"},
+    "v": {"at": "V"},
+    "w": {"at": "W"},
+    "xy_corner": {"at": "X"},
+    **{
+        f"xy_corner_{kind}": {"at": "X", "kind": kind}
+        for kind in ("strict", "y_wall", "x_wall", "convex", "valid")
+    },
+}
+
+
+@pytest.mark.parametrize("dim", sorted(MASKS))
+def test_wet_takes_a_stagger(dim):
+    m = MASKS[dim]()
+    points = {
+        "U": (("x", "right"),),
+        "V": (("y", "right"),),
+        "X": (("x", "right"), ("y", "right")),
+        "W": (("z", "right"),),
+    }
+    for point in {"1d": "U", "2d": "UVX", "3d": "UVXW"}[dim]:
+        np.testing.assert_array_equal(m.wet(at=points[point]), m.wet(at=point))
+    np.testing.assert_array_equal(m.wet(at=()), m.wet())
+
+
+@pytest.mark.parametrize("dim", sorted(MASKS))
+def test_the_old_attributes_are_gone(dim):
+    m = MASKS[dim]()
+    for name in WET:
+        assert not hasattr(m, name)
+        assert not hasattr(m, f"not_{name}")
+
+
+@pytest.mark.parametrize(
+    ("dim", "kwargs"),
+    [
+        ("1d", {"at": "V"}),
+        ("1d", {"at": "X"}),
+        ("2d", {"at": "W"}),
+        ("2d", {"at": "Q"}),
+        ("2d", {"at": (("x", "left"),)}),
+        ("2d", {"at": "X", "kind": "lenient"}),
+        ("2d", {"at": "U", "kind": "strict"}),
+    ],
+)
+def test_unknown_points_and_kinds_raise(dim, kwargs):
+    with pytest.raises(ValueError, match=r"at=|kind"):
+        MASKS[dim]().wet(**kwargs)
+
+
+class TestFromGrid:
+    GRIDS: ClassVar = {
+        "1d": CartesianCGrid1D.from_interior(6, 1.0),
+        "2d": CartesianCGrid2D.from_interior(6, 5, 1.0, 1.0),
+        "sphere": SphericalCGrid2D.from_interior(6, 5, (0.0, 30.0), (0.0, 30.0)),
+        "3d": CartesianCGrid3D.from_interior(6, 5, 4, 1.0, 1.0, 1.0),
+    }
+    CLASSES: ClassVar = {"1d": Mask1D, "2d": Mask2D, "sphere": Mask2D, "3d": Mask3D}
+
+    @pytest.mark.parametrize("name", sorted(GRIDS))
+    def test_is_from_mask_on_the_grids_shape(self, name):
+        grid, cls = self.GRIDS[name], self.CLASSES[name]
+        wet = np.random.default_rng(0).random(grid.shape) > 0.2
+        assert cls.from_grid(grid, wet) == cls.from_mask(wet)
+
+    @pytest.mark.parametrize("name", sorted(GRIDS))
+    def test_another_shape_raises(self, name):
+        grid, cls = self.GRIDS[name], self.CLASSES[name]
+        with pytest.raises(ValueError, match="shape"):
+            cls.from_grid(grid, np.ones([n - 1 for n in grid.shape], dtype=bool))
 
 
 def test_kept_fields_match_the_equinox_masks():
@@ -83,7 +155,7 @@ def test_kept_fields_match_the_equinox_masks():
         elif name.startswith("stencil_capability."):
             value = getattr(m.stencil_capability, name.split(".")[1])
         else:
-            value = getattr(m, name)
+            value = m.wet(**WET[name]) if name in WET else getattr(m, name)
         np.testing.assert_array_equal(np.asarray(value), ref[key], err_msg=key)
 
 
@@ -157,14 +229,14 @@ def test_from_bathymetry_equals_from_mask_of_the_threshold():
     with np.errstate(invalid="ignore"):
         expected = Mask2D.from_mask(depth > 10.0)
     assert m == expected
-    assert not m.h[3, 4]
+    assert not m.wet()[3, 4]
 
 
 def test_from_bathymetry_drops_small_wet_regions():
     depth = np.full((12, 12), -1.0)
     depth[1:9, 1:9] = 100.0  # basin of 64 cells
     depth[10, 10] = 100.0  # isolated one-cell pond
-    assert Mask2D.from_bathymetry(depth).h[10, 10]
+    assert Mask2D.from_bathymetry(depth).wet()[10, 10]
     m = Mask2D.from_bathymetry(depth, min_area=2)
-    assert not m.h[10, 10]
-    assert m.h[1:9, 1:9].all()
+    assert not m.wet()[10, 10]
+    assert m.wet()[1:9, 1:9].all()

@@ -116,8 +116,8 @@ def _op(name: str, mask=None):
 def _dry(name: str, method: str, mask) -> np.ndarray:
     """Dry cells of the method's output stagger."""
     if (name, method) in _X_POINT:
-        return ~np.asarray(mask.xy_corner_strict)
-    return ~np.asarray(mask.h)
+        return ~np.asarray(mask.wet(at="X", kind="strict"))
+    return ~np.asarray(mask.wet())
 
 
 @pytest.mark.parametrize(("name", "method"), CASES)
@@ -283,9 +283,9 @@ class TestNaNOnLand:
         op = _op(name, mask)
         args = _args(method)
         dry_of = {
-            "u": _interior_dry(mask.u),
-            "v": _interior_dry(mask.v),
-            "h": _interior_dry(mask.h),
+            "u": _interior_dry(mask.wet(at="U")),
+            "v": _interior_dry(mask.wet(at="V")),
+            "h": _interior_dry(mask.wet()),
         }
         # Positional stagger of each leading field argument, per method
         # (None = not a field, left untouched).
@@ -319,9 +319,9 @@ class TestGradientsWithNaNOnLand:
         mask = make_mask_2d()
         op = Energetics2D(grid=make_grid_2d(), mask=mask)
         dry_h, dry_u, dry_v = (
-            _interior_dry(mask.h),
-            _interior_dry(mask.u),
-            _interior_dry(mask.v),
+            _interior_dry(mask.wet()),
+            _interior_dry(mask.wet(at="U")),
+            _interior_dry(mask.wet(at="V")),
         )
         h, u, v = _args("bernoulli_potential")
         H = _args("available_potential_energy")[1]
@@ -344,8 +344,8 @@ class TestGradientsWithNaNOnLand:
         mask = make_mask_2d()
         op = Strain2D(grid=make_grid_2d(), mask=mask)
         u, v = _args("shear")
-        u = jnp.where(_interior_dry(mask.u), jnp.nan, u)
-        v = jnp.where(_interior_dry(mask.v), jnp.nan, v)
+        u = jnp.where(_interior_dry(mask.wet(at="U")), jnp.nan, u)
+        v = jnp.where(_interior_dry(mask.wet(at="V")), jnp.nan, v)
         du, dv = jax.grad(lambda u, v: jnp.sum(op.okubo_weiss(u, v)), (0, 1))(u, v)
         assert np.all(np.isfinite(np.asarray(du)))
         assert np.all(np.isfinite(np.asarray(dv)))
@@ -355,10 +355,10 @@ class TestGradientsWithNaNOnLand:
         op = Vorticity2D(grid=make_grid_2d(), mask=mask)
         u, v, h, f = _args("potential_enstrophy")
         # field[j, i] = NaN on dry interior cells of its stagger
-        u = jnp.where(_interior_dry(mask.u), jnp.nan, u)
-        v = jnp.where(_interior_dry(mask.v), jnp.nan, v)
-        h = jnp.where(_interior_dry(mask.h), jnp.nan, h)
-        f = jnp.where(_interior_dry(mask.h), jnp.nan, f)
+        u = jnp.where(_interior_dry(mask.wet(at="U")), jnp.nan, u)
+        v = jnp.where(_interior_dry(mask.wet(at="V")), jnp.nan, v)
+        h = jnp.where(_interior_dry(mask.wet()), jnp.nan, h)
+        f = jnp.where(_interior_dry(mask.wet()), jnp.nan, f)
 
         def loss(u, v, h, f):
             return jnp.sum(op.enstrophy(u, v)) + jnp.sum(
@@ -387,7 +387,7 @@ class TestStrainBoundaryConditions:
         d = np.asarray(
             op.magnitude_squared(u_noslip, v) - op.magnitude_squared(u_freeslip, v)
         )
-        wet_first_row = np.asarray(mask.h)[1, :]
+        wet_first_row = np.asarray(mask.wet())[1, :]
         assert np.any(d[1, wet_first_row] != 0.0)
         np.testing.assert_array_equal(d[2:, :], 0.0)
 

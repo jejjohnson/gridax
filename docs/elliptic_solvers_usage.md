@@ -50,7 +50,7 @@ ocean = np.zeros((Ny, Nx), dtype=bool)
 ocean[1:-1, 1:-1] = True
 ocean &= (ii - Nx / 2) ** 2 + (jj - Ny / 2) ** 2 < (0.45 * Nx) ** 2
 ocean &= (ii - 0.62 * Nx) ** 2 + (jj - 0.55 * Ny) ** 2 > (0.1 * Nx) ** 2
-mask = fvx.Mask2D.from_mask(ocean)  # psi uses mask.xy_corner_strict, p uses mask.h
+mask = fvx.Mask2D.from_mask(ocean)  # psi uses mask.wet(at="X", kind="strict"), p uses mask.wet()
 
 Rd = 2e4             # deformation radius [m]
 lambda_ = 1 / Rd**2  # (∇² − λ) is negative definite for λ ≥ 0
@@ -250,7 +250,7 @@ preconditioned CG solver, which is gaussx's (`gaussx.linear_solve_with_info` wit
 ### Basic Usage
 
 ```python
-psi_mask = jnp.asarray(mask.xy_corner_strict, dtype=float)  # psi's wet nodes
+psi_mask = jnp.asarray(mask.wet(at="X", kind="strict"), dtype=float)  # psi's wet nodes
 rhs = zeta * psi_mask
 
 # Define the operator: (∇² − λ) with psi = 0 on the dry neighbours

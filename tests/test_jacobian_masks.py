@@ -2,7 +2,7 @@
 
 ArakawaJacobian2D is the Layer-3 form of :func:`arakawa_jacobian` (#206):
 full-shape T-point output with a zero ghost ring, dry T-cells zeroed via
-``mask.h``.
+``mask.wet()``.
 """
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ class TestArakawaJacobian2DMasks:
     def test_dry_cells_zero(self):
         mask = make_mask_2d()
         out = np.asarray(_call(mask))
-        dry = ~np.asarray(mask.h)
+        dry = ~np.asarray(mask.wet())
         assert dry.any()
         assert np.all(np.isfinite(out))
         np.testing.assert_array_equal(out[dry], 0.0)
@@ -65,7 +65,7 @@ class TestArakawaJacobian2DShape:
         np.testing.assert_array_equal(np.asarray(out)[ghost], 0.0)
 
     def test_batched_layers(self):
-        """Leading axes pass through; each layer masked by the same mask.h."""
+        """Leading axes pass through; each layer masked by the same mask.wet()."""
         mask = make_mask_2d()
         op = ArakawaJacobian2D(grid=make_grid_2d(), mask=mask)
         psi = make_psi_field_2layer()
@@ -87,7 +87,7 @@ class TestArakawaJacobian2DNaNOnLand:
         """NaN land values in f / g give the same output as finite ones."""
         mask = make_mask_2d()
         # dry[j, i] = interior dry T-cell (the ghost ring is BC-owned)
-        dry = ~np.asarray(mask.h)
+        dry = ~np.asarray(mask.wet())
         dry[0, :] = dry[-1, :] = dry[:, 0] = dry[:, -1] = False
         op = ArakawaJacobian2D(grid=make_grid_2d(), mask=mask)
         f, g = make_h_field_2d(), make_q_field_2d()

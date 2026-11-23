@@ -553,18 +553,20 @@ class TestVerticalVelocity:
             grid3d.spacing("z"),
             mask=mask,
         )
-        assert w.shape == mask.w.shape
-        np.testing.assert_array_equal(np.asarray(w)[~np.asarray(mask.w)], 0.0)
+        assert w.shape == mask.wet(at="W").shape
+        np.testing.assert_array_equal(np.asarray(w)[~np.asarray(mask.wet(at="W"))], 0.0)
         # = the unmasked result on the masked velocities (no flow through the
         # coast faces), zeroed on dry W-faces
         w_ref = vertical_velocity(
-            u * mask.u,
-            v * mask.v,
+            u * mask.wet(at="U"),
+            v * mask.wet(at="V"),
             grid3d.spacing("x"),
             grid3d.spacing("y"),
             grid3d.spacing("z"),
         )
-        np.testing.assert_allclose(jnp.where(mask.w, w_ref, 0.0), w, rtol=0, atol=1e-14)
+        np.testing.assert_allclose(
+            jnp.where(mask.wet(at="W"), w_ref, 0.0), w, rtol=0, atol=1e-14
+        )
         w_all = vertical_velocity(
             u, v, grid3d.spacing("x"), grid3d.spacing("y"), grid3d.spacing("z")
         )
@@ -588,8 +590,8 @@ class TestVerticalVelocity:
         wet = np.ones((grid3d.Nz, grid3d.Ny, grid3d.Nx), dtype=bool)
         wet[:, :, :3] = False
         mask = Mask3D.from_mask(wet)
-        u = jnp.where(mask.u, jnp.broadcast_to(x, wet.shape), jnp.nan)
-        v = jnp.where(mask.v, 0.0, jnp.nan)
+        u = jnp.where(mask.wet(at="U"), jnp.broadcast_to(x, wet.shape), jnp.nan)
+        v = jnp.where(mask.wet(at="V"), 0.0, jnp.nan)
         w = vertical_velocity(
             u,
             v,

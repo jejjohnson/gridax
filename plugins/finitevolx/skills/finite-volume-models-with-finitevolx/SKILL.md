@@ -41,7 +41,7 @@ Poisson solver or an RK loop, look it up:
 | Moving fields between T / U / V / X points | `fvx.Interpolation1D/2D/3D` (`T_to_U`, `U_to_T`, `T_to_X`, …) |
 | Tracer advection | `fvx.Advection1D/2D/3D(grid, mask)(q, u, v, method="weno5")` (`upwind1/2/3`, `weno3/5/7/9`, `wenoz5`, `minmod`, `van_leer`, `superbee`, `mc`); `fvx.SphericalAdvection2D` |
 | Diffusion, momentum advection, Coriolis | `fvx.Diffusion2D/3D`, `fvx.BiharmonicDiffusion2D/3D`, `fvx.MomentumAdvection2D/3D`, `fvx.Coriolis2D/3D` |
-| Land and coasts | `fvx.Mask2D.from_mask(wet)` → staggered masks `h` / `u` / `v` / `xy_corner_strict`; pass `mask=` to an operator |
+| Land and coasts | `fvx.Mask2D.from_mask(wet)` → `mask.wet(at="T" / "U" / "V" / "X")`; pass `mask=` to an operator |
 | Ghost cells | `fvx.fill_ghosts(u, grid, fvx.BC(x=fvx.Dirichlet(0.0), y=fvx.Neumann()), stagger="U")`, `fvx.enforce_periodic`, `fvx.zero_gradient_boundaries`, `fvx.no_slip_boundaries`, `fvx.wall_boundaries` |
 | Diagnostics | `fvx.Energetics2D`, `fvx.Strain2D`, `fvx.QGPotentialVorticity2D`, `fvx.ArakawaJacobian2D`; `fvx.kinetic_energy`, `fvx.okubo_weiss`, `fvx.arakawa_jacobian`, … |
 | Integrals and means | `fvx.area_sum`, `fvx.area_mean`, `fvx.volume_mean`, `fvx.masked_mean` |
@@ -142,7 +142,7 @@ wet[0, :] = wet[-1, :] = wet[:, 0] = wet[:, -1] = False
 wet[28:38, 28:38] = False
 mask = fvx.Mask2D.from_mask(wet)
 dq = fvx.Advection2D(grid=grid, mask=mask)(q0, u, v, method="weno5")
-land_max = jnp.max(jnp.abs(jnp.where(mask.h, 0.0, dq)))
+land_max = jnp.max(jnp.abs(jnp.where(mask.wet(), 0.0, dq)))
 ```
 
 With x64 on, the velocities from `grad_perp` have a divergence of order

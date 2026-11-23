@@ -239,7 +239,7 @@ dh_dt = diff_op(h, kappa=100.0)
 
 # With masking — mask is a class field, not a per-call kwarg.
 # Diffusion applies the intermediate flux-masking pattern internally
-# (flux_x *= mask.u, flux_y *= mask.v, tendency *= mask.h).
+# (flux_x *= mask.wet(at="U"), flux_y *= mask.wet(at="V"), tendency *= mask.wet()).
 diff_op_masked = Diffusion2D(grid=grid, mask=mask)
 dh_dt = diff_op_masked(h, kappa=100.0)
 

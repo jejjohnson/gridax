@@ -151,11 +151,11 @@ class TestCoriolis2D:
         """Mask zeros tendencies at dry face cells and leaves wet cells unchanged.
 
         Under the trailing-pad (positive half-step) convention,
-        ``mask.u[j, i] = h[j, i] AND h[j, i+1]`` (the east face of T[j, i]),
-        so a land column at index 5 zeros ``mask.u[:, 4]`` (east face of
-        column 4 borders land) and ``mask.u[:, 5]`` (east face of column 5
-        is land).  The ``mask.v`` (north face) is unaffected by a single
-        land column except *at* column 5, where ``mask.v[:, 5] =
+        ``mask.wet(at="U")[j, i] = h[j, i] AND h[j, i+1]`` (the east face of T[j, i]),
+        so a land column at index 5 zeros ``mask.wet(at="U")[:, 4]`` (east face of
+        column 4 borders land) and ``mask.wet(at="U")[:, 5]`` (east face of column 5
+        is land).  The ``mask.wet(at="V")`` (north face) is unaffected by a single
+        land column except *at* column 5, where ``mask.wet(at="V")[:, 5] =
         h[:, 5] AND h[:+1, 5] = F``.
         """
         u = jnp.ones((grid2d.Ny, grid2d.Nx))
@@ -172,15 +172,19 @@ class TestCoriolis2D:
         du_masked, dv_masked = cor(u, v, f)
         du_unmasked, _ = cor_unmasked(u, v, f)
 
-        # mask.u (east face) is dry at columns 4 and 5: column 4's east
+        # mask.wet(at="U") (east face) is dry at columns 4 and 5: column 4's east
         # face borders the land column 5, and column 5's east face is land.
         for col in (4, 5):
-            assert not bool(mask.u[3, col].item()), f"mask.u[:, {col}] should be dry"
+            assert not bool(mask.wet(at="U")[3, col].item()), (
+                "mask.wet(at=)[:, {col}] should be dry"
+            )
             np.testing.assert_allclose(np.asarray(du_masked[:, col]), 0.0, atol=1e-15)
 
-        # mask.v (north face) is dry only at column 5 (north face of land
+        # mask.wet(at="V") (north face) is dry only at column 5 (north face of land
         # column 5 is itself land); column 6 is unaffected by the gap.
-        assert not bool(mask.v[3, 5].item()), "mask.v[:, 5] should be dry"
+        assert not bool(mask.wet(at="V")[3, 5].item()), (
+            "V points of column 5 should be dry"
+        )
         np.testing.assert_allclose(np.asarray(dv_masked[:, 5]), 0.0, atol=1e-15)
 
         # An interior column away from land should match the unmasked result.
@@ -318,10 +322,10 @@ class TestCoriolis3D:
         """3-D mask zeros dry face cells at every z-level.
 
         Under the trailing-pad (positive half-step) convention,
-        ``mask.u[k, j, i] = h[k, j, i] AND h[k, j, i+1]`` (the east
+        ``mask.wet(at="U")[k, j, i] = h[k, j, i] AND h[k, j, i+1]`` (the east
         face of ``T[k, j, i]``), so a land column at ``i=4`` zeros
-        ``mask.u[:, :, 3]`` (east face of column 3 borders land) and
-        ``mask.u[:, :, 4]`` (east face of column 4 is itself land).
+        ``mask.wet(at="U")[:, :, 3]`` (east face of column 3 borders land) and
+        ``mask.wet(at="U")[:, :, 4]`` (east face of column 4 is itself land).
         After applying the mask, ``du_cor[:, :, 3]`` and
         ``du_cor[:, :, 4]`` must be zero at all z-levels, while an
         adjacent wet column is left unchanged.
@@ -346,17 +350,19 @@ class TestCoriolis3D:
         du_masked, dv_masked = cor(u, v, f)
         du_unmasked, _ = cor_unmasked(u, v, f)
 
-        # mask.u (east face) is dry at columns 3 and 4 at every z-level.
+        # mask.wet(at="U") (east face) is dry at columns 3 and 4 at every z-level.
         for col in (3, 4):
-            assert not bool(mask.u[1, 3, col].item()), (
-                f"mask.u[:, :, {col}] should be dry"
+            assert not bool(mask.wet(at="U")[1, 3, col].item()), (
+                "mask.wet(at=)[:, :, {col}] should be dry"
             )
             np.testing.assert_allclose(
                 np.asarray(du_masked[:, :, col]), 0.0, atol=1e-15
             )
 
-        # mask.v (north face) is dry only at column 4 (the land column).
-        assert not bool(mask.v[1, 3, 4].item()), "mask.v[:, :, 4] should be dry"
+        # mask.wet(at="V") (north face) is dry only at column 4 (the land column).
+        assert not bool(mask.wet(at="V")[1, 3, 4].item()), (
+            "V points of column 4 should be dry"
+        )
         np.testing.assert_allclose(np.asarray(dv_masked[:, :, 4]), 0.0, atol=1e-15)
 
         # An interior column well away from land should match the unmasked result.
@@ -426,8 +432,8 @@ class TestCoriolisEnergyConservation:
         h[0, :] = h[-1, :] = h[:, 0] = h[:, -1] = False
         h[8:13, 9:15] = False
         mask = Mask2D.from_mask(h)
-        u = jax.random.normal(jax.random.PRNGKey(3), (g.Ny, g.Nx)) * mask.u
-        v = jax.random.normal(jax.random.PRNGKey(4), (g.Ny, g.Nx)) * mask.v
+        u = jax.random.normal(jax.random.PRNGKey(3), (g.Ny, g.Nx)) * mask.wet(at="U")
+        v = jax.random.normal(jax.random.PRNGKey(4), (g.Ny, g.Nx)) * mask.wet(at="V")
         du, dv = Coriolis2D(grid=g, mask=mask)(u, v, self._beta_f(g))
         assert self._rel_dE(u, v, du, dv) < 1e-13
         # uniform f: same as f * V_to_U(v) on the masked velocities, also next
@@ -435,10 +441,10 @@ class TestCoriolisEnergyConservation:
         du, dv = Coriolis2D(grid=g, mask=mask)(u, v, jnp.full((g.Ny, g.Nx), 1.3))
         interp = Interpolation2D(grid=g)
         np.testing.assert_allclose(
-            du, 1.3 * interp.V_to_U(v) * mask.u, rtol=1e-13, atol=1e-15
+            du, 1.3 * interp.V_to_U(v) * mask.wet(at="U"), rtol=1e-13, atol=1e-15
         )
         np.testing.assert_allclose(
-            dv, -1.3 * interp.U_to_V(u) * mask.v, rtol=1e-13, atol=1e-15
+            dv, -1.3 * interp.U_to_V(u) * mask.wet(at="V"), rtol=1e-13, atol=1e-15
         )
 
     def test_masked_nan_land_stays_finite(self):
@@ -448,8 +454,8 @@ class TestCoriolisEnergyConservation:
         h[0, :] = h[-1, :] = h[:, 0] = h[:, -1] = False
         h[8:13, 9:15] = False
         mask = Mask2D.from_mask(h)
-        u = jnp.where(mask.u, 1.0, jnp.nan)
-        v = jnp.where(mask.v, 1.0, jnp.nan)
+        u = jnp.where(mask.wet(at="U"), 1.0, jnp.nan)
+        v = jnp.where(mask.wet(at="V"), 1.0, jnp.nan)
         op = Coriolis2D(grid=g, mask=mask)
         du, dv = op(u, v, self._beta_f(g))
         assert bool(jnp.all(jnp.isfinite(du))) and bool(jnp.all(jnp.isfinite(dv)))

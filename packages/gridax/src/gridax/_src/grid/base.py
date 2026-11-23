@@ -194,7 +194,7 @@ class ArakawaCGrid3D:
 
     Only the horizontal axes are staggered (T, U, V, X share the same
     z-level); W-fields use the same ``[Nz, Ny, Nx]`` shape, ``w[k]`` on the
-    top face of ``T[k]`` (as ``Mask3D.w`` and ``vertical_velocity``).
+    top face of ``T[k]`` (as ``Mask3D.wet(at="W")`` and ``vertical_velocity``).
     """
 
     Nx: int = static_field()
