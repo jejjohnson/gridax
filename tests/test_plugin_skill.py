@@ -34,7 +34,7 @@ _ALIASES = {"fvx": "gridax", "gs": "gridax.solvers"}
 # or a longer path.
 _NAME = re.compile(r"(?<![\w./])(fvx|gs|gridax\.solvers|gridax)\.([A-Za-z_]\w*)")
 # Submodules named as ``gridax.<module>``, not names in ``gridax.__all__``.
-_SUBMODULES = {"advection", "analysis", "pipekit", "solvers", "stencils"}
+_SUBMODULES = {"advection", "analysis", "pipekit", "schemes", "solvers", "stencils"}
 _BLOCKS = re.compile(r"```python\n(.*?)```", re.S)
 
 

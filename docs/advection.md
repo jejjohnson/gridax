@@ -483,6 +483,7 @@ from gridax import (
     interior,
     rusanov_flux,
 )
+from gridax.schemes import WENO, Upwind
 
 grid = CartesianCGrid2D.from_interior(16, 16, 1.0, 1.0)
 y, x = jnp.meshgrid(jnp.arange(grid.Ny), jnp.arange(grid.Nx), indexing="ij")

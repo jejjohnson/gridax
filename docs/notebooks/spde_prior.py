@@ -58,9 +58,10 @@ import jax.numpy as jnp
 import matplotlib
 
 matplotlib.use("Agg")
-import gridax.solvers as gs
 import matplotlib.pyplot as plt
 import numpy as np
+
+import gridax.solvers as gs
 
 jax.config.update("jax_enable_x64", True)
 

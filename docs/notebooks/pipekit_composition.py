@@ -45,8 +45,8 @@
 # operators: [C-grid discretization](../cgrid_discretization.md).
 
 # %%
-import json
 from pathlib import Path
+import json
 import time
 
 import equinox as eqx
@@ -55,12 +55,13 @@ import jax.numpy as jnp
 import matplotlib
 
 matplotlib.use("Agg")
-import gridax as fvx
-from gridax import pipekit as fp
-from integrix.march import rk4_step
 import matplotlib.pyplot as plt
-from pipekit_jax import Rollout
 from pipekit_ops import Graph, Input, Operator
+from pipekit_jax import Rollout
+
+import gridax as fvx
+from integrix.march import rk4_step
+from gridax import pipekit as fp
 
 jax.config.update("jax_enable_x64", True)
 
