@@ -25,6 +25,11 @@ from gridax._src.grid.collocated import (
 )
 from gridax._src.grid.coordinates import t_point_coordinates
 from gridax._src.grid.spherical import SphericalCGrid2D, SphericalCGrid3D
+from gridax._src.grid.stretched import (
+    StretchedCGrid1D,
+    StretchedCGrid2D,
+    StretchedCGrid3D,
+)
 
 __all__ = [
     # Abstract topology
@@ -42,6 +47,10 @@ __all__ = [
     # Spherical concrete
     "SphericalCGrid2D",
     "SphericalCGrid3D",
+    # Irregular axes
+    "StretchedCGrid1D",
+    "StretchedCGrid2D",
+    "StretchedCGrid3D",
     # Collocated
     "CollocatedGrid1D",
     "CollocatedGrid2D",

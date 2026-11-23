@@ -77,3 +77,37 @@ Every variable at T and no ghost ring, for fields that come with one value per c
 ::: gridax.CollocatedGrid2D
 
 ::: gridax.CollocatedGrid3D
+
+## Between the two families
+
+A collocated grid of `Ny` by `Nx` points is the interior T points of a C-grid of `(Ny + 2)` by `(Nx + 2)`: the faces sit halfway between the points, and a ghost point is the mirror of the first one about the wall. `agrid.staggered()` and `cgrid.collocated()` give one from the other, and `agrid.staggered().collocated()` is `agrid`. An irregular Cartesian grid gives a `StretchedCGrid`, which the moves, the vector calculus, the Laplacian and the reductions take. An axis that decreases (the rows of a north-up raster) has to be flipped first, and an irregular spherical one has no C-grid.
+
+`gridax.stagger` and `gridax.collocate` move the fields. A field at T moves exactly; any other point is interpolated, which damps short waves and warns with `LossyConversionWarning`, once per trace:
+
+```python
+import gridax
+import numpy as np
+
+agrid = gridax.CartesianAGrid2D.from_interior(8, 6, 8.0, 6.0, periodic=("x",))
+cgrid = agrid.staggered()
+ssh, u_geo = np.random.default_rng(0).normal(size=(2, *agrid.shape))
+
+walls = gridax.BC.no_flux("y")  # the periodic axis needs no condition
+h0 = gridax.stagger(ssh, agrid, dst="T", bc=walls)  # [8, 10], exact
+u0 = gridax.stagger(u_geo, agrid, dst="U", bc=walls)  # (u_geo[j, i] + u_geo[j, i+1]) / 2
+u_t = gridax.collocate(u0, cgrid, src="U")  # [6, 8], back at T, smoothed
+```
+
+There and back, `Centred(2)` multiplies a wave of wavenumber $k$ by $\cos^2(k \Delta x / 2)$, and removes the one of two cells. `scheme=Centred(4)` damps less.
+
+::: gridax.stagger
+
+::: gridax.collocate
+
+::: gridax.LossyConversionWarning
+
+::: gridax.StretchedCGrid1D
+
+::: gridax.StretchedCGrid2D
+
+::: gridax.StretchedCGrid3D

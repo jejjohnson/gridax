@@ -40,7 +40,7 @@ from gridax._src.pytree import array_namespace
 from gridax._src.schemes.adaptive import Adaptive, policies
 from gridax._src.schemes.base import Scheme
 from gridax._src.schemes.linear import Centred
-from gridax._src.stencils.coefficients import difference_coeffs
+from gridax._src.stencils.coefficients import difference_coeffs, nonuniform_coeffs
 
 if TYPE_CHECKING:
     from jaxtyping import Array
@@ -229,12 +229,16 @@ def along(
     *,
     derivative: int,
     edges: str = "bias",
+    lines: tuple[Array, Array] | None = None,
 ) -> Array:
     """The stencil of ``scheme`` along one axis, on the interior of that axis only.
 
     Where the stencil would leave the array it shifts inwards, with the
     weights of its shifted offsets (``edges="bias"``), the next rung of its
     ladder takes over (``"narrow"``), or the result is zero (``"none"``).
+    ``lines`` are the coordinates of the points read and of those written
+    along an irregular axis: the weights are then solved for the distances,
+    and a difference is per unit length.
     """
     xp = array_namespace(h)
     size = h.shape[position]
@@ -247,9 +251,12 @@ def along(
             continue
         offsets, cells = reads(rung, side, derivative)
         data: Any = rung._data or "point"
-        coeffs = difference_coeffs(
-            tuple(s + shift for s in offsets), derivative, data=data
-        )
+        if lines is None:
+            coeffs: Any = difference_coeffs(
+                tuple(s + shift for s in offsets), derivative, data=data
+            )
+        else:
+            coeffs = _uneven(h, position, lines, cells, shift, start, stop, derivative)
         total = None
         for k, c in zip(cells, coeffs, strict=True):
             first = start + k + shift
@@ -259,6 +266,29 @@ def along(
             total = term if total is None else total + term
         pieces.append(total)
     return pieces[0] if len(pieces) == 1 else xp.concat(pieces, axis=position)
+
+
+def _uneven(
+    h: Array,
+    position: int,
+    lines: tuple[Array, Array],
+    cells: list[int],
+    shift: int,
+    start: int,
+    stop: int,
+    derivative: int,
+) -> list[Array]:
+    """The weights of one run of outputs of an irregular axis, one array per cell."""
+    xp = array_namespace(h, *lines)
+    source, output = lines
+    distances = (
+        xp.stack([source[start + k + shift : stop + k + shift] for k in cells], axis=-1)
+        - output[start:stop][:, None]
+    )
+    weights = xp.asarray(nonuniform_coeffs(distances, derivative), dtype=h.dtype)
+    shape = [1] * (-position)
+    shape[0] = stop - start
+    return [weights[:, i].reshape(shape) for i in range(len(cells))]
 
 
 def reads(

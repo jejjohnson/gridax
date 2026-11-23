@@ -32,6 +32,20 @@ GRIDS = {
         8, 6, 5, (0.0, 40.0), (-60.0, 60.0), 10.0, R=2.0
     ),
 }
+for _rank, _coords in {
+    "1D": {"x": [0.0, 0.5, 1.5, 2.0, 4.0, 4.5, 6.0, 7.0]},
+    "2D": {
+        "y": [0.0, 1.0, 3.0, 4.5, 5.0, 7.0],
+        "x": [0.0, 0.5, 1.5, 2.0, 4.0, 4.5, 6.0],
+    },
+    "3D": {
+        "z": [0.0, 1.0, 3.0, 4.0],
+        "y": [0.0, 1.0, 3.0, 4.5, 5.0, 7.0],
+        "x": [0.0, 0.5, 1.5, 2.0, 4.0, 4.5, 6.0],
+    },
+}.items():
+    _agrid = getattr(g, f"CartesianAGrid{_rank}").from_coords(**_coords)
+    GRIDS[f"StretchedCGrid{_rank}"] = _agrid.staggered()
 C2 = GRIDS["CartesianCGrid2D"]
 MASKS = {1: g.Mask1D, 2: g.Mask2D, 3: g.Mask3D}
 
@@ -54,6 +68,11 @@ def keywords(name, grid):
     if getattr(grid, "_collocated", False):
         axes = [{"axis": axis} for axis in grid.axes]
         return axes if name == "difference" else [{}]
+    if type(grid).__name__.startswith("Stretched") and name in (
+        "laplacian",
+        "grad_perp",
+    ):
+        return [{"at": "T" if name == "laplacian" else "X"}]
     if name == "laplacian":
         points = [p for p, along in POINT_AXES.items() if set(along) <= set(grid.axes)]
         return [{"at": p} for p in points]

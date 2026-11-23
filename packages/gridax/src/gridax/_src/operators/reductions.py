@@ -45,6 +45,8 @@ from gridax._src.grid import (
     SphericalAGrid2D,
     SphericalCGrid2D,
     SphericalCGrid3D,
+    StretchedCGrid2D,
+    StretchedCGrid3D,
 )
 from gridax._src.grid.points import Stagger
 from gridax._src.mask import Mask2D, Mask3D
@@ -63,7 +65,7 @@ else:
 
 
 def area_weights(
-    grid: CurvilinearGrid2D | CollocatedGrid2D, *, xp: Any = None
+    grid: CurvilinearGrid2D | CollocatedGrid2D | StretchedCGrid2D, *, xp: Any = None
 ) -> Float[Array, "Ny Nx"]:
     """The T-cell areas of a 2-D grid: ``grid.area()`` in a chosen namespace.
 
@@ -87,7 +89,7 @@ def area_weights(
     TypeError
         If the grid is not a 2-D one.
     """
-    if isinstance(grid, CurvilinearGrid2D | CollocatedGrid2D):
+    if isinstance(grid, CurvilinearGrid2D | CollocatedGrid2D | StretchedCGrid2D):
         return grid._area(xp=xp)
     raise TypeError(
         f"area_weights: unsupported grid type {type(grid).__name__}. Use a 2-D grid."
@@ -95,14 +97,14 @@ def area_weights(
 
 
 def volume_weights(
-    grid: CurvilinearGrid3D | CollocatedGrid3D, *, xp: Any = None
+    grid: CurvilinearGrid3D | CollocatedGrid3D | StretchedCGrid3D, *, xp: Any = None
 ) -> Float[Array, "Nz Ny Nx"]:
     """The T-cell volumes of a 3-D grid, area times ``dz`` (``xp`` as in :func:`area_weights`)."""
     if isinstance(grid, CartesianCGrid3D):
         cell = grid.spacing("x") * grid.spacing("y") * grid.spacing("z")
         xp = array_namespace(cell) if xp is None else xp
         return xp.full(grid.shape, cell)
-    if isinstance(grid, CurvilinearGrid3D | CollocatedGrid3D):
+    if isinstance(grid, CurvilinearGrid3D | CollocatedGrid3D | StretchedCGrid3D):
         area = grid._area(xp=xp)
         xp = array_namespace(area) if xp is None else xp
         return xp.broadcast_to(area * abs(grid.spacing("z")), grid.shape)
@@ -290,6 +292,7 @@ def volume_mean(
 @area_sum.register(SphericalAGrid2D)
 @area_sum.register(CartesianCGrid2D)
 @area_sum.register(SphericalCGrid2D)
+@area_sum.register(StretchedCGrid2D)
 def _area_sum(grid: Any, x: Any, *, mask: Mask2D | None) -> Any:
     return _sum(x, area_weights(grid, xp=array_namespace(x)), mask, grid.ghost)
 
@@ -298,6 +301,7 @@ def _area_sum(grid: Any, x: Any, *, mask: Mask2D | None) -> Any:
 @area_mean.register(SphericalAGrid2D)
 @area_mean.register(CartesianCGrid2D)
 @area_mean.register(SphericalCGrid2D)
+@area_mean.register(StretchedCGrid2D)
 def _area_mean(grid: Any, x: Any, *, mask: Mask2D | None) -> Any:
     return _mean(x, area_weights(grid, xp=array_namespace(x)), mask, grid.ghost)
 
@@ -305,6 +309,7 @@ def _area_mean(grid: Any, x: Any, *, mask: Mask2D | None) -> Any:
 @volume_sum.register(CartesianAGrid3D)
 @volume_sum.register(CartesianCGrid3D)
 @volume_sum.register(SphericalCGrid3D)
+@volume_sum.register(StretchedCGrid3D)
 def _volume_sum(grid: Any, x: Any, *, mask: Mask3D | None) -> Any:
     return _sum(x, volume_weights(grid, xp=array_namespace(x)), mask, grid.ghost)
 
@@ -312,6 +317,7 @@ def _volume_sum(grid: Any, x: Any, *, mask: Mask3D | None) -> Any:
 @volume_mean.register(CartesianAGrid3D)
 @volume_mean.register(CartesianCGrid3D)
 @volume_mean.register(SphericalCGrid3D)
+@volume_mean.register(StretchedCGrid3D)
 def _volume_mean(grid: Any, x: Any, *, mask: Mask3D | None) -> Any:
     return _mean(x, volume_weights(grid, xp=array_namespace(x)), mask, grid.ghost)
 

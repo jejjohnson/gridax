@@ -114,7 +114,7 @@ class _Atom:
         def phi(k: int) -> Any:
             return f[at(first + k - 1)]
 
-        step = _face_spacing(grid, axis, point, f)
+        step = _face_spacing(grid, axis, side, point, f)
         if not on_wall:
             layers = {width - k: self._ghost(phi, k, step) for k in range(1, width + 1)}
         else:
@@ -172,7 +172,7 @@ class _Atom:
         def phi(k: int) -> Any:
             return xp.roll(lines, -inwards * (layer + k - 1), axis=0)
 
-        step = _face_spacing(grid, axis, point, f)
+        step = _face_spacing(grid, axis, side, point, f)
         if axis not in point_axes(point, grid.axes):
             values = self._ghost(phi, layer, step)
         else:
@@ -183,7 +183,7 @@ class _Atom:
 
 
 def _face_spacing(
-    grid: Any, axis: str, point: str | Stagger, f: Float[Array, "..."]
+    grid: Any, axis: str, side: int, point: str | Stagger, f: Float[Array, "..."]
 ) -> Float[Array, "..."]:
     """The normal spacing on the faces of ``axis``, one value per face point.
 
@@ -191,7 +191,12 @@ def _face_spacing(
     latitude on a sphere) has ``f``'s size along it: where ``f`` has more or
     fewer rows than the grid, those beyond it repeat the last one.
     """
-    step = grid.spacing(axis, at=point)
+    wall_step = getattr(grid, "_wall_step", None)
+    step: Any = None
+    if wall_step is None:
+        step = grid.spacing(axis, at=point)
+    else:
+        step = wall_step(axis, side, point)  # an irregular axis
     if np.ndim(step) == 0:
         return _metric_like(step, f)
     # [Ny, Nx] on the sphere: the same at every longitude, so one column

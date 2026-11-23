@@ -169,6 +169,83 @@ class _Collocated:
         cell = xp.asarray(cell)
         return xp.broadcast_to(cell.reshape(cell.shape[-len(shape) :]), shape)
 
+    def staggered(self) -> Any:
+        """The C-grid whose interior T points are the points of this grid.
+
+        One ghost ring more on every side. The faces sit halfway between the
+        points, and a ghost point is the mirror of the first one about the wall.
+
+        Returns
+        -------
+        CartesianCGrid*, SphericalCGrid2D or StretchedCGrid*
+            Stretched if a Cartesian axis is irregular.
+
+        Raises
+        ------
+        ValueError
+            If an axis decreases: flip it, and the fields along it, first (a
+            flux through a face of a C-grid is positive along the axis).
+        NotImplementedError
+            If an axis of a spherical grid is irregular.
+
+        Examples
+        --------
+        >>> import gridax
+        >>> grid = gridax.CartesianAGrid1D.from_coords(x=[0.0, 1.0, 3.0])
+        >>> cgrid = grid.staggered()
+        >>> cgrid.coords("x").tolist(), cgrid.coords("x", at="U").tolist()
+        ([-1.0, 0.0, 1.0, 3.0, 5.0], [-0.5, 0.5, 2.0, 4.0, 6.0])
+        >>> cgrid.collocated() == grid
+        True
+        """
+        for axis in self.axes:
+            if _decreases(getattr(self, f"_{axis}")):
+                raise ValueError(
+                    f"staggered: the {axis} axis decreases; flip it, and the fields"
+                    " along it, first"
+                )
+        return self._to_staggered()
+
+    def _to_staggered(self) -> Any:
+        raise NotImplementedError
+
+    def _cartesian(self, uniform: Any, stretched: Any) -> Any:
+        """The uniform or the stretched C-grid of a Cartesian grid."""
+        sizes = {f"N{axis}": self._size(axis) + 2 for axis in self.axes}
+        if any(self._step(axis) is None for axis in self.axes):
+            fields: dict[str, Any] = {}
+            for axis in self.axes:
+                x = getattr(self, f"_{axis}")
+                xp = array_namespace(x)
+                low, high = 2.0 * x[:1] - x[1:2], 2.0 * x[-1:] - x[-2:-1]
+                fields[f"_{axis}"] = xp.concat([low, x, high])
+                fields[f"_d{axis}"] = self._step(axis)
+            return stretched(**sizes, **fields, periodic=self.periodic)
+        metric: dict[str, Any] = {}
+        for axis in self.axes:
+            metric[f"L{axis}"] = _length(self._step(axis), self._size(axis))
+            metric[f"{axis}0"] = getattr(self, f"_{axis}")[0]
+        return uniform(**sizes, **metric, periodic=self.periodic)
+
+
+def _decreases(x: Any) -> bool:
+    """Whether concrete coordinates decrease; a traced one is taken to increase."""
+    try:
+        return bool(x[1] < x[0]) if x.shape[0] > 1 else False
+    except Exception:  # a tracer has no truth value
+        return False
+
+
+def _length(step: Any, n: int) -> Any:
+    """The length of ``n`` steps, such that ``length / n`` is ``step`` to the bit."""
+    length = step * n
+    if not isinstance(step, np.ndarray | np.generic | float):
+        return length
+    for candidate in (length, np.nextafter(length, np.inf), np.nextafter(length, 0.0)):
+        if candidate / n == step:
+            return candidate
+    return length
+
 
 @pytree_dataclass
 class CollocatedGrid1D:
@@ -312,6 +389,12 @@ class CartesianAGrid1D(_Collocated, CollocatedGrid1D):
     _x: Float[Array, "Nx"]
     _dx: Float[Array, ""] | None
 
+    def _to_staggered(self) -> Any:
+        from gridax._src.grid.cartesian import CartesianCGrid1D
+        from gridax._src.grid.stretched import StretchedCGrid1D
+
+        return self._cartesian(CartesianCGrid1D, StretchedCGrid1D)
+
     @classmethod
     def from_interior(
         cls, nx: int, Lx: float, *, x0: float = 0.0, periodic: Sequence[str] = ()
@@ -374,6 +457,12 @@ class CartesianAGrid2D(_Collocated, CollocatedGrid2D):
     _dx: Float[Array, ""] | None
     _y: Float[Array, "Ny"]
     _dy: Float[Array, ""] | None
+
+    def _to_staggered(self) -> Any:
+        from gridax._src.grid.cartesian import CartesianCGrid2D
+        from gridax._src.grid.stretched import StretchedCGrid2D
+
+        return self._cartesian(CartesianCGrid2D, StretchedCGrid2D)
 
     @classmethod
     def from_interior(
@@ -468,6 +557,12 @@ class CartesianAGrid3D(_Collocated, CollocatedGrid3D):
     _z: Float[Array, "Nz"]
     _dz: Float[Array, ""] | None
 
+    def _to_staggered(self) -> Any:
+        from gridax._src.grid.cartesian import CartesianCGrid3D
+        from gridax._src.grid.stretched import StretchedCGrid3D
+
+        return self._cartesian(CartesianCGrid3D, StretchedCGrid3D)
+
     @classmethod
     def from_interior(
         cls,
@@ -553,6 +648,34 @@ class SphericalAGrid2D(_Collocated, CollocatedGrid2D):
             if isinstance(value, int | float) and not field.metadata.get("static"):
                 object.__setattr__(self, field.name, _leaf(value))
         self.__check_init__()
+
+    def _to_staggered(self) -> Any:
+        from gridax._src.grid.spherical import SphericalCGrid2D
+
+        dlon, dlat = self._dx, self._dy
+        if dlon is None or dlat is None:
+            raise NotImplementedError(
+                "staggered: a spherical C-grid is uniform in longitude and latitude"
+            )
+        xp = array_namespace(self._x, self._y, dlon, dlat)
+        lon = xp.concat([self._x[:1] - dlon, self._x, self._x[-1:] + dlon])
+        lat = xp.concat([self._y[:1] - dlat, self._y, self._y[-1:] + dlat])
+        shape = (self.Ny + 2, self.Nx + 2)
+        rows = xp.broadcast_to(lat[:, None], shape)
+        return SphericalCGrid2D(
+            Nx=self.Nx + 2,
+            Ny=self.Ny + 2,
+            Lx=self.R * dlon * self.Nx,
+            Ly=self.R * dlat * self.Ny,
+            dlon=dlon,
+            dlat=dlat,
+            R=self.R,
+            _lat=lat,
+            _lon=lon,
+            _cos_lat_T=xp.cos(rows),
+            _cos_lat_V=xp.cos(rows + 0.5 * dlat),
+            periodic=self.periodic,
+        )
 
     @classmethod
     def from_interior(

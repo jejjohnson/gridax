@@ -83,6 +83,9 @@ class ArakawaCGrid1D:
         The names of the array axes, in array order (static).
     ghost : int
         Width of the ghost ring on each side (static).
+    periodic : tuple of str
+        The axes that wrap, for the record (static): a boundary condition says
+        what fills the ring.
 
     Notes
     -----
@@ -101,6 +104,7 @@ class ArakawaCGrid1D:
     Nx: int = static_field()
     axes: tuple[str, ...] = static_field(default=("x",), kw_only=True)
     ghost: int = static_field(default=1, kw_only=True)
+    periodic: tuple[str, ...] = static_field(default=(), kw_only=True)
 
     @property
     def shape(self) -> tuple[int, ...]:
@@ -126,6 +130,9 @@ class ArakawaCGrid2D:
         The names of the array axes, in array order (static).
     ghost : int
         Width of the ghost ring on each side (static).
+    periodic : tuple of str
+        The axes that wrap, for the record (static): a boundary condition says
+        what fills the ring.
 
     Notes
     -----
@@ -151,6 +158,7 @@ class ArakawaCGrid2D:
     Ny: int = static_field()
     axes: tuple[str, ...] = static_field(default=("y", "x"), kw_only=True)
     ghost: int = static_field(default=1, kw_only=True)
+    periodic: tuple[str, ...] = static_field(default=(), kw_only=True)
 
     @property
     def shape(self) -> tuple[int, ...]:
@@ -178,6 +186,9 @@ class ArakawaCGrid3D:
         The names of the array axes, in array order (static).
     ghost : int
         Width of the ghost ring on each side (static).
+    periodic : tuple of str
+        The axes that wrap, for the record (static): a boundary condition says
+        what fills the ring.
 
     Notes
     -----
@@ -202,6 +213,7 @@ class ArakawaCGrid3D:
     Nz: int = static_field()
     axes: tuple[str, ...] = static_field(default=("z", "y", "x"), kw_only=True)
     ghost: int = static_field(default=1, kw_only=True)
+    periodic: tuple[str, ...] = static_field(default=(), kw_only=True)
 
     @property
     def shape(self) -> tuple[int, ...]:
@@ -234,8 +246,9 @@ class _UniformMetric:
     def __post_init__(self) -> None:
         for field in dataclasses.fields(self):  # ty: ignore[invalid-argument-type]
             if not field.metadata.get("static", False):
-                value = _as_leaf(getattr(self, field.name))
-                object.__setattr__(self, field.name, value)
+                value = getattr(self, field.name)
+                if value is not None:
+                    object.__setattr__(self, field.name, _as_leaf(value))
 
     def _size(self, axis: str) -> int:
         """Number of points along ``axis``, ghost ring included."""
@@ -287,7 +300,9 @@ class _UniformMetric:
 
         ``x[i] = i Δx`` at the points centred along the axis and
         ``(i + 1/2) Δx`` at the points staggered along it (the same-index
-        convention of ``docs/cgrid_discretization.md``).
+        convention of ``docs/cgrid_discretization.md``). A grid with an origin
+        (``x0``, from ``CartesianAGrid2D.staggered``) has its first interior
+        point there.
 
         Parameters
         ----------
@@ -310,9 +325,14 @@ class _UniformMetric:
         """
         shift = 0.5 if self._staggered(axis, at) else 0.0
         step = self._step(axis)
-        xp = array_namespace(step)
-        # x[i] = (i + shift) Δx
-        return (xp.arange(self._size(axis)) + shift) * step
+        origin = getattr(self, f"{axis}0", None)
+        xp = array_namespace(step, origin)
+        index = xp.arange(self._size(axis))
+        if origin is None:
+            # x[i] = (i + shift) Δx
+            return (index + shift) * step
+        # x[i] = x0 + (i - ghost + shift) Δx
+        return origin + (index - self.ghost + shift) * step
 
     def area(self, *, at: str = "T") -> Float[Array, "..."]:
         """The horizontal cell measure around the points ``at``.

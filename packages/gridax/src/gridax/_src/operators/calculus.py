@@ -7,6 +7,8 @@ grid everything is at T, with the stencils of ``gridax.analysis``.
 
 from __future__ import annotations
 
+import functools
+import operator
 from typing import TYPE_CHECKING, Any
 
 from jaxtyping import Float
@@ -28,6 +30,9 @@ from gridax._src.grid import (
     SphericalAGrid2D,
     SphericalCGrid2D,
     SphericalCGrid3D,
+    StretchedCGrid1D,
+    StretchedCGrid2D,
+    StretchedCGrid3D,
 )
 from gridax._src.grid.points import Stagger
 from gridax._src.operators._ghost import interior
@@ -316,6 +321,8 @@ def _laplacian_cartesian(grid: Any, f: Any, *, at: Any, mask: Any) -> Any:
 @gradient.register(CartesianCGrid3D)
 @gradient.register(SphericalCGrid2D)
 @gradient.register(SphericalCGrid3D)
+@gradient.register(StretchedCGrid2D)
+@gradient.register(StretchedCGrid3D)
 def _gradient_staggered(grid: Any, f: Any, *, mask: Any) -> Any:
     return (
         difference(f, grid, axis="x", src="T", dst="U", mask=mask),
@@ -327,8 +334,12 @@ def _gradient_staggered(grid: Any, f: Any, *, mask: Any) -> Any:
 @grad_perp.register(CartesianCGrid3D)
 @grad_perp.register(SphericalCGrid2D)
 @grad_perp.register(SphericalCGrid3D)
+@grad_perp.register(StretchedCGrid2D)
+@grad_perp.register(StretchedCGrid3D)
 def _grad_perp_staggered(grid: Any, psi: Any, *, at: Any, mask: Any) -> Any:
     at = "X" if at is None else point_name(at)
+    if at != "X" and isinstance(grid, StretchedCGrid2D | StretchedCGrid3D):
+        raise NotImplementedError("grad_perp at T is not available on a stretched grid")
     if at == "X":
         # u[j, i+1/2] = -(ψ[j+1/2, i+1/2] - ψ[j-1/2, i+1/2]) / dy
         u = -difference(psi, grid, axis="y", src="X", dst="U", mask=mask)
@@ -351,6 +362,49 @@ def _grad_perp_staggered(grid: Any, psi: Any, *, at: Any, mask: Any) -> Any:
         _masked(interior(u, psi), mask, "U"),
         _masked(interior(v, psi), mask, "V"),
     )
+
+
+@divergence.register(StretchedCGrid2D)
+@divergence.register(StretchedCGrid3D)
+def _divergence_stretched(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
+    # the flux form: (u[i+1/2] - u[i-1/2]) / Δx[i] + (v[j+1/2] - v[j-1/2]) / Δy[j]
+    du = difference(u, grid, axis="x", src="U", dst="T")
+    out = du + difference(v, grid, axis="y", src="V", dst="T")
+    return _masked(out, mask, "T")
+
+
+@curl.register(StretchedCGrid2D)
+@curl.register(StretchedCGrid3D)
+def _curl_stretched(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
+    dv = difference(v, grid, axis="x", src="V", dst="X")
+    out = dv - difference(u, grid, axis="y", src="U", dst="X")
+    return _masked(out, mask, "X")
+
+
+@laplacian.register(StretchedCGrid1D)
+@laplacian.register(StretchedCGrid2D)
+@laplacian.register(StretchedCGrid3D)
+def _laplacian_stretched(grid: Any, f: Any, *, at: Any, mask: Any) -> Any:
+    at = "T" if at is None else point_name(at)
+    if at != "T":
+        raise NotImplementedError(f"laplacian at {at} of a stretched grid")
+    xp = array_namespace(f)
+    terms = []
+    for axis in grid.axes:
+        if axis == "z":
+            continue
+        position = grid.axes.index(axis) - len(grid.axes)
+        # ∇²f = ((f[i+1] - f[i]) / Δ[i+1/2] - (f[i] - f[i-1]) / Δ[i-1/2]) / Δ[i]
+        lines = xp.moveaxis(f, position, -1)
+        faces = _metric_like(grid._gaps(axis, {"x": "U", "y": "V"}[axis]), f)
+        cells = _metric_like(grid._gaps(axis, "T"), f)
+        slope = (lines[..., 1:] - lines[..., :-1]) / faces[:-1]
+        second = (slope[..., 1:] - slope[..., :-1]) / cells[1:-1]
+        second = xp.moveaxis(second, -1, position)
+        kept = (slice(1, -1) if a != axis else slice(None) for a in grid.axes)
+        terms.append(second[(..., *kept)])
+    out = interior(functools.reduce(operator.add, terms), f)
+    return _masked(out, mask, at)
 
 
 @divergence.register(SphericalCGrid2D)
