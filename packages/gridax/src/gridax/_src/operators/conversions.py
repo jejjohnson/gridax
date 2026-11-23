@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 import warnings
 
 from jaxtyping import Float
@@ -118,7 +118,7 @@ def stagger(
         return _stagger(f, grid, name, bc, scheme)
     canonical = _canonical(f, grid)
     data = _stagger(canonical.data, grid, name, bc, scheme)
-    return _field(data, canonical, grid, name).transpose(f.dims)
+    return cast(Any, _field(data, canonical, grid, name).transpose(f.dims))
 
 
 def collocate(

@@ -13,7 +13,7 @@ honestly: what ran, what passed, what was skipped and why.
 ```bash
 uv run ruff check .                 # entire repo: tests/ and scripts/ too (docs/ is excluded)
 uv run ruff format --check .
-uv run ty check packages/gridax/src  # what CI's lint and typecheck workflows run
+uv run ty check packages/gridax/src  # what CI's typecheck workflow runs
 uv run pytest tests -n 2            # every tier; -n 2, not auto (~2 GB per worker)
 ```
 

@@ -22,6 +22,20 @@ The three masks share their builders and what they derive from the wet cells.
 
 ::: gridax.CoastGhosts
 
+## Construction helpers
+
+On plain NumPy arrays, for a mask that the builders above do not make.
+
+::: gridax.count_contiguous
+
+::: gridax.dilate_mask
+
+::: gridax.h_from_pooled
+
+::: gridax.make_sponge
+
+::: gridax.pool_bool
+
 ## Stencil Capability
 
 ::: gridax.StencilCapability1D

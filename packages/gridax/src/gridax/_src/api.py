@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import functools
-from typing import Any
+from typing import Any, Protocol, cast
 
 #: Every canonical function, by name.
 OPERATIONS: dict[str, Any] = {}
@@ -77,7 +77,21 @@ def _not_defined(name: str) -> Callable[..., Any]:
     return impl
 
 
-def grid_dispatch[F: Callable[..., Any]](public: F) -> F:
+class Canonical[**P, R](Protocol):
+    """A canonical function: its call, and its dispatch on the grid type."""
+
+    __name__: str
+    #: The ``singledispatch`` that the body calls, with the grid first.
+    _impl: Any
+    #: A decorator that adds the implementation of a grid type.
+    register: Any
+    #: Grid type to implementation.
+    registry: Any
+
+    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R: ...
+
+
+def grid_dispatch[**P, R](public: Callable[P, R]) -> Canonical[P, R]:
     """Make a canonical function dispatch on the type of its grid.
 
     The function gets ``register`` (a decorator, by grid type), ``registry``
@@ -110,9 +124,10 @@ def grid_dispatch[F: Callable[..., Any]](public: F) -> F:
     NotImplementedError: twice is not defined on str
     >>> _ = OPERATIONS.pop("twice")
     """
-    impl = functools.singledispatch(_not_defined(public.__name__))
-    public.register = impl.register
-    public.registry = impl.registry
-    public._impl = impl
-    OPERATIONS[public.__name__] = public
-    return public
+    op = cast(Any, public)
+    impl = functools.singledispatch(_not_defined(op.__name__))
+    op.register = impl.register
+    op.registry = impl.registry
+    op._impl = impl
+    OPERATIONS[op.__name__] = op
+    return op

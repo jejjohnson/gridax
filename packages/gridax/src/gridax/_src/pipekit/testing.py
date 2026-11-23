@@ -33,7 +33,7 @@ def compiled_hlo(op: Any, *fields: Any) -> str:
         o, xs = eqx.combine(d, static)
         return o(*xs)
 
-    return jax.jit(run).lower(dynamic).compile().as_text()
+    return jax.jit(run).lower(dynamic).compile().as_text() or ""
 
 
 def check_operator(op: Any, *fields: Any, hlo: bool = True) -> None:

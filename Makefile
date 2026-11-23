@@ -1,4 +1,4 @@
-.PHONY: help install uv-format uv-lint uv-pre-commit test test-all test-slow test-integration test-cov typecheck ci docs docs-check docs-api docs-serve capabilities clean version
+.PHONY: help install uv-format uv-lint uv-pre-commit test test-all test-slow test-integration typecheck ci docs docs-check docs-api docs-serve capabilities clean version
 .DEFAULT_GOAL = help
 
 # ANSI Color Codes for pretty terminal output
@@ -69,12 +69,6 @@ test-all: ## Every tier (what CI runs on main); ~2 GB per xdist worker, keep -n 
 	@printf "$(YELLOW)>>> Launching the whole suite...$(RESET)\n"
 	@uv run pytest tests -n 2
 	@printf "$(GREEN)>>> All tests passed.$(RESET)\n"
-
-.PHONY: test-cov
-test-cov: ## Run tests with coverage
-	@printf "$(YELLOW)>>> Running tests with coverage...$(RESET)\n"
-	@uv run pytest tests --cov=$(PKGROOT) --cov-report=xml --cov-report=term
-	@printf "$(GREEN)>>> Coverage report generated.$(RESET)\n"
 
 ##@ Type Checking
 .PHONY: typecheck

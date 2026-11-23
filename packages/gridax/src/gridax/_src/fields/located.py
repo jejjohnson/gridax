@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections.abc import Callable
 import functools
 import inspect
-from typing import Any
+from typing import Any, cast
 
 from gridax._src.fields.cfield import CField, StaggerMismatchError
 from gridax._src.fields.combine import _check_plain
@@ -88,14 +88,15 @@ def located[F: Callable[..., Any]](
             bound.apply_defaults()
             return _call(fn, bound.arguments, out, points)
 
-        wrapper.__located__ = (out, dict(points))
-        return wrapper
+        located_fn = cast(Any, wrapper)
+        located_fn.__located__ = (out, dict(points))
+        return located_fn
 
     return decorate
 
 
 def _call(
-    fn: Callable[..., Any],
+    fn: Any,
     arguments: dict[str, Any],
     out: Point | tuple[Point, ...] | None,
     points: dict[str, Point],
@@ -150,7 +151,7 @@ def _call(
 
 
 def _check_point(
-    fn: Callable[..., Any], name: str, x: CField, point: Point, values: dict[str, Any]
+    fn: Any, name: str, x: CField, point: Point, values: dict[str, Any]
 ) -> None:
     """Check the point of ``x``, or supply the keyword that names it."""
     if point in POINT_AXES:

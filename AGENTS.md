@@ -75,7 +75,7 @@ model.
 |---|---|---|
 | **jax** | Arrays, `jit`, `vmap`, `grad`, `lax.fori_loop` (multigrid V-cycles) | Pure functions; `.at[...].set` instead of mutation; no Python control flow on traced values; build outputs with the input's dtype (`interior` uses `jnp.result_type`). |
 | **equinox** | The solvers and pipekit operators (`gridax.solvers`, `gridax.pipekit`) are `eqx.Module`s; `eqx.filter_vmap` (the layer `vmap`) | Never a plain dataclass or class for anything holding arrays. In gridax (grids, masks, operators, BCs) that is a `pytree_dataclass` (`gridax/_src/pytree.py`): settings that pick a code path or a shape are `static_field()` (e.g. `Extrapolation.order`, the grid sizes), a hand-written `__init__` may precompute, and `__check_init__` validates. In `gridax.solvers` and `gridax.pipekit` it is an `eqx.Module`, with `eqx.field(static=True)` for settings. An operator holds its grid, its mask and any precomputed hierarchy as fields, built once in `__init__`. |
-| **jaxtyping** | Shape annotations (`Float[Array, "Ny Nx"]`) | Annotate public array arguments and returns; shape strings stay quoted (`UP037` and `F722` are off for that reason). They are documentation: nothing checks them at run time (beartype is a declared dependency but is not imported). |
+| **jaxtyping** | Shape annotations (`Float[Array, "Ny Nx"]`) | Annotate public array arguments and returns; shape strings stay quoted (`UP037` and `F722` are off for that reason). They are documentation: nothing checks them at run time, and `tests/test_public_names.py` checks that they resolve. |
 | **lineax** | The operators the solvers build on (`helmholtz_operator`, the multigrid levels) | Elliptic operators here are negative (semi)definite: tag them `negative_semidefinite_tag`; a preconditioner approximates `A⁻¹`, and gaussx's CG solves `(−A) x = −b`, so it takes `−M⁻¹`. |
 | **diffrax** | Nothing directly; the steppers of `integrix.march` are diffrax solvers | gridax holds no solver of its own: the integrators are `integrix.march`'s, and a new one goes there; a forcing lives inside the vector field, not as an extra diffrax term. |
 | **spectraldiffx** | DCT / DST / FFT, spectral Poisson / Helmholtz solvers, eigenvalues, capacitance solver | Re-export or call; never re-implement a spectral solve or its eigenvalues. |
@@ -335,7 +335,7 @@ apply BCs to intermediate fields before chaining operators.
 
 ### The public API
 
-- Export a new public name from `packages/gridax/src/gridax/__init__.py` (import plus an entry in `__all__`, in its logical group), or, for a name that needs JAX, from `packages/gridax/src/gridax/solvers/__init__.py` (its `__all__` is sorted) or `gridax/pipekit/__init__.py`; give it a `::: gridax.Name` (or `::: gridax.solvers.Name`) entry on its page in `docs/api/` (no test checks this), and run `make capabilities`.
+- Export a new public name from `packages/gridax/src/gridax/__init__.py` (import plus an entry in `__all__`, in its logical group), or, for a name that needs JAX, from `packages/gridax/src/gridax/solvers/__init__.py` (its `__all__` is sorted) or `gridax/pipekit/__init__.py`; give it a `::: gridax.Name` (or `::: gridax.solvers.Name`) entry on its page in `docs/api/` (`tests/test_public_names.py` checks it), and run `make capabilities`.
 - NumPy-style docstrings: the formula (half-index notation in ASCII or
   Unicode), parameters and returns with shapes, and an `Examples` section for
   new public names. Doctests are **not** collected (no `--doctest-modules`),
@@ -367,6 +367,7 @@ docstring before changing what it checks.
 | `tests/test_elliptic*.py`, `tests/test_multigrid.py`, `tests/test_inhomogeneous.py`, `tests/test_solver_deprecations.py` | Solvers against analytic solutions, preconditioner benefit, known-value lifting, that the moved and removed names raise `AttributeError` |
 | `tests/test_timestepping*.py`, `tests/test_diffrax_solvers.py` | Convergence order and accuracy of the `integrix.march` step functions and diffrax solvers as gridax's tests use them; the pure steps match their diffrax twins (`TestPureFunctionalVsDiffrax`) |
 | `tests/test_scripts.py` | The example models in `scripts/` run stably on small grids |
+| `tests/test_public_names.py` | Every public function and class has an API page, and the type hints of every public function resolve |
 | `tests/test_capabilities.py` | `docs/capabilities.md` is current; no name shadows a spectraldiffx / gaussx name with a different object |
 | `tests/test_plugin_skill.py` | The downstream plugin's worked example runs and its stated results hold; every `fvx.X` (`gridax`), `gs.X` (`gridax.solvers`) and `gridax.X` / `gridax.solvers.X` the plugin names exists |
 | `pyproject.toml` `filterwarnings = ["error", ...]`, `xfail_strict = true` | Any warning other than a `DeprecationWarning` fails a test; an `xfail` that starts passing fails too |
@@ -407,7 +408,6 @@ make install              # uv sync --all-extras + pre-commit hooks
 make test                 # fast tier: pytest -m "not slow and not integration" -n 2
 make test-all             # every tier (what make ci and the weekly CI run do)
 make test-slow            # slow tier only;  make test-integration: integration tier only
-make test-cov             # the same with coverage (reports/coverage.xml)
 make uv-lint              # ruff check . + ruff format --check . + ty (mirrors CI)
 make uv-format            # ruff format . && ruff check --fix .
 make typecheck            # uv run ty check packages/gridax/src

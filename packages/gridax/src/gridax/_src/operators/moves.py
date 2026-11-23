@@ -388,9 +388,8 @@ def _staggered(
     if irregular:
 
         def lines(axis: str) -> tuple[Any, Any]:
-            return tuple(
-                _metric_like(grid._line(axis, p, extra), f) for p in (src, dst)
-            )
+            at_src, at_dst = (grid._line(axis, p, extra) for p in (src, dst))
+            return _metric_like(at_src, f), _metric_like(at_dst, f)
 
         def two_point(f: Any) -> Any:
             return _move(f, axes, src, dst, CENTRED2, derivative, lines=lines)

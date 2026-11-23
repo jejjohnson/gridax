@@ -319,4 +319,5 @@ class LinComb(FVXOperator):
             raise ValueError(
                 f"LinComb has {self.coeffs.shape[0]} coefficients, got {len(xs)} inputs"
             )
-        return sum((c * x for c, x in zip(self.coeffs, xs, strict=True)), start=0.0)
+        total: Any = sum(c * x for c, x in zip(self.coeffs, xs, strict=True))
+        return total
