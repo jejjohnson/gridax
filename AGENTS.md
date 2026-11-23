@@ -226,6 +226,7 @@ apply BCs to intermediate fields before chaining operators.
   returning interior-sized results with no metric and no padding; the
   caller scales by any metric (`dx`, `R cos φ dλ`, …) and pads with
   `interior`.
+- **A canonical function** is declared with `@grid_dispatch` (`_src/api.py`) over `@located(out, f=…)` (`_src/fields/located.py`), which names the point of every field argument and of the result, and is listed in `SUPPORT`; its implementations work on arrays only.
 - **Layer 2 functions** are the canonical form: one per operation, with `grid` positional wherever values move between points or the metric enters (never loose `dx, dy`), and `mask=` a keyword (ADR 1). A family that has not moved yet still takes spacings and no mask; don't add to that form.
 - **Layer 3 classes** are bindings: `pytree_dataclass`es (in gridax) holding `grid` and `mask` (default
   `None`), with any precomputation (adaptive-stencil hierarchies, an inner
@@ -354,6 +355,7 @@ docstring before changing what it checks.
 | `tests/test_jax_transforms.py`, `tests/test_differentiable.py` | `jit` / `vmap` match eager execution; the smooth surrogates differentiate |
 | `tests/test_registry_parity.py` | Every canonical function is implemented on exactly the grid types `SUPPORT` lists, and raises `NotImplementedError` naming the others |
 | `tests/test_moves.py` | `difference` and `interpolate` are exact on the coordinates for every move and C-grid, and the bindings equal them bit for bit |
+| `tests/test_located.py` | Every canonical function declares the points of its operands and result (`@located`), its `CField` path gives the array path's data exactly, and an operand on another point raises |
 | `tests/test_batch_dims.py` | Every 2-D entry point annotated `*batch Ny Nx` equals a loop over the batch members, masked and unmasked, eager and under `jit` |
 | `tests/test_dtype_behavior.py` | float32 and float64 agree; outputs are finite on extreme inputs |
 | `tests/test_open_walls.py`, conservation tests in `test_advection.py`, `test_jacobian.py`, `test_momentum.py`, `test_diagnostics.py` | Mass / energy / enstrophy conservation of the flux-form and Arakawa schemes, including `wall="open"` |
