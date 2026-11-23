@@ -118,8 +118,8 @@ class TestSphericalVorticity2D:
         # Forward values on wet corners equal the unguarded formula.
         pv = op.potential_vorticity(u, v, h, f)
         zeta = op.relative_vorticity(u, v)
-        num = zeta + op._interp.T_to_X(f)
-        den = op._interp.T_to_X(h)
+        num = zeta + op.ops.interpolate(f, src="T", dst="X")
+        den = op.ops.interpolate(h, src="T", dst="X")
         wet = np.asarray(mask.wet(at="X", kind="strict"))
         wet_int = wet.copy()
         wet_int[[0, -1], :] = False

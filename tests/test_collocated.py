@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import equinox as eqx
 import gridax as g
 from gridax import CField, StaggerMismatchError, analysis
+from gridax._src.analysis.differences import adaptive_difference
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -209,7 +210,7 @@ class TestDifference:
             wet = np.random.default_rng(3).random(grid.shape) > 0.2
             cls = {1: g.Mask1D, 2: g.Mask2D, 3: g.Mask3D}[len(grid.axes)]
             out = g.difference(f, grid, axis=axis, mask=cls.from_grid(grid, wet))
-            want = analysis.adaptive_difference(f, mask=~wet, **kwargs)
+            want = adaptive_difference(f, mask=~wet, **kwargs)
         else:
             out = g.difference(f, grid, axis=axis)
             want = analysis.difference(f, **kwargs)

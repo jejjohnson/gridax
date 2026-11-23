@@ -72,7 +72,7 @@ class TestMomentumAdvection2D:
         madv = MomentumAdvection2D(grid=grid2d)
         u = jnp.ones((grid2d.Ny, grid2d.Nx))
         v = jnp.ones((grid2d.Ny, grid2d.Nx))
-        with pytest.raises(ValueError, match="Unknown scheme"):
+        with pytest.raises(ValueError, match="form must be"):
             madv(u, v, scheme="invalid")
 
     def test_no_nan_output(self, grid2d):
@@ -213,7 +213,7 @@ class TestMomentumAdvection3D:
         madv = MomentumAdvection3D(grid=grid3d)
         u = jnp.ones((grid3d.Nz, grid3d.Ny, grid3d.Nx))
         v = jnp.ones((grid3d.Nz, grid3d.Ny, grid3d.Nx))
-        with pytest.raises(ValueError, match="Unknown scheme"):
+        with pytest.raises(ValueError, match="form must be"):
             madv(u, v, scheme="bad")
 
     def test_no_nan_output(self, grid3d):
@@ -336,26 +336,10 @@ class TestVortexForceConservation:
         ) / grid.spacing("x")
 
 
-class TestBlendSchemeAlias:
-    """scheme="al" is a deprecated alias of scheme="blend" (#283)."""
-
-    def test_al_warns_and_matches_blend(self, grid2d, grid3d):
-        for grid, cls in ((grid2d, MomentumAdvection2D), (grid3d, MomentumAdvection3D)):
-            shape = (
-                (grid.Nz, grid.Ny, grid.Nx)
-                if hasattr(grid, "Nz")
-                else (grid.Ny, grid.Nx)
-            )
-            u = jnp.sin(jnp.arange(np.prod(shape), dtype=float).reshape(shape))
-            v = jnp.cos(0.7 * jnp.arange(np.prod(shape), dtype=float).reshape(shape))
-            madv = cls(grid=grid)
-            with pytest.warns(DeprecationWarning, match="scheme='blend'"):
-                old = madv(u, v, scheme="al")
-            new = madv(u, v, scheme="blend")
-            np.testing.assert_array_equal(old[0], new[0])
-            np.testing.assert_array_equal(old[1], new[1])
+class TestUnknownForm:
+    """The forms are energy, enstrophy and blend; "al" is gone (#493)."""
 
     def test_unknown_scheme_raises(self, grid2d):
         u = jnp.zeros((grid2d.Ny, grid2d.Nx))
         with pytest.raises(ValueError, match="'blend'"):
-            MomentumAdvection2D(grid=grid2d)(u, u, scheme="arakawa")
+            MomentumAdvection2D(grid=grid2d)(u, u, scheme="al")

@@ -614,23 +614,6 @@ class TestVerticalVelocity:
         )(u)
         assert bool(jnp.all(jnp.isfinite(grad)))
 
-    def test_float_mask_is_deprecated(self, grid3d):
-        """A raw float mask still zeroes the divergence, with a DeprecationWarning."""
-        x = jnp.arange(grid3d.Nx, dtype=float) * grid3d.spacing("x")
-        u = jnp.broadcast_to(x, (grid3d.Nz, grid3d.Ny, grid3d.Nx))
-        v = jnp.zeros((grid3d.Nz, grid3d.Ny, grid3d.Nx))
-        mask = jnp.zeros((grid3d.Nz, grid3d.Ny, grid3d.Nx))
-        with pytest.warns(DeprecationWarning, match="Mask3D"):
-            w = vertical_velocity(
-                u,
-                v,
-                grid3d.spacing("x"),
-                grid3d.spacing("y"),
-                grid3d.spacing("z"),
-                mask=mask,
-            )
-        np.testing.assert_allclose(w, 0.0, atol=1e-10)
-
 
 # ======================================================================
 # Standalone vorticity functions (Issue #73)

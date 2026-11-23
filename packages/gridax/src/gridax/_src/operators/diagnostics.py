@@ -403,8 +403,9 @@ def geostrophic_velocity(
     gravity : float
         The acceleration of gravity.
     mask : Mask2D, optional
-        The wet cells. Dry interior heights are read as zero, and the velocity
-        is zero on dry faces.
+        The wet cells. The velocity is zero on dry faces, and ``f`` is not read
+        there. A wet face next to a coast reads the height of the land beside
+        it, which must be finite.
 
     Returns
     -------
@@ -625,8 +626,6 @@ def _geostrophic_velocity(
     grid: Any, h: Any, *, f: Any, gravity: float, mask: Any
 ) -> tuple[Any, Any]:
     xp = array_namespace(h, f)
-    if mask is not None:
-        h, f = _sanitize(mask.wet(), h), _sanitize(mask.wet(), f)
     R, dlon, dlat = (_metric_like(m, h) for m in (grid.R, grid.dlon, grid.dlat))
     c = slice(1, -1)
     f_on_u = 0.5 * (f[..., c, 1:-1] + f[..., c, 2:])

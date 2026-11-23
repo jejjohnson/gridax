@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 import gridax as g
+from gridax._src.analysis.differences import adaptive_difference
 from gridax._src.schemes.adaptive import policies
-import gridax.analysis as ga
 from gridax.schemes import TVD, WENO, Adaptive, Biased, Centred, Upwind
 import gridax.stencils as gs
 import jax
@@ -179,7 +179,7 @@ def test_it_is_the_adaptive_difference(order: int) -> None:
             scheme=Adaptive(Centred(order), edges="bias", mask="narrow"),
             mask=g.Mask2D.from_grid(grid, wet),
         )
-        want = ga.adaptive_difference(
+        want = adaptive_difference(
             f,
             mask=~wet,
             axis=position,

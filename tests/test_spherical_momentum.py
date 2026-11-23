@@ -92,7 +92,7 @@ class TestSphericalMomentumAdvection2D:
     def test_invalid_scheme_raises(self, madv, grid):
         u = jnp.zeros((grid.Ny, grid.Nx))
         v = jnp.zeros((grid.Ny, grid.Nx))
-        with pytest.raises(ValueError, match="Unknown scheme"):
+        with pytest.raises(ValueError, match="form must be"):
             madv(u, v, scheme="bogus")
 
     @pytest.mark.parametrize("scheme", ["energy", "enstrophy", "blend"])

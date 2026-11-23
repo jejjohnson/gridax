@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gridax as g
 from gridax import CField, StaggerMismatchError, analysis
+from gridax._src.analysis.differences import adaptive_difference
 from gridax._src.grid.points import POINT_AXES
 import jax
 import jax.numpy as jnp
@@ -253,10 +254,10 @@ class TestCollocated:
             if masked:
                 wet = np.array([True, True, False, True, True, True, True])
                 out = g.laplacian(f, grid, mask=g.Mask1D.from_grid(grid, wet))
-                want = analysis.adaptive_laplacian_1d(f, mask=~wet, **kwargs)
+                want = adaptive_difference(f, mask=~wet, derivative=2, **kwargs)
             else:
                 out = g.laplacian(f, grid)
-                want = analysis.laplacian_1d(f, **kwargs)
+                want = analysis.difference(f, derivative=2, **kwargs)
             np.testing.assert_array_equal(out, want)
 
     def test_irregular_axes_and_levels(self):
