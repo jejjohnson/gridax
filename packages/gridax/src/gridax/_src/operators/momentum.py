@@ -30,6 +30,7 @@ from gridax._src.grid import (
     SphericalCGrid3D,
 )
 from gridax._src.operators._ghost import interior
+from gridax._src.operators._utils import without_dry
 from gridax._src.operators.calculus import curl
 from gridax._src.operators.moves import difference, interpolate
 from gridax._src.pytree import array_namespace
@@ -179,6 +180,7 @@ _CC = (..., slice(2, -2), slice(2, -2))
 def _pv_flux(
     grid: Any, q: Any, u: Any, v: Any, *, form: str, alpha: float, mask: Any
 ) -> tuple[Any, Any]:
+    q, u, v = (without_dry(x, mask, at, 2) for x, at in ((q, "X"), (u, "U"), (v, "V")))
     if form != "enstrophy":
         energy = _corner_product(q, u, v, mask)
         if form == "energy":
@@ -228,7 +230,8 @@ def _corner_product(q: Any, u: Any, v: Any, mask: Any) -> tuple[Any, Any]:
 def _advect_momentum(
     grid: Any, u: Any, v: Any, *, form: str, mask: Any
 ) -> tuple[Any, Any]:
-    # on a 3-D grid the mask acts on the tendencies only
+    u, v = (without_dry(x, mask, at, len(grid.axes)) for x, at in ((u, "U"), (v, "V")))
+    # on a 3-D grid the mask acts on the velocities and the tendencies only
     inner = mask if len(grid.axes) == 2 else None
 
     def to(f: Any, src: str, dst: str) -> Any:

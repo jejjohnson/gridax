@@ -237,9 +237,9 @@ def _fluxes(
         fx, fy = fx / _spacing(grid, "x", h), fy / _spacing(grid, "y", h)
     fx, fy = fx.astype(h.dtype), fy.astype(h.dtype)
     if mu is not None:
-        fx = fx * mu[..., c, before]
-    if mv is not None:
-        fy = fy * mv[..., before, c]
+        xp = array_namespace(fx)
+        fx = xp.where(mu[..., c, before], fx, 0.0)
+        fy = xp.where(mv[..., before, c], fy, 0.0)
     return fx, fy
 
 
@@ -282,8 +282,16 @@ def _kappa_levels(grid: Any, kappa: Any) -> Any:
     return _levels(grid, kappa) if kappa.ndim >= 3 else kappa
 
 
+def _wet_only(x: Any, mask: Any) -> Any:
+    """A T field, zero on land, which may hold NaN; a number as it is."""
+    if mask is None or np.ndim(x) < len(mask.wet().shape):
+        return x
+    return array_namespace(x, mask.wet()).where(mask.wet(), x, 0.0)
+
+
 def _tendency(grid: Any, f: Any, kappa: Any, mask: Any, wall: str) -> Any:
     mh, mu, mv = _wet(mask, grid)
+    f, kappa = _wet_only(f, mask), _wet_only(kappa, mask)
     h = _levels(grid, f)
     fx, fy = _fluxes(h, _kappa_levels(grid, kappa), grid, mu, mv, wall)
     east, west, north, south = _sides(fx, fy, wall)
@@ -301,7 +309,7 @@ def _tendency(grid: Any, f: Any, kappa: Any, mask: Any, wall: str) -> Any:
         dv = (north - south) / _spacing(grid, "y", h)
         out = du + dv
     out = interior(out, f)
-    return out if mh is None else out * mh
+    return out if mh is None else array_namespace(out).where(mh, out, 0.0)
 
 
 @diffusive_fluxes.register(CartesianCGrid2D)
@@ -315,6 +323,7 @@ def _diffusive_fluxes(
         _closed(wall)
     xp = array_namespace(f, kappa)
     _, mu, mv = _wet(mask, grid)
+    f, kappa = _wet_only(f, mask), _wet_only(kappa, mask)
     h = _levels(grid, f)
     fx, fy = _fluxes(h, _kappa_levels(grid, kappa), grid, mu, mv, wall)
     # x faces on [1:-1, :-1] (open) or [1:-1, 1:-2] (closed); y likewise
@@ -350,10 +359,6 @@ def _closed(wall: str) -> None:
 @biharmonic.register(SphericalCGrid2D)
 @biharmonic.register(SphericalCGrid3D)
 def _biharmonic(grid: Any, f: Any, *, kappa4: Any, mask: Any) -> Any:
-    xp = array_namespace(f)
-    if mask is not None:
-        # land may hold NaN: zero it before any stencil reads it
-        f = xp.where(mask.wet(), f, 0.0)
     # the second pass reads the first at four offsets: keep it as one buffer
     # rather than letting XLA recompute it per offset
     once = _materialize(_tendency(grid, f, 1.0, mask, "closed"))
