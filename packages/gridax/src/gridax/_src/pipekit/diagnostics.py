@@ -155,7 +155,17 @@ class OkuboWeiss(GridOperator):
         return Strain2D(grid=self.grid).okubo_weiss(u, v)
 
 
-class TotalEnergy(GridOperator):
+class _Reduction(GridOperator):
+    """A number per leading index, from the whole domain."""
+
+    @property
+    def halo(self) -> int:
+        raise AttributeError(
+            f"{type(self).__name__} reads the whole domain and has no halo"
+        )
+
+
+class TotalEnergy(_Reduction):
     """E = ∑_interior (KE + APE) ΔA (`area_sum`), one value per leading index.
 
     ``(T, T) → [*batch]``.
@@ -165,14 +175,14 @@ class TotalEnergy(GridOperator):
         return over_leading(lambda f: area_sum(f, self.grid))(ke + ape)
 
 
-class DomainIntegral(GridOperator):
+class DomainIntegral(_Reduction):
     """∑_interior x ΔA over the T-cells (`area_sum`).  ``T → [*batch]``."""
 
     def _apply(self, x: Field) -> Scalar:
         return over_leading(lambda f: area_sum(f, self.grid))(x)
 
 
-class DomainMean(GridOperator):
+class DomainMean(_Reduction):
     """Area-weighted interior mean ⟨x⟩ (`area_mean`).  ``T → [*batch]``."""
 
     def _apply(self, x: Field) -> Scalar:

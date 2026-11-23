@@ -39,8 +39,10 @@ from gridax._src.boundary.boundary import (
 from gridax._src.operators.calculus import curl, divergence, grad_perp, laplacian
 from gridax._src.operators.coriolis import coriolis
 from gridax._src.operators.moves import difference, interpolate
-from gridax._src.operators.triples import PAIRS, TRIPLES, choose
-from gridax._src.pipekit.base import FVXOperator, GridOperator
+from gridax._src.operators.triples import PAIRS, TRIPLES, choose, moved_along
+from gridax._src.pipekit.base import FVXOperator, GridOperator, _as_scheme
+from gridax._src.stencils.staggered import CENTRED2, check_linear, reads
+from gridax.schemes import Adaptive, Scheme
 
 Field = Float[Array, "*batch Ny Nx"]
 
@@ -53,8 +55,21 @@ DIFFERENCES = tuple(sorted(TRIPLES["y", "x"]))
 INTERPOLATIONS = tuple(sorted(PAIRS["y", "x"]))
 
 
+def _move_halo(src: str, dst: str, scheme: Scheme, derivative: int) -> int:
+    """The points a move reads on either side, along the axes it moves along."""
+    return max(
+        abs(k)
+        for _, side in moved_along(src, dst)
+        for k in reads(_inner(scheme), side, derivative)[1]
+    )
+
+
+def _inner(scheme: Scheme) -> Scheme:
+    return scheme.scheme if isinstance(scheme, Adaptive) else scheme
+
+
 class Difference(GridOperator):
-    """One-sided difference between staggered points, ``δ / Δ``.
+    """Difference between staggered points, ``δ / Δ``.
 
     ``axis="x", src="T", dst="U"``: δₓh[j, i+½] = (h[j, i+1] − h[j, i]) / Δx.
 
@@ -67,17 +82,36 @@ class Difference(GridOperator):
     src, dst : {"T", "U", "V", "X"}
         Source and destination stagger; see `DIFFERENCES` for the valid
         triples.
+    scheme : Scheme
+        As in `gridax.difference`, or its JSON config, e.g. ``{"name":
+        "Centred", "order": 4}``. ``Centred(2)`` by default.
     """
 
     axis: str = eqx.field(static=True, kw_only=True)
     src: str = eqx.field(static=True, kw_only=True)
     dst: str = eqx.field(static=True, kw_only=True)
+    scheme: Scheme = eqx.field(
+        static=True, kw_only=True, default=CENTRED2, converter=_as_scheme
+    )
 
     def __check_init__(self) -> None:
         choose("difference", (self.axis, self.src, self.dst), TRIPLES["y", "x"])
+        check_linear(self.scheme)
+
+    @property
+    def halo(self) -> int:
+        """The points on either side that the stencil reads."""
+        return _move_halo(self.src, self.dst, self.scheme, 1)
 
     def _apply(self, x: Field) -> Field:
-        return difference(x, self.grid, axis=self.axis, src=self.src, dst=self.dst)
+        return difference(
+            x,
+            self.grid,
+            axis=self.axis,
+            src=self.src,
+            dst=self.dst,
+            scheme=self.scheme,
+        )
 
 
 class Divergence(GridOperator):
@@ -109,7 +143,7 @@ class GradPerp(GridOperator):
 
 
 class Interp(GridOperator):
-    """Average between staggered points (two- or four-point mean).
+    """Interpolation between staggered points (a two- or four-point mean).
 
     Attributes
     ----------
@@ -117,16 +151,28 @@ class Interp(GridOperator):
         The grid, or ``(nx_interior, ny_interior, Lx, Ly)``.
     src, dst : {"T", "U", "V", "X"}
         Source and destination stagger; see `INTERPOLATIONS`.
+    scheme : Scheme
+        As in `gridax.interpolate`, or its JSON config. ``Centred(2)`` by
+        default.
     """
 
     src: str = eqx.field(static=True, kw_only=True)
     dst: str = eqx.field(static=True, kw_only=True)
+    scheme: Scheme = eqx.field(
+        static=True, kw_only=True, default=CENTRED2, converter=_as_scheme
+    )
 
     def __check_init__(self) -> None:
         choose("interpolation", (self.src, self.dst), PAIRS["y", "x"])
+        check_linear(self.scheme)
+
+    @property
+    def halo(self) -> int:
+        """The points on either side that the stencil reads."""
+        return _move_halo(self.src, self.dst, self.scheme, 0)
 
     def _apply(self, x: Field) -> Field:
-        return interpolate(x, self.grid, src=self.src, dst=self.dst)
+        return interpolate(x, self.grid, src=self.src, dst=self.dst, scheme=self.scheme)
 
 
 class Coriolis(GridOperator):
@@ -200,6 +246,11 @@ class FillGhosts(FVXOperator):
             raise ValueError(
                 f"kind {self.kind!r} is not available; valid: {sorted(GHOST_FILLERS)}"
             )
+
+    @property
+    def halo(self) -> int:
+        """1: on a patch it writes a wall where there is none."""
+        return 1
 
     def _apply(self, x: Field) -> Field:
         if self.kind == "wall":

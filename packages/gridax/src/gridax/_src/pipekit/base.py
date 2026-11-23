@@ -32,7 +32,8 @@ import jax
 from jaxtyping import Array
 from pipekit_jax import JaxOperator
 
-from gridax import CartesianCGrid2D
+from gridax import CartesianCGrid2D, schemes
+from gridax.schemes import Scheme
 
 
 def _as_grid(spec: Sequence[Any] | CartesianCGrid2D) -> CartesianCGrid2D:
@@ -64,6 +65,27 @@ def _as_grid(spec: Sequence[Any] | CartesianCGrid2D) -> CartesianCGrid2D:
     if int(nx) < 1 or int(ny) < 1:
         raise ValueError(f"grid needs positive cell counts, got {spec!r}")
     return CartesianCGrid2D.from_interior(int(nx), int(ny), lx, ly)
+
+
+def _as_scheme(spec: Scheme | dict[str, Any]) -> Scheme:
+    """The scheme of an operator, from a scheme or from its JSON config."""
+    if isinstance(spec, Scheme):
+        return spec
+    arguments = dict(spec)
+    cls = getattr(schemes, arguments.pop("name"))
+    if "scheme" in arguments:
+        arguments["scheme"] = _as_scheme(arguments["scheme"])
+    return cls(**arguments)
+
+
+def _scheme_config(scheme: Scheme) -> dict[str, Any]:
+    """The JSON config of a scheme: its name and its arguments."""
+    arguments = {
+        name: _scheme_config(value) if isinstance(value, Scheme) else value
+        for name, value in vars(scheme).items()
+        if value is not None
+    }
+    return {"name": type(scheme).__name__, **arguments}
 
 
 def over_leading(fn: Callable[..., Any], core_ndim: int = 2) -> Callable[..., Any]:
@@ -121,6 +143,11 @@ class FVXOperator(JaxOperator):
     ``[*batch, Ny, Nx]`` to fields.
     """
 
+    @property
+    def halo(self) -> int:
+        """The cells around a point that its result reads: 0, point by point."""
+        return 0
+
 
 class GridOperator(FVXOperator):
     """An `FVXOperator` on a 2-D Cartesian C-grid.
@@ -134,9 +161,21 @@ class GridOperator(FVXOperator):
 
     grid: CartesianCGrid2D = eqx.field(converter=_as_grid)
 
+    @property
+    def halo(self) -> int:
+        """The cells around a point that its result reads: 1, a one-cell stencil.
+
+        An operator that reads further says so.
+        """
+        return 1
+
     def get_config(self) -> dict[str, Any]:
         """The constructor config, with the grid as ``from_interior``'s arguments."""
         grid = self.grid
         ring = 2 * grid.ghost
         spec = (grid.Nx - ring, grid.Ny - ring, float(grid.Lx), float(grid.Ly))
-        return {**super().get_config(), "grid": spec}
+        config = {
+            name: _scheme_config(value) if isinstance(value, Scheme) else value
+            for name, value in super().get_config().items()
+        }
+        return {**config, "grid": spec}
