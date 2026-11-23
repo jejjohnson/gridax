@@ -34,10 +34,15 @@ import numpy as np
 from gridax._src.api import grid_dispatch
 from gridax._src.fields.located import located
 from gridax._src.grid import (
+    CartesianAGrid2D,
+    CartesianAGrid3D,
     CartesianCGrid2D,
     CartesianCGrid3D,
+    CollocatedGrid2D,
+    CollocatedGrid3D,
     CurvilinearGrid2D,
     CurvilinearGrid3D,
+    SphericalAGrid2D,
     SphericalCGrid2D,
     SphericalCGrid3D,
 )
@@ -57,7 +62,9 @@ else:
 # ----------------------------------------------------------------------
 
 
-def area_weights(grid: CurvilinearGrid2D, *, xp: Any = None) -> Float[Array, "Ny Nx"]:
+def area_weights(
+    grid: CurvilinearGrid2D | CollocatedGrid2D, *, xp: Any = None
+) -> Float[Array, "Ny Nx"]:
     """The T-cell areas of a 2-D grid: ``grid.area()`` in a chosen namespace.
 
     Parameters
@@ -80,29 +87,27 @@ def area_weights(grid: CurvilinearGrid2D, *, xp: Any = None) -> Float[Array, "Ny
     TypeError
         If the grid is not a 2-D one.
     """
-    if isinstance(grid, CurvilinearGrid2D):
+    if isinstance(grid, CurvilinearGrid2D | CollocatedGrid2D):
         return grid._area(xp=xp)
     raise TypeError(
-        f"area_weights: unsupported grid type {type(grid).__name__}. "
-        "Use CartesianCGrid2D or SphericalCGrid2D."
+        f"area_weights: unsupported grid type {type(grid).__name__}. Use a 2-D grid."
     )
 
 
 def volume_weights(
-    grid: CurvilinearGrid3D, *, xp: Any = None
+    grid: CurvilinearGrid3D | CollocatedGrid3D, *, xp: Any = None
 ) -> Float[Array, "Nz Ny Nx"]:
     """The T-cell volumes of a 3-D grid, area times ``dz`` (``xp`` as in :func:`area_weights`)."""
     if isinstance(grid, CartesianCGrid3D):
         cell = grid.spacing("x") * grid.spacing("y") * grid.spacing("z")
         xp = array_namespace(cell) if xp is None else xp
         return xp.full(grid.shape, cell)
-    if isinstance(grid, CurvilinearGrid3D):
+    if isinstance(grid, CurvilinearGrid3D | CollocatedGrid3D):
         area = grid._area(xp=xp)
         xp = array_namespace(area) if xp is None else xp
-        return xp.broadcast_to(area * grid.spacing("z"), grid.shape)
+        return xp.broadcast_to(area * abs(grid.spacing("z")), grid.shape)
     raise TypeError(
-        f"volume_weights: unsupported grid type {type(grid).__name__}. "
-        "Use CartesianCGrid3D or SphericalCGrid3D."
+        f"volume_weights: unsupported grid type {type(grid).__name__}. Use a 3-D grid."
     )
 
 
@@ -129,7 +134,9 @@ def _weighted(
     return xp.where(wet, x, 0.0), xp.where(wet, weights, 0.0)
 
 
-def _interior_axes(x: Any, weights: Any) -> tuple[Any, tuple[int, ...] | None]:
+def _interior_axes(
+    x: Any, weights: Any, ghost: int
+) -> tuple[Any, tuple[int, ...] | None]:
     """The interior of the grid axes, which are the last, and those axes.
 
     ``None`` (all of them) when there are no others, where NumPy sums in
@@ -137,22 +144,23 @@ def _interior_axes(x: Any, weights: Any) -> tuple[Any, tuple[int, ...] | None]:
     """
     rank = weights.ndim
     axes = None if x.ndim == rank else tuple(range(-rank, 0))
-    return (..., *(slice(1, -1),) * rank), axes
+    inner = slice(ghost, -ghost or None)
+    return (..., *(inner,) * rank), axes
 
 
-def _sum(x: Any, weights: Any, mask: Any) -> Any:
+def _sum(x: Any, weights: Any, mask: Any, ghost: int) -> Any:
     """∑ w x over the interior."""
     xp = array_namespace(x)
     x, weights = _weighted(x, weights, mask)
-    inner, axes = _interior_axes(x, weights)
+    inner, axes = _interior_axes(x, weights, ghost)
     return xp.sum((weights * x)[inner], axis=axes)
 
 
-def _mean(x: Any, weights: Any, mask: Any) -> Any:
+def _mean(x: Any, weights: Any, mask: Any, ghost: int) -> Any:
     """∑ w x / ∑ w over the interior, NaN where there is no wet cell."""
     xp = array_namespace(x)
     x, weights = _weighted(x, weights, mask)
-    inner, axes = _interior_axes(x, weights)
+    inner, axes = _interior_axes(x, weights, ghost)
     num = xp.sum(weights[inner] * x[inner], axis=axes)
     den = xp.sum(weights[inner])
     return xp.where(den == 0.0, xp.nan, num / xp.where(den == 0.0, 1.0, den))
@@ -165,7 +173,8 @@ def area_sum(
 ) -> Float[Array, "*batch"]:
     """Area-weighted sum over the interior T cells.
 
-    ``∑ⱼᵢ A[j, i] x[j, i]`` over ``[1:-1, 1:-1]``. With a mask the dry cells
+    ``∑ⱼᵢ A[j, i] x[j, i]`` over the interior, all the cells of a collocated
+    grid. With a mask the dry cells
     are zeroed before the product, so a NaN or Inf on land cannot
     contaminate the result.
 
@@ -173,7 +182,8 @@ def area_sum(
     ----------
     x : CField or Float[Array, "*batch Ny Nx"]
         T-point field.
-    grid : CartesianCGrid2D or SphericalCGrid2D
+    grid : grid
+        Two-dimensional, staggered or collocated.
     mask : Mask2D, optional
         Dry cells contribute zero.
 
@@ -206,7 +216,8 @@ def area_mean(
     ----------
     x : CField or Float[Array, "*batch Ny Nx"]
         T-point field.
-    grid : CartesianCGrid2D or SphericalCGrid2D
+    grid : grid
+        Two-dimensional, staggered or collocated.
     mask : Mask2D, optional
         Dry cells are left out of both sums.
 
@@ -239,7 +250,8 @@ def volume_sum(
     ----------
     x : CField or Float[Array, "*batch Nz Ny Nx"]
         T-point field.
-    grid : CartesianCGrid3D or SphericalCGrid3D
+    grid : grid
+        Three-dimensional, staggered or collocated.
     mask : Mask3D, optional
         Dry cells contribute zero.
 
@@ -261,7 +273,8 @@ def volume_mean(
     ----------
     x : CField or Float[Array, "*batch Nz Ny Nx"]
         T-point field.
-    grid : CartesianCGrid3D or SphericalCGrid3D
+    grid : grid
+        Three-dimensional, staggered or collocated.
     mask : Mask3D, optional
         Dry cells are left out of both sums.
 
@@ -273,28 +286,34 @@ def volume_mean(
     return volume_mean._impl(grid, x, mask=mask)
 
 
+@area_sum.register(CartesianAGrid2D)
+@area_sum.register(SphericalAGrid2D)
 @area_sum.register(CartesianCGrid2D)
 @area_sum.register(SphericalCGrid2D)
 def _area_sum(grid: Any, x: Any, *, mask: Mask2D | None) -> Any:
-    return _sum(x, area_weights(grid, xp=array_namespace(x)), mask)
+    return _sum(x, area_weights(grid, xp=array_namespace(x)), mask, grid.ghost)
 
 
+@area_mean.register(CartesianAGrid2D)
+@area_mean.register(SphericalAGrid2D)
 @area_mean.register(CartesianCGrid2D)
 @area_mean.register(SphericalCGrid2D)
 def _area_mean(grid: Any, x: Any, *, mask: Mask2D | None) -> Any:
-    return _mean(x, area_weights(grid, xp=array_namespace(x)), mask)
+    return _mean(x, area_weights(grid, xp=array_namespace(x)), mask, grid.ghost)
 
 
+@volume_sum.register(CartesianAGrid3D)
 @volume_sum.register(CartesianCGrid3D)
 @volume_sum.register(SphericalCGrid3D)
 def _volume_sum(grid: Any, x: Any, *, mask: Mask3D | None) -> Any:
-    return _sum(x, volume_weights(grid, xp=array_namespace(x)), mask)
+    return _sum(x, volume_weights(grid, xp=array_namespace(x)), mask, grid.ghost)
 
 
+@volume_mean.register(CartesianAGrid3D)
 @volume_mean.register(CartesianCGrid3D)
 @volume_mean.register(SphericalCGrid3D)
 def _volume_mean(grid: Any, x: Any, *, mask: Mask3D | None) -> Any:
-    return _mean(x, volume_weights(grid, xp=array_namespace(x)), mask)
+    return _mean(x, volume_weights(grid, xp=array_namespace(x)), mask, grid.ghost)
 
 
 # ----------------------------------------------------------------------

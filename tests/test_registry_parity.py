@@ -7,6 +7,8 @@ must raise ``NotImplementedError`` naming the operation and the grid.
 
 from __future__ import annotations
 
+import re
+
 import gridax
 from gridax._src.api import OPERATIONS, SUPPORT, grid_dispatch
 import jax
@@ -21,6 +23,14 @@ GRIDS = {
     "SphericalCGrid2D": gridax.SphericalCGrid2D.from_interior(
         6, 5, (0.0, 30.0), (0.0, 30.0)
     ),
+    "CartesianAGrid1D": gridax.CartesianAGrid1D.from_interior(8, 4.0),
+    "CartesianAGrid2D": gridax.CartesianAGrid2D.from_coords(
+        y=[0.0, 1.0, 3.0, 4.5, 5.0, 7.0], x=[0.0, 0.5, 1.5, 2.0, 4.0, 4.5, 6.0]
+    ),
+    "CartesianAGrid3D": gridax.CartesianAGrid3D.from_interior(8, 6, 5, 4.0, 3.0, 10.0),
+    "SphericalAGrid2D": gridax.SphericalAGrid2D.from_interior(
+        8, 6, (0.0, 360.0), (-60.0, 60.0), R=2.0, periodic=("x",)
+    ),
     "SphericalCGrid3D": gridax.SphericalCGrid3D.from_interior(
         6, 5, 4, (0.0, 30.0), (0.0, 30.0), 1.0
     ),
@@ -31,7 +41,7 @@ def test_every_concrete_grid_is_here():
     concrete = {
         name
         for name in gridax.__all__
-        if name.startswith(("CartesianCGrid", "SphericalCGrid"))
+        if re.fullmatch(r"(Cartesian|Spherical)[AC]Grid\dD", name)
     }
     assert concrete == set(GRIDS)
 

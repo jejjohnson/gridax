@@ -50,3 +50,30 @@ arrays so they can be used inside `jax.jit`.
 ::: gridax.SphericalCGrid2D
 
 ::: gridax.SphericalCGrid3D
+
+## Collocated grids
+
+Every variable at T and no ghost ring, for fields that come with one value per cell: a raster scene, observations, an analysis product. Axes may be uniform or irregular, and uniform ones periodic. The steps are signed, so a derivative along `y` points north on a raster whose rows run south. The canonical functions (`gridax.difference`, the reductions) take these grids, and a mask built with `Mask2D.from_grid` has T points only.
+
+| | `from_interior` | `from_affine` | `from_coords` |
+|---|---|---|---|
+| `CartesianAGrid1D` | uniform | | `x` |
+| `CartesianAGrid2D` | uniform | a raster transform | `y`, `x` |
+| `CartesianAGrid3D` | uniform | | `z`, `y`, `x` |
+| `SphericalAGrid2D` | degrees | degrees | `lat`, `lon` in degrees |
+
+::: gridax.agrid_from
+
+::: gridax.CartesianAGrid1D
+
+::: gridax.CartesianAGrid2D
+
+::: gridax.CartesianAGrid3D
+
+::: gridax.SphericalAGrid2D
+
+::: gridax.CollocatedGrid1D
+
+::: gridax.CollocatedGrid2D
+
+::: gridax.CollocatedGrid3D

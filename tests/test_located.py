@@ -19,6 +19,14 @@ GRIDS = {
     "SphericalCGrid2D": g.SphericalCGrid2D.from_interior(
         8, 6, (0.0, 40.0), (-60.0, 60.0), R=2.0
     ),
+    "CartesianAGrid1D": g.CartesianAGrid1D.from_interior(8, 4.0),
+    "CartesianAGrid2D": g.CartesianAGrid2D.from_coords(
+        y=[0.0, 1.0, 3.0, 4.5, 5.0, 7.0], x=[0.0, 0.5, 1.5, 2.0, 4.0, 4.5, 6.0]
+    ),
+    "CartesianAGrid3D": g.CartesianAGrid3D.from_interior(8, 6, 5, 4.0, 3.0, 10.0),
+    "SphericalAGrid2D": g.SphericalAGrid2D.from_interior(
+        8, 6, (0.0, 360.0), (-60.0, 60.0), R=2.0, periodic=("x",)
+    ),
     "SphericalCGrid3D": g.SphericalCGrid3D.from_interior(
         8, 6, 5, (0.0, 40.0), (-60.0, 60.0), 10.0, R=2.0
     ),
@@ -38,6 +46,9 @@ def wet_mask(grid, seed=1):
 
 def keywords(name, grid):
     """The keyword arguments of each call an operation is checked on."""
+    if getattr(grid, "_collocated", False):
+        axes = [{"axis": axis} for axis in grid.axes]
+        return axes if name == "difference" else [{}]
     if name == "difference":
         return [
             {"axis": a, "src": s, "dst": d} for a, s, d in sorted(TRIPLES[grid.axes])
@@ -47,8 +58,10 @@ def keywords(name, grid):
     return [{}]
 
 
-def resolve(point, kwargs):
-    """A declared point: a name, or the keyword that holds it."""
+def resolve(point, kwargs, grid):
+    """A declared point: a name, or the keyword that holds it; T if collocated."""
+    if getattr(grid, "_collocated", False):
+        return "T"
     return point if point in POINT_AXES else kwargs[point]
 
 
@@ -79,7 +92,7 @@ def test_the_field_path_is_the_array_path(name, grid, kwargs, masked):
     mask = wet_mask(grid) if masked else None
     arrays = {n: array(grid, seed) for seed, n in enumerate(points)}
     fields = {
-        n: CField(a, grid.axes, loc=resolve(points[n], kwargs))
+        n: CField(a, grid.axes, loc=resolve(points[n], kwargs, grid))
         for n, a in arrays.items()
     }
     # the keywords that only name the point of an operand are inferred
@@ -94,7 +107,7 @@ def test_the_field_path_is_the_array_path(name, grid, kwargs, masked):
     gots, wants = (x if isinstance(x, tuple) else (x,) for x in (got, want))
     for point, a, b in zip(outs, gots, wants, strict=True):
         assert a.dims == grid.axes
-        assert a.stagger == point_stagger(resolve(point, kwargs))
+        assert a.stagger == point_stagger(resolve(point, kwargs, grid))
         np.testing.assert_array_equal(a.data, b)
 
 
@@ -106,7 +119,7 @@ def test_a_field_on_another_point_raises(name, grid, kwargs):
     for wrong in points:
         fields = {}
         for n, point in points.items():
-            at = resolve(point, kwargs)
+            at = resolve(point, kwargs, grid)
             if n == wrong:
                 at = "U" if at == "T" else "T"
             fields[n] = CField(array(grid), grid.axes, loc=at)

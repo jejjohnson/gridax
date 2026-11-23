@@ -17,9 +17,7 @@ else:
 _COS_EPS = 1e-12  # guard against division by cos(lat) ≈ 0 near poles
 
 
-def _metric_like(
-    metric: Float[Array, "..."], like: Float[Array, "..."]
-) -> Float[Array, "..."]:
+def _metric_like(metric: Any, like: Any) -> Float[Array, "..."]:
     """A grid metric in the floating dtype of the field it acts on.
 
     Grid metrics are float64 NumPy arrays (0-d ones included): multiplying one into a

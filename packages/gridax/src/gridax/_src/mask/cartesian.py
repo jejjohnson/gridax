@@ -27,6 +27,7 @@ grid module's ``U[j, i]`` / ``V[j, i]`` positions::
 
 from __future__ import annotations
 
+import dataclasses
 import typing as tp
 from typing import TYPE_CHECKING, Any
 
@@ -58,7 +59,7 @@ else:
 def _wet(mask: Any, axes: tuple[str, ...], at: str | Stagger, kind: str) -> Any:
     """``mask.wet``: the stored array of a point, and of a kind of corner."""
     staggered = point_axes(at, axes)
-    if staggered == ("x", "y"):
+    if staggered == ("x", "y") and mask._u is not None:
         name = "_xy_corner" if kind == "default" else f"_xy_corner_{kind}"
         if hasattr(mask, name):
             return getattr(mask, name)
@@ -68,14 +69,26 @@ def _wet(mask: Any, axes: tuple[str, ...], at: str | Stagger, kind: str) -> Any:
         raise ValueError(f"kind={kind!r} exists at X only, not at {at!r}")
     if not staggered:
         return mask._h
+    if mask._u is None:
+        raise ValueError(f"at={at!r}: the mask of a collocated grid has T points only")
     return getattr(mask, {"x": "_u", "y": "_v", "z": "_w"}[staggered[0]])
 
 
-def _check_grid_shape(grid: Any, wet_t: Any) -> None:
+def _from_grid(from_mask: Any, grid: Any, wet_t: Any, **kwargs: Any) -> Any:
+    """``from_mask`` on the shape of a grid, with T alone if it is collocated."""
     if np.shape(wet_t) != grid.shape:
         raise ValueError(
             f"wet_t has shape {np.shape(wet_t)}, and the grid {grid.shape}"
         )
+    mask = from_mask(wet_t, **kwargs)
+    if not getattr(grid, "_collocated", False):
+        return mask
+    staggered = [
+        field.name
+        for field in dataclasses.fields(mask)
+        if field.name.startswith("_") and field.name != "_h"
+    ]
+    return dataclasses.replace(mask, **dict.fromkeys(staggered))
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -330,8 +343,7 @@ class Mask1D:
         >>> Mask1D.from_grid(grid, np.ones(grid.shape)).wet().shape == grid.shape
         True
         """
-        _check_grid_shape(grid, wet_t)
-        return cls.from_mask(wet_t)
+        return _from_grid(cls.from_mask, grid, wet_t)
 
     @classmethod
     def from_center(
@@ -818,8 +830,7 @@ class Mask2D:
         >>> Mask2D.from_grid(grid, np.ones(grid.shape)).wet().shape == grid.shape
         True
         """
-        _check_grid_shape(grid, wet_t)
-        return cls.from_mask(wet_t, k_bottom=k_bottom)
+        return _from_grid(cls.from_mask, grid, wet_t, k_bottom=k_bottom)
 
     @classmethod
     def from_center(
@@ -1407,8 +1418,7 @@ class Mask3D:
         >>> Mask3D.from_grid(grid, np.ones(grid.shape)).wet().shape == grid.shape
         True
         """
-        _check_grid_shape(grid, wet_t)
-        return cls.from_mask(wet_t, k_bottom=k_bottom)
+        return _from_grid(cls.from_mask, grid, wet_t, k_bottom=k_bottom)
 
     @classmethod
     def from_center(
