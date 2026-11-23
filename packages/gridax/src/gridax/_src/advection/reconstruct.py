@@ -18,6 +18,8 @@ import numpy as np
 
 from gridax._src.advection.flux import upwind_flux
 from gridax._src.api import grid_dispatch
+from gridax._src.backend import pad
+from gridax._src.boundary.fill import BC, extend, extend_wet
 from gridax._src.fields.located import located
 from gridax._src.grid import (
     CartesianCGrid1D,
@@ -26,6 +28,8 @@ from gridax._src.grid import (
     SphericalCGrid2D,
     SphericalCGrid3D,
 )
+from gridax._src.grid.points import point_stagger
+from gridax._src.mask.base import tiers_of
 from gridax._src.operators._ghost import interior
 from gridax._src.pytree import array_namespace
 from gridax._src.schemes.base import Ladder, Scheme, Tier
@@ -53,6 +57,7 @@ def reconstruct(
     axis: str,
     scheme: Scheme,
     mask: Any = None,
+    bc: BC | None = None,
 ) -> Float[Array, "..."]:
     """The advective flux ``q̂ u`` on the faces along ``axis``.
 
@@ -60,9 +65,9 @@ def reconstruct(
     towards ``+axis`` the face ``i + 1/2`` takes the cells ``i + lo … i + hi``
     of the widest tier of the scheme that fits, and for flow towards ``-axis``
     their mirror; a scheme that is not upwinded takes the same cells for
-    either. A tier fits if its cells are inside the array and, with ``mask``,
-    wet, so no face reads a dry cell, and a face between two wet cells always
-    has a flux.
+    either. A tier fits if its cells are inside the array, or ``bc`` says what
+    is outside it, and, with ``mask``, wet; so no face reads a dry cell, and a
+    face between two wet cells always has a flux.
 
     Parameters
     ----------
@@ -78,6 +83,10 @@ def reconstruct(
         Any of `gridax.schemes`.
     mask : Mask1D, Mask2D or Mask3D, optional
         The wet cells.
+    bc : BC, optional
+        The condition of ``q`` on the faces normal to ``axis``. The ghost ring
+        of ``q`` is filled from it, and as many layers beyond as the widest
+        tier reads, so every face takes that tier.
 
     Returns
     -------
@@ -94,7 +103,7 @@ def reconstruct(
     [0.0, 1.0, 2.0, 3.0, 4.0, 0.0]
     """
     check_scheme(scheme)
-    return reconstruct._impl(grid, q, u, axis=axis, scheme=scheme, mask=mask)
+    return reconstruct._impl(grid, q, u, axis=axis, scheme=scheme, mask=mask, bc=bc)
 
 
 @reconstruct.register(CartesianCGrid1D)
@@ -103,20 +112,79 @@ def reconstruct(
 @reconstruct.register(SphericalCGrid2D)
 @reconstruct.register(SphericalCGrid3D)
 def _reconstruct_staggered(
-    grid: Any, q: Any, u: Any, *, axis: str, scheme: Scheme, mask: Any
+    grid: Any,
+    q: Any,
+    u: Any,
+    *,
+    axis: str,
+    scheme: Scheme,
+    mask: Any,
+    bc: BC | None,
 ) -> Any:
     if axis not in grid.axes:
         raise ValueError(f"axis must be one of {grid.axes}; got {axis!r}")
+    flux = axis_flux(grid, q, u, axis=axis, scheme=scheme, mask=mask, bc=bc)
+    if bc is None:
+        return flux
+    position = grid.axes.index(axis) - len(grid.axes)
+    ring = (..., slice(1, -1), *(slice(None),) * (-position - 1))
+    return interior(flux[ring], flux)
+
+
+def axis_flux(
+    grid: Any,
+    q: Array,
+    u: Array,
+    *,
+    axis: str,
+    scheme: Scheme,
+    mask: Any,
+    bc: BC | None,
+) -> Array:
+    """The flux through the faces along ``axis``.
+
+    With a zero ghost ring; with ``bc`` the first face (the wall on the low
+    side) has its flux too.
+    """
     rank = len(grid.axes)
-    return face_flux(
-        q,
-        u,
-        axis=grid.axes.index(axis) - rank,
+    position = grid.axes.index(axis) - rank
+    if bc is None:
+        return face_flux(
+            q,
+            u,
+            axis=position,
+            scheme=scheme,
+            rank=rank,
+            hierarchy=None if mask is None else hierarchy_of(mask, axis, scheme),
+            wet=None if mask is None else mask.wet(),
+        )
+    # at least one layer, so the wall on the low side is an interior face
+    extra = max(scheme.halo(staggered=True) - grid.ghost, 1)
+    wet = hierarchy = None
+    if mask is not None:
+        wet = extend_wet(mask.wet(), grid, bc, [axis], extra)
+        if scheme.upwinded:
+            hierarchy = tiers_of(wet, position, [t.size for t in scheme.tiers()])
+    widths = [(0, 0)] * q.ndim
+    widths[position] = (extra, extra)
+    flux = face_flux(
+        extend(q, grid, bc, point_stagger("T"), [axis], extra),
+        pad(u, tuple(widths)),
+        axis=position,
         scheme=scheme,
         rank=rank,
-        hierarchy=None if mask is None else hierarchy_of(mask, axis, scheme),
-        wet=None if mask is None else mask.wet(),
+        hierarchy=hierarchy,
+        wet=wet,
     )
+
+    def faces(start: int, stop: int) -> tuple[Any, ...]:
+        return (..., slice(start, stop), *(slice(None),) * (-position - 1))
+
+    # the last index has no face of the grid
+    size = q.shape[position]
+    kept = flux[faces(extra, extra + size - 1)]
+    xp = array_namespace(flux)
+    return xp.concat([kept, xp.zeros_like(flux[faces(0, 1)])], axis=position)
 
 
 def check_scheme(scheme: Any) -> None:

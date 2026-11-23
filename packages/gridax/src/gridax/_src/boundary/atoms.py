@@ -110,7 +110,7 @@ class _Atom:
         def phi(k: int) -> Any:
             return f[at(first + k - 1)]
 
-        step = _face_spacing(grid, axis, point, f, width)
+        step = _face_spacing(grid, axis, point, f)
         if not on_wall:
             layers = {width - k: self._ghost(phi, k, step) for k in range(1, width + 1)}
         else:
@@ -129,7 +129,6 @@ class _Atom:
         axis: str,
         side: int,
         point: str | Stagger,
-        width: int,
         layer: int,
     ) -> Float[Array, "..."]:
         """What every point would hold as layer ``layer`` behind a coast.
@@ -140,8 +139,7 @@ class _Atom:
         Parameters
         ----------
         f : array
-            A field whose last axes are ``grid.axes``, with ``width`` ghost
-            layers on each side.
+            A field whose last axes are ``grid.axes``.
         grid : grid
             Gives the axes and the spacing at the coast.
         axis : str
@@ -150,8 +148,6 @@ class _Atom:
             The side of the water the coast is on, low or high.
         point : str or Stagger
             The point of the field.
-        width : int
-            Number of ghost layers.
         layer : int
             The dry points between the point and the water, plus one. Where
             the field has a node on the wall, that is layer 1.
@@ -172,7 +168,7 @@ class _Atom:
         def phi(k: int) -> Any:
             return xp.roll(lines, -inwards * (layer + k - 1), axis=0)
 
-        step = _face_spacing(grid, axis, point, f, width)
+        step = _face_spacing(grid, axis, point, f)
         if axis not in point_axes(point, grid.axes):
             values = self._ghost(phi, layer, step)
         else:
@@ -183,13 +179,13 @@ class _Atom:
 
 
 def _face_spacing(
-    grid: Any, axis: str, point: str | Stagger, f: Float[Array, "..."], width: int
+    grid: Any, axis: str, point: str | Stagger, f: Float[Array, "..."]
 ) -> Float[Array, "..."]:
     """The normal spacing on the faces of ``axis``, one value per face point.
 
     0-d where it is uniform. A spacing that varies along the face (Δx with
-    latitude on a sphere) has ``f``'s size along it: where ``width`` is not
-    the grid's ring, the layers beyond it repeat the last row.
+    latitude on a sphere) has ``f``'s size along it: where ``f`` has more or
+    fewer rows than the grid, those beyond it repeat the last one.
     """
     step = grid.spacing(axis, at=point)
     if np.ndim(step) == 0:
@@ -197,7 +193,7 @@ def _face_spacing(
     # [Ny, Nx] on the sphere: the same at every longitude, so one column
     line = step[..., grid.ghost]
     xp = array_namespace(line)
-    extra = width - grid.ghost
+    extra = (f.shape[-2] - line.shape[0]) // 2
     if extra > 0:
         line = xp.concat([line[:1]] * extra + [line] + [line[-1:]] * extra)
     elif extra < 0:

@@ -408,6 +408,10 @@ All advection operators take `wall="closed"` (default) or `wall="open"`.
   for outflow, a wrap for periodic), keeps the requested scheme on the
   interior faces, and writes the full interior; the flux stays single-valued,
   so mass is conserved exactly.
+- **`bc=`** on `gridax.advect`, instead of `wall=`: the ghost layers of `q` are
+  filled from the conditions, as many as the scheme reads, so the full
+  interior is written with the widest stencil at the edges too. `Periodic`
+  faces give the periodic scheme with no halo to build, exactly conservative.
 - In 3-D the z axis is a batch axis: the horizontal reconstruction and
   divergence are applied to every level by array slicing (no `vmap`), and the
   ghost slabs `k = 0`, `Nz-1` stay zero.
@@ -584,7 +588,8 @@ Does the domain have land / islands?
 │         every scheme is land-safe (coastal fallback, no flux through land)
 └── No  → omit the mask
 
-Periodic in x or y?  → wall="open" with the halo H of the table above.
+Periodic in x or y?  → gridax.advect(..., bc=BC(x=Periodic(), ...)), or
+                       wall="open" with the halo H of the table above.
 ```
 
 ---

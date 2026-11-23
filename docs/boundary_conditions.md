@@ -319,6 +319,28 @@ print(gridax.fill_ghosts(x, grid, gridax.BC(x=gridax.Neumann())))
 
 ---
 
+### Wide stencils: `bc=` on an operator
+
+A field keeps one ghost ring, and `Centred(4)` or `WENO(5)` reads more than that next to a wall. Without more to go on, `difference` and `interpolate` shift such a stencil inwards at the edge, and `reconstruct` and `advect` narrow it. Give the operator the boundary condition instead, and it fills as many ghost layers as its scheme reads, computes, and returns a field with the usual ring:
+
+```python
+import gridax
+import numpy as np
+from gridax.schemes import WENO, Centred
+
+grid = gridax.CartesianCGrid2D.from_interior(16, 16, 1.0, 1.0)
+h = np.random.default_rng(0).normal(size=grid.shape)
+u, v = np.ones(grid.shape), np.zeros(grid.shape)
+
+around = gridax.BC(x=gridax.Periodic(), y=gridax.Periodic())
+dhdx = gridax.difference(h, grid, axis="x", src="T", dst="U", scheme=Centred(4), bc=around)
+dhdt = gridax.advect(h, u, v, grid, scheme=WENO(5), bc=around)
+print(abs(dhdt.sum()) < 1e-10)  # nothing is lost across the seam
+# True
+```
+
+The operator reads nothing of the ring of the field itself, so there is no need to fill it first. `advect` with `bc=` writes every interior cell, edges included, and reads the velocity on the walls.
+
 ### Coasts inside the domain: `mask`
 
 A coastline is a wall too. With `mask=`, `fill_ghosts` also writes the dry points behind every coast with the mirror rules above: the nearest wet point is $\phi_1$, and a coast on the east side of the water takes the condition of the east face. A straight coast inside the domain and a domain edge with the same condition therefore hold the same values.

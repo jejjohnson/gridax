@@ -258,7 +258,7 @@ def _filled(f: Any, grid: Any, bc: BC, mask: Any, width: int, stagger: Stagger) 
         return out
     # the coasts read the ring (a periodic image of the water), and the ring
     # then wraps or mirrors the coasts
-    out = _fill_coasts(out, grid, bc, mask, width, stagger, layers=width)
+    out = _fill_coasts(out, grid, bc, mask, stagger, layers=width)
     return _fill(out, grid, bc, width, stagger)
 
 
@@ -267,7 +267,6 @@ def _fill_coasts(
     grid: Any,
     bc: BC,
     mask: Any,
-    width: int,
     stagger: Stagger,
     *,
     layers: int,
@@ -292,7 +291,7 @@ def _fill_coasts(
             points = mask.coast_ghosts(
                 axis, ("low", "high")[side], at=stagger, kind=kind, layer=layer
             ).points
-            values = atom.coast(f, grid, axis, side, stagger, width, layer)
+            values = atom.coast(f, grid, axis, side, stagger, layer)
             total = total + xp.where(points, values, xp.zeros_like(values))
             count = count + xp.asarray(points, dtype=xp.int8)
         here = (count > 0) & ~written
@@ -310,6 +309,13 @@ def _fill(f: Any, grid: Any, bc: BC, width: int, stagger: Stagger) -> Any:
     if width < 1 or any(size <= 2 * width for size in sizes):
         raise ValueError(f"no room for {width} ghost layers in shape {sizes}")
     axes = [axis for axis in grid.axes if axis in bc.faces]
+    return _apply(f, grid, bc, axes, width, stagger)
+
+
+def _apply(
+    f: Any, grid: Any, bc: BC, axes: list[str], width: int, stagger: Stagger
+) -> Any:
+    """Fill the faces of ``axes``, and the corners between them by their rule."""
 
     def apply(order: Any) -> Any:
         out = f
@@ -325,3 +331,63 @@ def _fill(f: Any, grid: Any, bc: BC, width: int, stagger: Stagger) -> Any:
     # corners every order agrees, and the value stays exact.
     first, *rest = (apply(order) for order in itertools.permutations(axes))
     return first + sum(out - first for out in rest) / (len(rest) + 1)
+
+
+def extend(
+    f: Any, grid: Any, bc: BC, stagger: Stagger, axes: list[str], extra: int
+) -> Any:
+    """``f`` with ``extra`` more ghost layers on ``axes``, its ring among them filled.
+
+    What an operator reads when its stencil is wider than the ghost ring; a
+    field that is returned keeps the ring of the grid. The faces of ``axes``
+    must all have a condition.
+    """
+    unknown = [axis for axis in bc.faces if axis not in grid.axes]
+    if unknown:
+        raise ValueError(f"bc has the axes {unknown}, not in grid axes {grid.axes}")
+    for name, (axis, side) in FACES.items():
+        if axis in axes and bc.faces.get(axis, (None, None))[side] is None:
+            raise ValueError(f"bc has no condition for the {name} face")
+    xp = array_namespace(f)
+    for axis in axes:
+        position = grid.axes.index(axis) - len(grid.axes)
+        f = _widened(xp, f, position, extra, "zero")
+    return _apply(f, grid, bc, axes, grid.ghost + extra, stagger)
+
+
+def extend_wet(wet: Any, grid: Any, bc: BC, axes: list[str], extra: int) -> Any:
+    """The wet points of an extended field.
+
+    Wrapped where the faces are periodic, and those of the ghost ring elsewhere.
+    """
+    xp = array_namespace(wet)
+    for axis in axes:
+        position = grid.axes.index(axis) - len(grid.axes)
+        periodic = isinstance(bc.faces[axis][0], Periodic)
+        wet = _widened(xp, wet, position, extra, "wrap" if periodic else "ring", grid)
+    return wet
+
+
+def _widened(
+    xp: Any, x: Any, position: int, extra: int, how: str, grid: Any = None
+) -> Any:
+    """``x`` with ``extra`` layers on both sides of an axis."""
+    if extra == 0:
+        return x
+    n = x.shape[position]
+
+    def layers(start: int, stop: int) -> Any:
+        return x[(..., slice(start, stop), *(slice(None),) * (-position - 1))]
+
+    if how == "zero":
+        low = high = xp.zeros_like(layers(0, 1))
+        sides = [low] * extra, [high] * extra
+    elif how == "ring":
+        sides = [layers(0, 1)] * extra, [layers(n - 1, n)] * extra
+    else:
+        period = n - 2 * grid.ghost
+        sides = (
+            [layers(period - extra, period)],
+            [layers(n - period, n - period + extra)],
+        )
+    return xp.concat([*sides[0], x, *sides[1]], axis=position)
