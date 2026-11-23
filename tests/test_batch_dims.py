@@ -40,8 +40,6 @@ MODULES = (
     "gridax._src.operators.coriolis",
     "gridax._src.operators.diagnostics",
     "gridax._src.operators.diagnostic_operators",
-    "gridax._src.boundary.bc_1d",
-    "gridax._src.boundary.bc_set",
     "gridax._src.boundary.boundary",
 )
 
@@ -79,35 +77,22 @@ def _discover() -> tuple[list, list]:
 
 FUNCTIONS, CLASSES = _discover()
 
-FACES = ("south", "north", "west", "east")
-
-# BC atoms, one constructor per class: ``face -> atom``.
-ATOMS = {
-    fvx.Dirichlet1D: lambda face: fvx.Dirichlet1D(face, 1.5),
-    fvx.Neumann1D: lambda face: fvx.Neumann1D(face, 0.25),
-    fvx.Periodic1D: fvx.Periodic1D,
-    fvx.Outflow1D: fvx.Outflow1D,
-    fvx.Reflective1D: fvx.Reflective1D,
-    fvx.Sponge1D: lambda face: fvx.Sponge1D(face, background=0.3, weight=0.4),
-    fvx.Robin1D: lambda face: fvx.Robin1D(face, alpha=1.0, beta=0.5, gamma=0.2),
-    fvx.Extrapolation1D: lambda face: fvx.Extrapolation1D(face, order=2),
-    fvx.Slip1D: lambda face: fvx.Slip1D(face, 0.5),
-}
-
-BC_SETS = {
-    "periodic": fvx.BoundaryConditionSet.periodic(),
-    "closed_U": fvx.BoundaryConditionSet.closed(point="U"),
-    "open_V": fvx.BoundaryConditionSet.open(point="V"),
-    "mixed": fvx.BoundaryConditionSet(
-        south=fvx.Dirichlet1D("south", 1.5),
-        north=fvx.Neumann1D("north", 0.25),
-        west=fvx.Slip1D("west", 0.5),
-        east=fvx.Outflow1D("east"),
+BCS = {
+    "Dirichlet": fvx.BC(x=fvx.Dirichlet(1.5), y=fvx.Dirichlet(1.5)),
+    "Neumann": fvx.BC(x=fvx.Neumann(0.25), y=fvx.Neumann(0.25)),
+    "Periodic": fvx.BC(x=fvx.Periodic(), y=fvx.Periodic()),
+    "Outflow": fvx.BC(x=fvx.Outflow(), y=fvx.Outflow()),
+    "Reflective": fvx.BC(x=fvx.Reflective(), y=fvx.Reflective()),
+    "Sponge": fvx.BC(x=fvx.Sponge(0.3, 0.4), y=fvx.Sponge(0.3, 0.4)),
+    "Robin": fvx.BC(x=fvx.Robin(1.0, 0.5, 0.2), y=fvx.Robin(1.0, 0.5, 0.2)),
+    "Extrapolation": fvx.BC(x=fvx.Extrapolation(2), y=fvx.Extrapolation(2)),
+    "Slip": fvx.BC(x=fvx.Slip(0.5), y=fvx.Slip(0.5)),
+    "mixed": fvx.BC(
+        south=fvx.Dirichlet(1.5),
+        north=fvx.Neumann(0.25),
+        west=fvx.Slip(0.5),
+        east=fvx.Outflow(),
     ),
-    **{
-        cls.__name__: fvx.BoundaryConditionSet(**{f: make(f) for f in FACES})
-        for cls, make in ATOMS.items()
-    },
 }
 
 
@@ -144,8 +129,7 @@ def _call(fn: Callable, fields: list) -> object:
 
 def _cases() -> list:
     cases = []
-    bc_classes = (*ATOMS, fvx.BoundaryConditionSet, fvx.FieldBCSet)
-    grid_classes = [c for c in CLASSES if c not in bc_classes]
+    grid_classes = CLASSES
     for cls in grid_classes:
         assert "grid" in getattr(cls, "__dataclass_fields__", {}), (
             f"{cls.__name__} is annotated *batch but has no constructor in this test"
@@ -162,19 +146,13 @@ def _cases() -> list:
     for fn in FUNCTIONS:
         assert _array_params(fn), fn.__name__
         cases.append(pytest.param(fn, id=fn.__name__))
-    for name, bcs in BC_SETS.items():
+    for (name, bc), point in itertools.product(BCS.items(), "TUVX"):
         cases.append(
-            pytest.param(lambda f, b=bcs: b(f, dx=0.5, dy=0.25), id=f"BCSet.{name}")
+            pytest.param(
+                lambda f, b=bc, p=point: fvx.fill_ghosts(f, GRID, b, stagger=p),
+                id=f"BC.{name}[{point}]",
+            )
         )
-    field_bcs = fvx.FieldBCSet(
-        bc_map={"h": BC_SETS["mixed"]}, default=BC_SETS["periodic"]
-    )
-    cases.append(
-        pytest.param(
-            lambda h, u: field_bcs({"h": h, "u": u}, dx=0.5, dy=0.25),
-            id="FieldBCSet",
-        )
-    )
     return cases
 
 

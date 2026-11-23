@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import gridax as fvx
 from gridax._src.solvers.inhomogeneous import (
     KnownValueLifting,
     SolveDomain,
@@ -362,45 +361,3 @@ class TestKnownValueLifting:
         rhs_c, vlift = run(rhs, kv)
         assert rhs_c.shape == (8, 8)
         assert vlift.shape == (8, 8)
-
-
-# ---------------------------------------------------------------------------
-# BoundaryConditionSet.mask and .closed()
-# ---------------------------------------------------------------------------
-
-
-class TestBoundaryConditionSetMask:
-    def test_mask_field_default_none(self):
-        bc = fvx.BoundaryConditionSet()
-        assert bc.mask is None
-
-    def test_mask_field_accepts_array(self):
-        mask = jnp.ones((8, 8))
-        bc = fvx.BoundaryConditionSet(mask=mask)
-        assert bc.mask is not None
-
-    def test_closed_factory(self):
-        mask = jnp.ones((8, 8))
-        bc = fvx.BoundaryConditionSet.closed(mask=mask)
-        assert bc.mask is not None
-        assert isinstance(bc.south, fvx.Dirichlet1D)
-        assert isinstance(bc.north, fvx.Dirichlet1D)
-        assert isinstance(bc.west, fvx.Dirichlet1D)
-        assert isinstance(bc.east, fvx.Dirichlet1D)
-        assert bc.south.value == 0.0
-
-    def test_closed_factory_no_mask(self):
-        bc = fvx.BoundaryConditionSet.closed()
-        assert bc.mask is None
-        assert isinstance(bc.south, fvx.Dirichlet1D)
-
-    def test_existing_call_still_works(self):
-        bc = fvx.BoundaryConditionSet(
-            south=fvx.Periodic1D("south"),
-            north=fvx.Periodic1D("north"),
-            west=fvx.Periodic1D("west"),
-            east=fvx.Periodic1D("east"),
-        )
-        field = jnp.ones((6, 8))
-        result = bc(field, dx=1.0, dy=1.0)
-        assert result.shape == (6, 8)

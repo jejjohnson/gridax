@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 from gridax import (
-    BoundaryConditionSet,
+    BC,
     CartesianCGrid2D,
     CartesianCGrid3D,
+    Dirichlet,
     Interpolation2D,
     Mask2D,
     Mask3D,
     enforce_periodic,
+    fill_ghosts,
 )
 from gridax._src.operators._ghost import interior
 from gridax._src.operators.coriolis import Coriolis2D, Coriolis3D
@@ -391,15 +393,18 @@ class TestCoriolisEnergyConservation:
 
     def test_closed_basin_beta_plane(self):
         g = self._grid()
-        u = BoundaryConditionSet.closed(point="U")(
+        closed = BC(x=Dirichlet(0.0), y=Dirichlet(0.0))
+        u = fill_ghosts(
             jax.random.normal(jax.random.PRNGKey(1), (g.Ny, g.Nx)),
-            g.spacing("x"),
-            g.spacing("y"),
+            g,
+            closed,
+            stagger="U",
         )
-        v = BoundaryConditionSet.closed(point="V")(
+        v = fill_ghosts(
             jax.random.normal(jax.random.PRNGKey(2), (g.Ny, g.Nx)),
-            g.spacing("x"),
-            g.spacing("y"),
+            g,
+            closed,
+            stagger="V",
         )
         du, dv = Coriolis2D(grid=g)(u, v, self._beta_f(g))
         assert self._rel_dE(u, v, du, dv) < 1e-13
