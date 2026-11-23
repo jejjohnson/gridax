@@ -209,10 +209,10 @@ gridax has one derivative stack for collocated and staggered fields, in four lay
 |---|---|---|---|
 | **0 — coefficients** | offsets and exact coefficients | `gridax.stencils.difference_offsets`, `difference_coeffs`, `nonuniform_coeffs` | the same with `method="staggered"`, `bias=` and `data="cell"`; `weno_stencils`, `optimal_weights`, `smoothness_matrix` |
 | **1 — raw stencils** | index arithmetic, no metric, no mask | applied inside Layer 2 | the 32 named stencils on this page; `staggered_difference`, `staggered_average`; the `linear_*` and `weno_*` reconstructions |
-| **2 — functional helpers** | metric-scaled, mask-free | `gridax.analysis`: `difference`, `gradient_2d`, `divergence_2d`, `curl_2d`, `laplacian_2d`, … | `diffusion_2d`, `arakawa_jacobian`, `kinetic_energy`, `shear_strain`, …; `gridax.advection.reconstruct` (with an optional mask) |
-| **3 — class operators** | carry a grid and a mask | none | `Difference2D`, `Divergence2D`, `Vorticity2D`, `Reconstruction2D`, `Advection2D`, `SphericalDifference2D`, … |
+| **2 — canonical functions** | one per operation: the grid positional, the mask a keyword | `gridax.analysis`: `difference`, `gradient_2d`, `divergence_2d`, `curl_2d`, `laplacian_2d`, … | `diffusion_2d`, `arakawa_jacobian`, `kinetic_energy`, `shear_strain`, …; `gridax.advection.reconstruct` (with an optional mask) |
+| **3 — bindings** | hold a grid, a mask and caches derived from them; each method is one call of a Layer 2 function | none | `Difference2D`, `Divergence2D`, `Vorticity2D`, `Reconstruction2D`, `Advection2D`, `SphericalDifference2D`, … |
 
-A C-grid helper exists at Layer 2 only when it is more than one line of Layer 1; the divergence and the curl are `Difference2D.divergence` and `.curl` (the free functions `divergence_2d` and `relative_vorticity_cgrid` are deprecated).
+The definitions of Layers 2 and 3 are those of [ADR 1](design/adr/0001-canonical-functions.md), and the code is moving to them family by family: today the collocated functions and the diagnostics of Layer 2 take spacings instead of a grid and no mask, and the C-grid calculus is still implemented in the Layer 3 classes (the divergence and the curl are `Difference2D.divergence` and `.curl`; the free functions `divergence_2d` and `relative_vorticity_cgrid` are deprecated).
 
 ### Layer 0: one solver for every stencil
 

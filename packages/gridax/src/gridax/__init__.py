@@ -15,10 +15,10 @@ or any other backend, in one derivative stack of four layers (``docs/stencils.md
 - Layer 1, raw stencils: the named C-grid stencils (``diff_x_fwd_2d``, …) and
   ``staggered_difference`` / ``staggered_average`` in :mod:`gridax.stencils`;
   the ``linear_*`` and ``weno_*`` reconstructions.
-- Layer 2, functional helpers, metric-scaled and mask-free: the collocated
+- Layer 2, canonical functions, one per operation: the collocated
   calculus of :mod:`gridax.analysis`, the C-grid diagnostics, and
   :func:`gridax.advection.reconstruct` (which also takes a mask).
-- Layer 3, class operators that carry a grid and a mask: ``Difference2D``,
+- Layer 3, bindings that hold a grid and a mask: ``Difference2D``,
   ``Advection2D``, ``Diffusion2D``, … (the C-grid operators, advection,
   diffusion and boundary conditions live here, in gridax).
 
