@@ -28,12 +28,12 @@ grid module's ``U[j, i]`` / ``V[j, i]`` positions::
 from __future__ import annotations
 
 import dataclasses
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, Self
 
 from jaxtyping import Bool, Float
 import numpy as np
 
-from gridax._src.grid.points import Stagger, point_axes
+from gridax._src.grid.points import POINT_AXES, Stagger, point_axes
 from gridax._src.mask.base import (
     WALL_KINDS,
     MaskBase,
@@ -85,30 +85,288 @@ def _corner_kind(mask: Any, kind: str) -> Any:
     return corner & {"y_wall": on_y, "x_wall": on_x, "convex": on_y & on_x}[kind]
 
 
-def _from_grid(from_mask: Any, grid: Any, wet_t: Any, **kwargs: Any) -> Any:
-    """``from_mask`` on the shape of a grid, with T alone if it is collocated."""
-    if np.shape(wet_t) != grid.shape:
-        raise ValueError(
-            f"wet_t has shape {np.shape(wet_t)}, and the grid {grid.shape}"
+#: The stored mask of each point, and how many of the cells of its window must be
+#: wet: all of them, or one for the lenient corners.
+_STORED: dict[str, tuple[str, str]] = {
+    "_u": ("U", "all"),
+    "_v": ("V", "all"),
+    "_w": ("W", "all"),
+    "_xy_corner": ("X", "any"),
+    "_xy_corner_strict": ("X", "all"),
+}
+
+
+def _window(point: str, axes: tuple[str, ...]) -> tuple[int, ...]:
+    """The cells around a point: two along each axis it is staggered on."""
+    return tuple(2 if axis in POINT_AXES[point] else 1 for axis in axes)
+
+
+class _CartesianMask(MaskBase):
+    """What `Mask1D`, `Mask2D` and `Mask3D` share: the wet points and the builders.
+
+    The point ``[k, j, i]`` of a staggered mask takes the cells ``[k, j, i]`` and
+    one step further along each axis the point is staggered on, so
+    ``u[j, i]`` is wet if ``h[j, i]`` and ``h[j, i+1]`` are. Cells outside the
+    array are dry.
+    """
+
+    _counts: ClassVar[Any]
+
+    # ── wet points ───────────────────────────────────────────────────────────
+
+    def wet(
+        self, *, at: str | Stagger = "T", kind: str = "default"
+    ) -> Bool[Array, "*grid"]:
+        """The wet points at a point of the staggering; ``True`` = wet.
+
+        Parameters
+        ----------
+        at : str or Stagger
+            The point, one that the rank of the mask has, or a field's stagger
+            (``CField.stagger``).
+        kind : str
+            At X only: ``"default"`` (at least one of the four cells is wet),
+            ``"strict"`` (all four are), ``"y_wall"``, ``"x_wall"``,
+            ``"convex"`` or ``"valid"``.
+
+        Returns
+        -------
+        Bool[Array, "*grid"]
+
+        Raises
+        ------
+        ValueError
+            If the mask has no such point or kind.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from gridax import Mask2D
+        >>> mask = Mask2D.from_mask(np.ones((4, 4), dtype=bool))
+        >>> int(mask.wet().sum()), int(mask.wet(at="U").sum())
+        (16, 12)
+        """
+        return _wet(self, self._axes, at, kind)
+
+    # ── factory class-methods ─────────────────────────────────────────────────
+
+    @classmethod
+    def from_mask(
+        cls,
+        mask_hgrid: np.ndarray | Bool[Array, "*grid"],
+        k_bottom: Array | None = None,
+    ) -> Self:
+        """Construct from the wet (1 / True) and dry cells.
+
+        Everything is computed and stored with NumPy.
+
+        Parameters
+        ----------
+        mask_hgrid : array-like [*grid]
+            Wet / dry mask at cell centres.
+        k_bottom : array-like [Ny, Nx], optional
+            Vertical sea-floor indices; not in 1-D.
+
+        Returns
+        -------
+        Mask1D, Mask2D or Mask3D
+
+        Notes
+        -----
+        The staggered masks are :func:`pool_bool` of the cells, padded on the
+        trailing side: a face is wet if both its cells are, the lenient corner
+        if one of its four cells is, the strict corner if all four are. The
+        stencil capability is :meth:`StencilCapability2D.from_mask`.
+        """
+        h = np.asarray(mask_hgrid, dtype=bool)
+        cells = h.astype(np.float32)
+        names = {field.name for field in dataclasses.fields(cls)}
+        # NumPy arrays fill fields the type checker reads as JAX arrays: the
+        # type a consumer sees once JAX has flattened the mask.
+        fields: dict[str, Any] = {
+            "_h": h,
+            "stencil_capability": cls._counts.from_mask(h),
+        }
+        for name, (point, wet) in _STORED.items():
+            if name not in names:
+                continue
+            window = _window(point, cls._axes)
+            size = int(np.prod(window))
+            # between size - 1 and size wet cells, or between none and one
+            threshold = (size - 0.5) / size if wet == "all" else 0.5 / size
+            fields[name] = pool_bool(
+                cells, kernel=window, threshold=threshold, direction="trailing"
+            )
+        if "k_bottom" in names:
+            fields["k_bottom"] = None if k_bottom is None else np.asarray(k_bottom)
+        elif k_bottom is not None:
+            raise TypeError(f"{cls.__name__} has no k_bottom")
+        return cls(**fields)
+
+    @classmethod
+    def from_grid(
+        cls,
+        grid: Any,
+        wet_t: np.ndarray | Bool[Array, "*grid"],
+        *,
+        k_bottom: Array | None = None,
+    ) -> Self:
+        """Construct from the wet T points of a grid.
+
+        Parameters
+        ----------
+        grid : grid
+            The grid the mask is for, of the rank of the mask.
+        wet_t : array-like [*grid]
+            Wet (``True``) / dry mask at the T points, ghost ring included.
+        k_bottom : array-like [Ny, Nx], optional
+            Vertical sea-floor indices. See :meth:`from_mask`.
+
+        Returns
+        -------
+        Mask1D, Mask2D or Mask3D
+
+        Raises
+        ------
+        ValueError
+            If the shape of ``wet_t`` is not the grid's.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from gridax import CartesianCGrid2D, Mask2D
+        >>> grid = CartesianCGrid2D.from_interior(4, 4, 1.0, 1.0)
+        >>> Mask2D.from_grid(grid, np.ones(grid.shape)).wet().shape == grid.shape
+        True
+        """
+        if np.shape(wet_t) != grid.shape:
+            raise ValueError(
+                f"wet_t has shape {np.shape(wet_t)}, and the grid {grid.shape}"
+            )
+        mask = cls.from_mask(wet_t, k_bottom)
+        if not getattr(grid, "_collocated", False):
+            return mask
+        # a collocated grid has T points alone
+        staggered = {name for name in _STORED if hasattr(mask, name)}
+        return dataclasses.replace(mask, **dict.fromkeys(staggered))  # ty: ignore[invalid-argument-type]
+
+    @classmethod
+    def from_center(
+        cls,
+        field: Float[Array, "*grid"],
+        k_bottom: Array | None = None,
+    ) -> Self:
+        """Construct from a field at cell centres (T-points), ``NaN`` where dry.
+
+        This is the natural constructor for any tracer-like quantity (SSH,
+        temperature, salinity, pressure, …).
+
+        Parameters
+        ----------
+        field : array-like [*grid]
+            Float field at cell centres; ``NaN`` marks dry cells.
+        k_bottom : array-like [Ny, Nx], optional
+            Sea-floor indices.  See :meth:`from_mask`.
+
+        Returns
+        -------
+        Mask1D, Mask2D or Mask3D
+        """
+        return cls.from_mask(np.isfinite(np.asarray(field)), k_bottom)
+
+    @classmethod
+    def _from_point(cls, field: Any, at: str, mode: str, k_bottom: Any) -> Self:
+        """Construct from a staggered field, ``NaN`` where dry."""
+        wet = np.isfinite(np.asarray(field))
+        window = _window(at, cls._axes)
+        return cls.from_mask(
+            h_from_pooled(wet, kernel=window, mode=mode, direction="trailing"), k_bottom
         )
-    mask = from_mask(wet_t, **kwargs)
-    if not getattr(grid, "_collocated", False):
-        return mask
-    staggered = [
-        field.name
-        for field in dataclasses.fields(mask)
-        if field.name.startswith("_") and field.name != "_h"
-    ]
-    return dataclasses.replace(mask, **dict.fromkeys(staggered))
+
+    @classmethod
+    def from_u_face(
+        cls,
+        field: Float[Array, "*grid"],
+        mode: str = "permissive",
+        k_bottom: Array | None = None,
+    ) -> Self:
+        """Construct from a field at u-faces, ``NaN`` where dry.
+
+        Parameters
+        ----------
+        field : array-like [*grid]
+            Float field at u-faces; ``NaN`` marks dry faces.
+        mode : {'permissive', 'conservative'}
+            ``'permissive'`` (default) marks a cell wet if *any* of its two
+            u-faces is wet, ``'conservative'`` if *all* are
+            (:func:`h_from_pooled`).
+        k_bottom : array-like [Ny, Nx], optional
+            Sea-floor indices.  See :meth:`from_mask`.
+
+        Returns
+        -------
+        Mask1D, Mask2D or Mask3D
+        """
+        return cls._from_point(field, "U", mode, k_bottom)
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Mask1D
-# ──────────────────────────────────────────────────────────────────────────────
+class _HorizontalMask(_CartesianMask):
+    """The builders of the masks that have a y axis."""
+
+    @classmethod
+    def from_v_face(
+        cls,
+        field: Float[Array, "*grid"],
+        mode: str = "permissive",
+        k_bottom: Array | None = None,
+    ) -> Self:
+        """Construct from a field at v-faces, ``NaN`` where dry.
+
+        Parameters
+        ----------
+        field : array-like [*grid]
+            Float field at v-faces; ``NaN`` marks dry faces.
+        mode : {'permissive', 'conservative'}
+            See :meth:`from_u_face`.
+        k_bottom : array-like [Ny, Nx], optional
+            Sea-floor indices.  See :meth:`from_mask`.
+
+        Returns
+        -------
+        Mask2D or Mask3D
+        """
+        return cls._from_point(field, "V", mode, k_bottom)
+
+    @classmethod
+    def from_corner(
+        cls,
+        field: Float[Array, "*grid"],
+        mode: str = "permissive",
+        k_bottom: Array | None = None,
+    ) -> Self:
+        """Construct from a field at xy-corners (vertices), ``NaN`` where dry.
+
+        This is the natural constructor for vertex-stored quantities such as
+        relative vorticity. Corners in 3-D are per level.
+
+        Parameters
+        ----------
+        field : array-like [*grid]
+            Float field at xy-corners; ``NaN`` marks dry corners.
+        mode : {'permissive', 'conservative'}
+            See :meth:`from_u_face`.
+        k_bottom : array-like [Ny, Nx], optional
+            Sea-floor indices.  See :meth:`from_mask`.
+
+        Returns
+        -------
+        Mask2D or Mask3D
+        """
+        return cls._from_point(field, "X", mode, k_bottom)
 
 
 @pytree_dataclass
-class Mask1D(MaskBase):
+class Mask1D(_CartesianMask):
     """Unified Arakawa C-grid mask for a 1-D Cartesian domain.
 
     Stores binary masks on the two staggerings (cell centre ``h``,
@@ -139,194 +397,21 @@ class Mask1D(MaskBase):
         Directional contiguous-wet-cell counts on the h-grid.
     """
 
+    _counts: ClassVar[Any] = StencilCapability1D
     _axes: ClassVar[tuple[str, ...]] = ("x",)
 
     _h: Bool[Array, "Nx"]
     _u: Bool[Array, "Nx"]
     stencil_capability: StencilCapability1D
 
-    # ── wet points ───────────────────────────────────────────────────────────
-
-    def wet(
-        self, *, at: str | Stagger = "T", kind: str = "default"
-    ) -> Bool[Array, "Nx"]:
-        """The wet points at a point of the staggering; ``True`` = wet.
-
-        Parameters
-        ----------
-        at : str or Stagger
-            The point, ``"T"`` or ``"U"``, or a field's stagger (``CField.stagger``).
-        kind : str
-            ``"default"``, the only one in 1-D.
-
-        Returns
-        -------
-        Bool[Array, "Nx"]
-
-        Raises
-        ------
-        ValueError
-            If the mask has no such point or kind.
-
-        Examples
-        --------
-        >>> import numpy as np
-        >>> from gridax import Mask1D
-        >>> mask = Mask1D.from_mask(np.ones((4,), dtype=bool))
-        >>> int(mask.wet().sum()), int(mask.wet(at="U").sum())
-        (4, 3)
-        """
-        return _wet(self, self._axes, at, kind)
-
-    # ── factory class-methods ─────────────────────────────────────────────────
-
     @classmethod
-    def from_mask(
-        cls,
-        mask_hgrid: np.ndarray | Bool[Array, "Nx"],
-    ) -> Mask1D:
-        """Construct from a binary h-grid (cell-centre) mask.
-
-        Parameters
-        ----------
-        mask_hgrid : array-like [Nx]
-            Binary wet (1 / True) / dry (0 / False) mask at cell centres.
-
-        Returns
-        -------
-        Mask1D
-
-        Notes
-        -----
-        The staggered u-face mask is derived from ``mask_hgrid`` via
-        :func:`pool_bool` with the following kernel/threshold pair
-        (trailing-pad direction → ``u[i] = h[i] AND h[i+1]``):
-
-        ====== ========= =========  ====================================
-        Mask   Kernel    Threshold  Semantics
-        ====== ========= =========  ====================================
-        ``u``  ``(2,)``  ``3/4``    both adjacent h-cells wet (strict)
-        ====== ========= =========  ====================================
-
-        The stencil capability is built via
-        :meth:`StencilCapability1D.from_mask`.
-        """
-        h_np = np.asarray(mask_hgrid, dtype=bool)
-        hf = h_np.astype(np.float32)
-
-        # Staggered u-face (east face of T[i]): kernel (2,) trailing
-        # → u[i] = (h[i] + h[i+1]) / 2 > 3/4 (both adjacent h-cells wet)
-        u_np = pool_bool(hf, kernel=(2,), threshold=3.0 / 4.0, direction="trailing")
-
-        # ── stencil capability ────────────────────────────────────────────
-        sc = StencilCapability1D.from_mask(h_np)
-
-        # NumPy arrays fill fields the type checker reads as JAX arrays: the
-        # type a consumer sees once JAX has flattened the mask.
-        fields: dict[str, Any] = {
-            "_h": h_np,
-            "_u": u_np,
-            "stencil_capability": sc,
-        }
-        return cls(**fields)
-
-    @classmethod
-    def from_grid(
-        cls,
-        grid: Any,
-        wet_t: np.ndarray | Bool[Array, "Nx"],
-    ) -> Mask1D:
-        """Construct from the wet T points of a grid.
-
-        Parameters
-        ----------
-        grid : CartesianCGrid1D
-            The grid the mask is for.
-        wet_t : array-like [Nx]
-            Wet (``True``) / dry mask at the T points, ghost ring included.
-
-        Returns
-        -------
-        Mask1D
-
-        Raises
-        ------
-        ValueError
-            If the shape of ``wet_t`` is not the grid's.
-
-        Examples
-        --------
-        >>> import numpy as np
-        >>> from gridax import CartesianCGrid1D, Mask1D
-        >>> grid = CartesianCGrid1D.from_interior(4, 1.0)
-        >>> Mask1D.from_grid(grid, np.ones(grid.shape)).wet().shape == grid.shape
-        True
-        """
-        return _from_grid(cls.from_mask, grid, wet_t)
-
-    @classmethod
-    def from_center(
-        cls,
-        field: Float[Array, "Nx"],
-    ) -> Mask1D:
-        """Construct from a field at cell centres (T-points).
-
-        ``NaN`` values are treated as dry; finite values as wet.  This
-        is the natural constructor for any tracer-like quantity (SSH,
-        temperature, salinity, pressure, …) that lives at cell centres.
-
-        Parameters
-        ----------
-        field : array-like [Nx]
-            Float field at cell centres; ``NaN`` marks dry cells.
-
-        Returns
-        -------
-        Mask1D
-        """
-        h_mask = np.isfinite(np.asarray(field))
-        return cls.from_mask(h_mask)
-
-    @classmethod
-    def from_u_face(
-        cls,
-        field: Float[Array, "Nx"],
-        mode: str = "permissive",
-    ) -> Mask1D:
-        """Construct from a field at u-faces, deriving the h-grid mask.
-
-        ``NaN`` values are treated as dry u-faces.  The h-grid mask is
-        then inferred via :func:`h_from_pooled` with kernel ``(2,)``.
-
-        Parameters
-        ----------
-        field : array-like [Nx]
-            Float field at u-faces; ``NaN`` marks dry faces.
-        mode : {'permissive', 'conservative'}
-            Inversion strategy.  ``'permissive'`` (default) marks an
-            h-cell wet if *any* of its two adjacent u-faces is wet
-            (logical OR).  ``'conservative'`` requires *all* adjacent
-            u-faces to be wet (logical AND).
-
-        Returns
-        -------
-        Mask1D
-        """
-        u_mask = np.isfinite(np.asarray(field))
-        h_mask = h_from_pooled(u_mask, kernel=(2,), mode=mode, direction="trailing")
-        return cls.from_mask(h_mask)
-
-    @classmethod
-    def from_dimensions(
-        cls,
-        nx: int,
-    ) -> Mask1D:
-        """Construct an all-ocean 1-D domain of given length.
+    def from_dimensions(cls, nx: int) -> Mask1D:
+        """Construct an all-ocean domain of given shape.
 
         Parameters
         ----------
         nx : int
-            Total grid length (including ghost cells).
+            Total grid dimensions (including ghost cells).
 
         Returns
         -------
@@ -335,13 +420,8 @@ class Mask1D(MaskBase):
         return cls.from_mask(np.ones(nx, dtype=bool))
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Mask2D
-# ──────────────────────────────────────────────────────────────────────────────
-
-
 @pytree_dataclass
-class Mask2D(MaskBase):
+class Mask2D(_HorizontalMask):
     """Unified Arakawa C-grid mask for a 2-D Cartesian domain.
 
     Stores binary masks on all five Arakawa C-grid staggerings (cell
@@ -397,6 +477,7 @@ class Mask2D(MaskBase):
         Optional 2-D array of vertical sea-floor indices (3-D domains).
     """
 
+    _counts: ClassVar[Any] = StencilCapability2D
     _axes: ClassVar[tuple[str, ...]] = ("y", "x")
 
     # ── staggered masks ───────────────────────────────────────────────────────
@@ -412,288 +493,8 @@ class Mask2D(MaskBase):
     # ── optional arrays ───────────────────────────────────────────────────────
     k_bottom: Array | None = None
 
-    # ── wet points ───────────────────────────────────────────────────────────
-
-    def wet(
-        self, *, at: str | Stagger = "T", kind: str = "default"
-    ) -> Bool[Array, "Ny Nx"]:
-        """The wet points at a point of the staggering; ``True`` = wet.
-
-        Parameters
-        ----------
-        at : str or Stagger
-            The point, ``"T"``, ``"U"``, ``"V"`` or ``"X"``, or a field's stagger (``CField.stagger``).
-        kind : str
-            At X only: ``"default"`` (at least one of the four cells is wet),
-            ``"strict"`` (all four are), ``"y_wall"``, ``"x_wall"``,
-            ``"convex"`` or ``"valid"``.
-
-        Returns
-        -------
-        Bool[Array, "Ny Nx"]
-
-        Raises
-        ------
-        ValueError
-            If the mask has no such point or kind.
-
-        Examples
-        --------
-        >>> import numpy as np
-        >>> from gridax import Mask2D
-        >>> mask = Mask2D.from_mask(np.ones((4, 4), dtype=bool))
-        >>> int(mask.wet().sum()), int(mask.wet(at="U").sum())
-        (16, 12)
-        """
-        return _wet(self, self._axes, at, kind)
-
-    # ── factory class-methods ─────────────────────────────────────────────────
-
     @classmethod
-    def from_mask(
-        cls,
-        mask_hgrid: np.ndarray | Bool[Array, "Ny Nx"],
-        k_bottom: Array | None = None,
-    ) -> Mask2D:
-        """Construct from a binary h-grid (cell-centre) mask.
-
-        All intermediate computations use numpy, and so are the stored
-        arrays.
-
-        Parameters
-        ----------
-        mask_hgrid : array-like [Ny, Nx]
-            Binary wet (1 / True) / dry (0 / False) mask at cell centres.
-        k_bottom : array-like [Ny, Nx], optional
-            Vertical sea-floor indices for 3-D domains.
-
-        Returns
-        -------
-        Mask2D
-
-        Notes
-        -----
-        The four staggered masks are derived from ``mask_hgrid`` via
-        :func:`pool_bool` with the following kernel/threshold pairs
-        (trailing-pad direction → positive half-step convention):
-
-        ==================== ========== =========  ====================================
-        Mask                 Kernel     Threshold  Semantics
-        ==================== ========== =========  ====================================
-        ``u`` (east face)    ``(1, 2)`` ``3/4``    ``h[j, i] AND h[j, i+1]``
-        ``v`` (north face)   ``(2, 1)`` ``3/4``    ``h[j, i] AND h[j+1, i]``
-        ``xy_corner``        ``(2, 2)`` ``1/8``    ≥ 1 of 4 NE-corner h-cells wet
-        ``xy_corner_strict`` ``(2, 2)`` ``7/8``    all 4 NE-corner h-cells wet
-        ==================== ========== =========  ====================================
-
-        The stencil capability is built via
-        :meth:`StencilCapability2D.from_mask`.
-        """
-        h_np = np.asarray(mask_hgrid, dtype=bool)
-        hf = h_np.astype(np.float32)
-
-        # ── staggered masks ───────────────────────────────────────────────
-        # All staggered masks use the trailing-pad (positive half-step)
-        # convention, matching the grid module's same-index rule:
-        # U[j, i] at east face (i+1/2), V[j, i] at north face (j+1/2),
-        # X[j, i] at NE corner (i+1/2, j+1/2).
-
-        # u[j, i] = (h[j, i] + h[j, i+1]) / 2 > 3/4  (east face = U-point)
-        u_np = pool_bool(hf, kernel=(1, 2), threshold=3.0 / 4.0, direction="trailing")
-        # v[j, i] = (h[j, i] + h[j+1, i]) / 2 > 3/4  (north face = V-point)
-        v_np = pool_bool(hf, kernel=(2, 1), threshold=3.0 / 4.0, direction="trailing")
-        # xy_corner[j, i]: at least 1 of 4 NE-corner h-cells wet  (lenient)
-        xy_corner_np = pool_bool(
-            hf, kernel=(2, 2), threshold=1.0 / 8.0, direction="trailing"
-        )
-        # xy_corner_strict[j, i]: all 4 NE-corner h-cells wet     (strict)
-        xy_corner_strict_np = pool_bool(
-            hf, kernel=(2, 2), threshold=7.0 / 8.0, direction="trailing"
-        )
-
-        # ── stencil capability ────────────────────────────────────────────
-        sc = StencilCapability2D.from_mask(h_np)
-
-        # NumPy arrays fill fields the type checker reads as JAX arrays: the
-        # type a consumer sees once JAX has flattened the mask.
-        fields: dict[str, Any] = {
-            "_h": h_np,
-            "_u": u_np,
-            "_v": v_np,
-            "_xy_corner": xy_corner_np,
-            "_xy_corner_strict": xy_corner_strict_np,
-            "stencil_capability": sc,
-            "k_bottom": np.asarray(k_bottom) if k_bottom is not None else None,
-        }
-        return cls(**fields)
-
-    @classmethod
-    def from_grid(
-        cls,
-        grid: Any,
-        wet_t: np.ndarray | Bool[Array, "Ny Nx"],
-        *,
-        k_bottom: Array | None = None,
-    ) -> Mask2D:
-        """Construct from the wet T points of a grid.
-
-        Parameters
-        ----------
-        grid : CartesianCGrid2D or SphericalCGrid2D
-            The grid the mask is for.
-        wet_t : array-like [Ny Nx]
-            Wet (``True``) / dry mask at the T points, ghost ring included.
-        k_bottom : array-like [Ny, Nx], optional
-            Vertical sea-floor indices. See :meth:`from_mask`.
-
-        Returns
-        -------
-        Mask2D
-
-        Raises
-        ------
-        ValueError
-            If the shape of ``wet_t`` is not the grid's.
-
-        Examples
-        --------
-        >>> import numpy as np
-        >>> from gridax import CartesianCGrid2D, Mask2D
-        >>> grid = CartesianCGrid2D.from_interior(4, 4, 1.0, 1.0)
-        >>> Mask2D.from_grid(grid, np.ones(grid.shape)).wet().shape == grid.shape
-        True
-        """
-        return _from_grid(cls.from_mask, grid, wet_t, k_bottom=k_bottom)
-
-    @classmethod
-    def from_center(
-        cls,
-        field: Float[Array, "Ny Nx"],
-        k_bottom: Array | None = None,
-    ) -> Mask2D:
-        """Construct from a field at cell centres (T-points).
-
-        ``NaN`` values are treated as dry; finite values as wet.  This
-        is the natural constructor for any tracer-like quantity (SSH,
-        temperature, salinity, pressure, …) that lives at cell centres.
-
-        Parameters
-        ----------
-        field : array-like [Ny, Nx]
-            Float field at cell centres; ``NaN`` marks dry cells.
-        k_bottom : array-like, optional
-            Sea-floor indices.  See :meth:`from_mask`.
-
-        Returns
-        -------
-        Mask2D
-        """
-        h_mask = np.isfinite(np.asarray(field))
-        return cls.from_mask(h_mask, k_bottom=k_bottom)
-
-    @classmethod
-    def from_u_face(
-        cls,
-        field: Float[Array, "Ny Nx"],
-        mode: str = "permissive",
-        k_bottom: Array | None = None,
-    ) -> Mask2D:
-        """Construct from a field at u-faces, deriving the h-grid mask.
-
-        ``NaN`` values are treated as dry u-faces.  The h-grid mask is
-        then inferred via :func:`h_from_pooled` with kernel ``(1, 2)``
-        (trailing-pad direction, matching the grid's positive-half-step
-        convention) and the requested ``mode``; the remaining staggered
-        masks are produced by :meth:`from_mask`.
-
-        Parameters
-        ----------
-        field : array-like [Ny, Nx]
-            Float field at u-faces; ``NaN`` marks dry faces.
-        mode : {'permissive', 'conservative'}
-            Inversion strategy.  See :meth:`Mask1D.from_u_face` for
-            details.
-        k_bottom : array-like, optional
-            Sea-floor indices.  See :meth:`from_mask`.
-
-        Returns
-        -------
-        Mask2D
-        """
-        u_mask = np.isfinite(np.asarray(field))
-        h_mask = h_from_pooled(u_mask, kernel=(1, 2), mode=mode, direction="trailing")
-        return cls.from_mask(h_mask, k_bottom=k_bottom)
-
-    @classmethod
-    def from_v_face(
-        cls,
-        field: Float[Array, "Ny Nx"],
-        mode: str = "permissive",
-        k_bottom: Array | None = None,
-    ) -> Mask2D:
-        """Construct from a field at v-faces, deriving the h-grid mask.
-
-        ``NaN`` values are treated as dry v-faces.  The h-grid mask is
-        then inferred via :func:`h_from_pooled` with kernel ``(2, 1)``
-        (trailing-pad direction) and the requested ``mode``.
-
-        Parameters
-        ----------
-        field : array-like [Ny, Nx]
-            Float field at v-faces; ``NaN`` marks dry faces.
-        mode : {'permissive', 'conservative'}
-            Inversion strategy.  See :meth:`Mask1D.from_u_face` for
-            details.
-        k_bottom : array-like, optional
-            Sea-floor indices.  See :meth:`from_mask`.
-
-        Returns
-        -------
-        Mask2D
-        """
-        v_mask = np.isfinite(np.asarray(field))
-        h_mask = h_from_pooled(v_mask, kernel=(2, 1), mode=mode, direction="trailing")
-        return cls.from_mask(h_mask, k_bottom=k_bottom)
-
-    @classmethod
-    def from_corner(
-        cls,
-        field: Float[Array, "Ny Nx"],
-        mode: str = "permissive",
-        k_bottom: Array | None = None,
-    ) -> Mask2D:
-        """Construct from a field at xy-corners (vertices).
-
-        ``NaN`` values are treated as dry corners.  The h-grid mask is
-        then inferred via :func:`h_from_pooled` with kernel ``(2, 2)``
-        (trailing-pad direction) and the requested ``mode``.  This is
-        the natural constructor for vertex-stored quantities such as
-        relative vorticity.
-
-        Parameters
-        ----------
-        field : array-like [Ny, Nx]
-            Float field at xy-corners; ``NaN`` marks dry corners.
-        mode : {'permissive', 'conservative'}
-            Inversion strategy.  See :meth:`Mask1D.from_u_face` for
-            details.
-        k_bottom : array-like, optional
-            Sea-floor indices.  See :meth:`from_mask`.
-
-        Returns
-        -------
-        Mask2D
-        """
-        c_mask = np.isfinite(np.asarray(field))
-        h_mask = h_from_pooled(c_mask, kernel=(2, 2), mode=mode, direction="trailing")
-        return cls.from_mask(h_mask, k_bottom=k_bottom)
-
-    @classmethod
-    def from_dimensions(
-        cls,
-        ny: int,
-        nx: int,
-    ) -> Mask2D:
+    def from_dimensions(cls, ny: int, nx: int) -> Mask2D:
         """Construct an all-ocean domain of given shape.
 
         Parameters
@@ -764,13 +565,8 @@ class Mask2D(MaskBase):
         return cls.from_mask(wet, k_bottom=k_bottom)
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Mask3D
-# ──────────────────────────────────────────────────────────────────────────────
-
-
 @pytree_dataclass
-class Mask3D(MaskBase):
+class Mask3D(_HorizontalMask):
     """Unified Arakawa C-grid mask for a 3-D Cartesian domain.
 
     Stores binary masks on the six 3-D Arakawa C-grid staggerings, the
@@ -836,6 +632,7 @@ class Mask3D(MaskBase):
         Optional 2-D ``[Ny, Nx]`` array of vertical sea-floor indices.
     """
 
+    _counts: ClassVar[Any] = StencilCapability3D
     _axes: ClassVar[tuple[str, ...]] = ("z", "y", "x")
 
     # ── staggered masks ───────────────────────────────────────────────────────
@@ -852,256 +649,6 @@ class Mask3D(MaskBase):
     # ── optional arrays ───────────────────────────────────────────────────────
     k_bottom: Array | None = None
 
-    # ── wet points ───────────────────────────────────────────────────────────
-
-    def wet(
-        self, *, at: str | Stagger = "T", kind: str = "default"
-    ) -> Bool[Array, "Nz Ny Nx"]:
-        """The wet points at a point of the staggering; ``True`` = wet.
-
-        Parameters
-        ----------
-        at : str or Stagger
-            The point, ``"T"``, ``"U"``, ``"V"``, ``"X"`` or ``"W"``, or a field's stagger (``CField.stagger``).
-        kind : str
-            At X only: ``"default"`` (at least one of the four cells is wet),
-            ``"strict"`` (all four are), ``"y_wall"``, ``"x_wall"``,
-            ``"convex"`` or ``"valid"``.
-
-        Returns
-        -------
-        Bool[Array, "Nz Ny Nx"]
-
-        Raises
-        ------
-        ValueError
-            If the mask has no such point or kind.
-
-        Examples
-        --------
-        >>> import numpy as np
-        >>> from gridax import Mask3D
-        >>> mask = Mask3D.from_mask(np.ones((3, 4, 4), dtype=bool))
-        >>> int(mask.wet().sum()), int(mask.wet(at="U").sum())
-        (48, 36)
-        """
-        return _wet(self, self._axes, at, kind)
-
-    # ── factory class-methods ─────────────────────────────────────────────────
-
-    @classmethod
-    def from_mask(
-        cls,
-        mask_hgrid: np.ndarray | Bool[Array, "Nz Ny Nx"],
-        k_bottom: Array | None = None,
-    ) -> Mask3D:
-        """Construct from a binary 3-D h-grid (cell-centre) mask.
-
-        Parameters
-        ----------
-        mask_hgrid : array-like [Nz, Ny, Nx]
-            Binary wet (1 / True) / dry (0 / False) mask at cell centres.
-        k_bottom : array-like [Ny, Nx], optional
-            Vertical sea-floor indices (one per horizontal column).
-
-        Returns
-        -------
-        Mask3D
-
-        Notes
-        -----
-        The five staggered masks are derived from ``mask_hgrid`` via
-        :func:`pool_bool` with the following kernel/threshold pairs
-        (trailing-pad direction → positive half-step convention):
-
-        ==================== ============= =========  =========================================
-        Mask                 Kernel        Threshold  Semantics
-        ==================== ============= =========  =========================================
-        ``u`` (east face)    ``(1, 1, 2)`` ``3/4``    ``h[k, j, i] AND h[k, j, i+1]``
-        ``v`` (north face)   ``(1, 2, 1)`` ``3/4``    ``h[k, j, i] AND h[k, j+1, i]``
-        ``w`` (top z-face)   ``(2, 1, 1)`` ``3/4``    ``h[k, j, i] AND h[k+1, j, i]``
-        ``xy_corner``        ``(1, 2, 2)`` ``1/8``    ≥ 1 of 4 NE-corner h-cells wet (per k)
-        ``xy_corner_strict`` ``(1, 2, 2)`` ``7/8``    all 4 NE-corner h-cells wet (per k)
-        ==================== ============= =========  =========================================
-
-        The stencil capability is built via
-        :meth:`StencilCapability3D.from_mask`.
-        """
-        h_np = np.asarray(mask_hgrid, dtype=bool)
-        hf = h_np.astype(np.float32)
-
-        # ── staggered masks ───────────────────────────────────────────────
-        # All staggered masks use the trailing-pad (positive half-step)
-        # convention, matching the grid module's same-index rule.
-
-        # u[k, j, i] = (h[k, j, i] + h[k, j, i+1]) / 2 > 3/4  (east face = U-point)
-        u_np = pool_bool(
-            hf, kernel=(1, 1, 2), threshold=3.0 / 4.0, direction="trailing"
-        )
-        # v[k, j, i] = (h[k, j, i] + h[k, j+1, i]) / 2 > 3/4  (north face = V-point)
-        v_np = pool_bool(
-            hf, kernel=(1, 2, 1), threshold=3.0 / 4.0, direction="trailing"
-        )
-        # w[k, j, i] = (h[k, j, i] + h[k+1, j, i]) / 2 > 3/4  (top z-face)
-        w_np = pool_bool(
-            hf, kernel=(2, 1, 1), threshold=3.0 / 4.0, direction="trailing"
-        )
-        # xy_corner[k, j, i]: at least 1 of 4 NE-corner h-cells wet (lenient)
-        xy_corner_np = pool_bool(
-            hf, kernel=(1, 2, 2), threshold=1.0 / 8.0, direction="trailing"
-        )
-        # xy_corner_strict: all 4 NE-corner h-cells wet (strict)
-        xy_corner_strict_np = pool_bool(
-            hf, kernel=(1, 2, 2), threshold=7.0 / 8.0, direction="trailing"
-        )
-
-        # ── stencil capability (3-D, includes z) ──────────────────────────
-        sc = StencilCapability3D.from_mask(h_np)
-
-        # NumPy arrays fill fields the type checker reads as JAX arrays: the
-        # type a consumer sees once JAX has flattened the mask.
-        fields: dict[str, Any] = {
-            "_h": h_np,
-            "_u": u_np,
-            "_v": v_np,
-            "_w": w_np,
-            "_xy_corner": xy_corner_np,
-            "_xy_corner_strict": xy_corner_strict_np,
-            "stencil_capability": sc,
-            "k_bottom": np.asarray(k_bottom) if k_bottom is not None else None,
-        }
-        return cls(**fields)
-
-    @classmethod
-    def from_grid(
-        cls,
-        grid: Any,
-        wet_t: np.ndarray | Bool[Array, "Nz Ny Nx"],
-        *,
-        k_bottom: Array | None = None,
-    ) -> Mask3D:
-        """Construct from the wet T points of a grid.
-
-        Parameters
-        ----------
-        grid : CartesianCGrid3D or SphericalCGrid3D
-            The grid the mask is for.
-        wet_t : array-like [Nz Ny Nx]
-            Wet (``True``) / dry mask at the T points, ghost ring included.
-        k_bottom : array-like [Ny, Nx], optional
-            Vertical sea-floor indices. See :meth:`from_mask`.
-
-        Returns
-        -------
-        Mask3D
-
-        Raises
-        ------
-        ValueError
-            If the shape of ``wet_t`` is not the grid's.
-
-        Examples
-        --------
-        >>> import numpy as np
-        >>> from gridax import CartesianCGrid3D, Mask3D
-        >>> grid = CartesianCGrid3D.from_interior(4, 4, 2, 1.0, 1.0, 1.0)
-        >>> Mask3D.from_grid(grid, np.ones(grid.shape)).wet().shape == grid.shape
-        True
-        """
-        return _from_grid(cls.from_mask, grid, wet_t, k_bottom=k_bottom)
-
-    @classmethod
-    def from_center(
-        cls,
-        field: Float[Array, "Nz Ny Nx"],
-        k_bottom: Array | None = None,
-    ) -> Mask3D:
-        """Construct from a 3-D field at cell centres (T-points).
-
-        ``NaN`` values are treated as dry; finite values as wet.
-
-        Parameters
-        ----------
-        field : array-like [Nz, Ny, Nx]
-            Float field at cell centres; ``NaN`` marks dry cells.
-        k_bottom : array-like [Ny, Nx], optional
-            Sea-floor indices.  See :meth:`from_mask`.
-
-        Returns
-        -------
-        Mask3D
-        """
-        h_mask = np.isfinite(np.asarray(field))
-        return cls.from_mask(h_mask, k_bottom=k_bottom)
-
-    @classmethod
-    def from_u_face(
-        cls,
-        field: Float[Array, "Nz Ny Nx"],
-        mode: str = "permissive",
-        k_bottom: Array | None = None,
-    ) -> Mask3D:
-        """Construct from a 3-D field at u-faces, deriving the h-grid mask.
-
-        ``NaN`` values are treated as dry u-faces.  The h-grid mask is
-        then inferred via :func:`h_from_pooled` with kernel
-        ``(1, 1, 2)`` (trailing-pad direction) and the requested
-        ``mode``.
-
-        Parameters
-        ----------
-        field : array-like [Nz, Ny, Nx]
-            Float field at u-faces; ``NaN`` marks dry faces.
-        mode : {'permissive', 'conservative'}
-            Inversion strategy.  See :meth:`Mask1D.from_u_face` for
-            details.
-        k_bottom : array-like [Ny, Nx], optional
-            Sea-floor indices.  See :meth:`from_mask`.
-
-        Returns
-        -------
-        Mask3D
-        """
-        u_mask = np.isfinite(np.asarray(field))
-        h_mask = h_from_pooled(
-            u_mask, kernel=(1, 1, 2), mode=mode, direction="trailing"
-        )
-        return cls.from_mask(h_mask, k_bottom=k_bottom)
-
-    @classmethod
-    def from_v_face(
-        cls,
-        field: Float[Array, "Nz Ny Nx"],
-        mode: str = "permissive",
-        k_bottom: Array | None = None,
-    ) -> Mask3D:
-        """Construct from a 3-D field at v-faces, deriving the h-grid mask.
-
-        ``NaN`` values are treated as dry v-faces.  The h-grid mask is
-        then inferred via :func:`h_from_pooled` with kernel
-        ``(1, 2, 1)`` (trailing-pad direction) and the requested
-        ``mode``.
-
-        Parameters
-        ----------
-        field : array-like [Nz, Ny, Nx]
-            Float field at v-faces; ``NaN`` marks dry faces.
-        mode : {'permissive', 'conservative'}
-            Inversion strategy.  See :meth:`Mask1D.from_u_face` for
-            details.
-        k_bottom : array-like [Ny, Nx], optional
-            Sea-floor indices.  See :meth:`from_mask`.
-
-        Returns
-        -------
-        Mask3D
-        """
-        v_mask = np.isfinite(np.asarray(field))
-        h_mask = h_from_pooled(
-            v_mask, kernel=(1, 2, 1), mode=mode, direction="trailing"
-        )
-        return cls.from_mask(h_mask, k_bottom=k_bottom)
-
     @classmethod
     def from_w_face(
         cls,
@@ -1109,21 +656,17 @@ class Mask3D(MaskBase):
         mode: str = "permissive",
         k_bottom: Array | None = None,
     ) -> Mask3D:
-        """Construct from a 3-D field at w-faces, deriving the h-grid mask.
+        """Construct from a field at w-faces, ``NaN`` where dry.
 
-        ``NaN`` values are treated as dry w-faces.  The h-grid mask is
-        then inferred via :func:`h_from_pooled` with kernel
-        ``(2, 1, 1)`` (trailing-pad direction) and the requested
-        ``mode``.  This is the natural constructor for vertical-velocity
-        fields stored at z-faces.
+        This is the natural constructor for vertical-velocity fields stored at
+        z-faces.
 
         Parameters
         ----------
         field : array-like [Nz, Ny, Nx]
             Float field at w-faces; ``NaN`` marks dry faces.
         mode : {'permissive', 'conservative'}
-            Inversion strategy.  See :meth:`Mask1D.from_u_face` for
-            details.
+            See :meth:`from_u_face`.
         k_bottom : array-like [Ny, Nx], optional
             Sea-floor indices.  See :meth:`from_mask`.
 
@@ -1131,55 +674,11 @@ class Mask3D(MaskBase):
         -------
         Mask3D
         """
-        w_mask = np.isfinite(np.asarray(field))
-        h_mask = h_from_pooled(
-            w_mask, kernel=(2, 1, 1), mode=mode, direction="trailing"
-        )
-        return cls.from_mask(h_mask, k_bottom=k_bottom)
+        return cls._from_point(field, "W", mode, k_bottom)
 
     @classmethod
-    def from_corner(
-        cls,
-        field: Float[Array, "Nz Ny Nx"],
-        mode: str = "permissive",
-        k_bottom: Array | None = None,
-    ) -> Mask3D:
-        """Construct from a 3-D field at xy-corners (vertices).
-
-        ``NaN`` values are treated as dry corners.  The h-grid mask is
-        then inferred via :func:`h_from_pooled` with kernel
-        ``(1, 2, 2)`` (trailing-pad direction) and the requested
-        ``mode``.  Corners in 3-D are per-z-level (no z-staggering on
-        corners).
-
-        Parameters
-        ----------
-        field : array-like [Nz, Ny, Nx]
-            Float field at xy-corners; ``NaN`` marks dry corners.
-        mode : {'permissive', 'conservative'}
-            Inversion strategy.  See :meth:`Mask1D.from_u_face` for
-            details.
-        k_bottom : array-like [Ny, Nx], optional
-            Sea-floor indices.  See :meth:`from_mask`.
-
-        Returns
-        -------
-        Mask3D
-        """
-        c_mask = np.isfinite(np.asarray(field))
-        h_mask = h_from_pooled(
-            c_mask, kernel=(1, 2, 2), mode=mode, direction="trailing"
-        )
-        return cls.from_mask(h_mask, k_bottom=k_bottom)
-
-    @classmethod
-    def from_dimensions(
-        cls,
-        nz: int,
-        ny: int,
-        nx: int,
-    ) -> Mask3D:
-        """Construct an all-ocean 3-D domain of given shape.
+    def from_dimensions(cls, nz: int, ny: int, nx: int) -> Mask3D:
+        """Construct an all-ocean domain of given shape.
 
         Parameters
         ----------

@@ -4,7 +4,6 @@ Covers:
 - Linear stencil functions (polynomial exactness, symmetry)
 - reconstruct() dispatcher (conservation, accuracy, JAX transforms)
 - distbound mask accessors
-- plusminus velocity splitting
 """
 
 from __future__ import annotations
@@ -23,10 +22,6 @@ from gridax.advection.kernels import (
     linear_5pts_left,
     linear_5pts_right,
     linear_6pts,
-    plusminus,
-    upwind_1pt,
-    upwind_3pt,
-    upwind_5pt,
 )
 from gridax.schemes import TVD, WENO, Upwind
 import jax
@@ -259,95 +254,6 @@ class TestLinearWENOConsistency:
         linear_vals = linear_5pts_left(q[:-4], q[1:-3], q[2:-2], q[3:-1], q[4:])
 
         np.testing.assert_allclose(weno_vals, linear_vals, atol=1e-6)
-
-
-# ===========================================================================
-# plusminus tests
-# ===========================================================================
-
-
-class TestPlusMinus:
-    def test_basic_split(self):
-        u = jnp.array([-2.0, -1.0, 0.0, 1.0, 2.0])
-        u_pos, u_neg = plusminus(u)
-        np.testing.assert_array_equal(u_pos, [0.0, 0.0, 0.0, 1.0, 2.0])
-        np.testing.assert_array_equal(u_neg, [-2.0, -1.0, 0.0, 0.0, 0.0])
-
-    def test_reconstruction(self):
-        """u_pos + u_neg == u."""
-        u = jnp.array([-3.0, 1.5, 0.0, -0.1, 7.0])
-        u_pos, u_neg = plusminus(u)
-        np.testing.assert_allclose(u_pos + u_neg, u)
-
-
-# ===========================================================================
-# Low-level upwind helper tests
-# ===========================================================================
-
-
-class TestUpwind1pt:
-    def test_positive_flow_selects_left(self):
-        # q = [g0, c1, c2, g3]; interior faces between c1-c2
-        q = jnp.array([0.0, 1.0, 2.0, 3.0])
-        u = jnp.array([1.0, 1.0])  # 2 interior faces
-        result = upwind_1pt(q, u)
-        # Positive flow → left cell: q[1]=1.0, q[2]=2.0
-        np.testing.assert_array_equal(result, [1.0, 2.0])
-
-    def test_negative_flow_selects_right(self):
-        q = jnp.array([0.0, 1.0, 2.0, 3.0])
-        u = jnp.array([-1.0, -1.0])
-        result = upwind_1pt(q, u)
-        # Negative flow → right cell: q[2]=2.0, q[3]=3.0
-        np.testing.assert_array_equal(result, [2.0, 3.0])
-
-    def test_constant_field(self):
-        q = jnp.array([5.0, 5.0, 5.0, 5.0, 5.0])
-        u = jnp.array([1.0, -1.0, 0.5])
-        result = upwind_1pt(q, u)
-        np.testing.assert_array_equal(result, [5.0, 5.0, 5.0])
-
-
-class TestUpwind3pt:
-    @pytest.mark.slow
-    def test_constant_field_all_methods(self):
-        """Constant scalar → face value = constant for all methods."""
-        C = 3.0
-        q = jnp.full(6, C)
-        u = jnp.ones(4)
-        for method in ("weno", "wenoz", "linear"):
-            result = upwind_3pt(q, u, method)
-            np.testing.assert_allclose(
-                result, C, atol=1e-12, err_msg=f"method={method}"
-            )
-
-    def test_linear_field_positive(self):
-        """Linear field f(x)=x: face values should be exact midpoints."""
-        q = jnp.arange(6, dtype=float)  # 0, 1, 2, 3, 4, 5
-        u = jnp.ones(4)  # all positive
-        result = upwind_3pt(q, u, method="linear")
-        # 3-point left-biased on linear data is exact
-        expected = jnp.array([1.5, 2.5, 3.5, 4.5])
-        np.testing.assert_allclose(result, expected, atol=1e-12)
-
-
-class TestUpwind5pt:
-    def test_constant_field(self):
-        C = 7.0
-        q = jnp.full(8, C)
-        u = jnp.ones(4)
-        for method in ("weno", "wenoz", "linear"):
-            result = upwind_5pt(q, u, method)
-            np.testing.assert_allclose(
-                result, C, atol=1e-12, err_msg=f"method={method}"
-            )
-
-    def test_linear_field(self):
-        q = jnp.arange(8, dtype=float)
-        u = jnp.ones(4)
-        result = upwind_5pt(q, u, method="linear")
-        expected = jnp.array([2.5, 3.5, 4.5, 5.5])
-        np.testing.assert_allclose(result, expected, atol=1e-10)
 
 
 # ===========================================================================
@@ -1272,27 +1178,3 @@ class TestReconstructNegativeFlow:
             ref = fn(q, u)
             out = _reconstruct(q, u, axis=-1, scheme=_scheme(method, num_pts))
             np.testing.assert_allclose(out, ref, atol=1e-13, rtol=1e-13)
-
-
-class TestUpwindHelpersNegativeFlow:
-    """``upwind_3pt`` / ``upwind_5pt`` target the same face for both signs."""
-
-    @pytest.mark.parametrize("method", ["weno", "wenoz", "linear"])
-    def test_3pt_linear_field_negative(self, method):
-        q = jnp.arange(8, dtype=float)
-        pos = upwind_3pt(q, jnp.ones(6), method)
-        neg = upwind_3pt(q, -jnp.ones(6), method)
-        # output k is the face between cells k+1 and k+2: k + 1.5; the last
-        # negative-flow face is 1st-order upwind (q[N-1] = 7).
-        np.testing.assert_allclose(pos, np.arange(6) + 1.5, atol=1e-14)
-        np.testing.assert_allclose(neg[:-1], pos[:-1], atol=1e-14)
-        assert float(neg[-1]) == 7.0
-
-    @pytest.mark.parametrize("method", ["weno", "wenoz", "linear"])
-    def test_5pt_linear_field_negative(self, method):
-        q = jnp.arange(10, dtype=float)
-        pos = upwind_5pt(q, jnp.ones(6), method)
-        neg = upwind_5pt(q, -jnp.ones(6), method)
-        np.testing.assert_allclose(pos, np.arange(6) + 2.5, atol=1e-14)
-        # last face falls back to the 3pt right-biased stencil (exact on a ramp)
-        np.testing.assert_allclose(neg, pos, atol=1e-14)

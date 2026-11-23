@@ -6,9 +6,9 @@ of :mod:`gridax.schemes` are built on them, and every weight comes from Layer 0
 (:mod:`gridax.stencils`).
 
 - ``linear_*``: the optimal linear weights;
-- ``weno_*``: WENO, Jiang–Shu, and WENO-Z (``*_improved``);
-- ``upwind_1pt``, ``upwind_3pt``, ``upwind_5pt``: upwind fluxes along an axis,
-  and ``plusminus``, the positive and the negative part of a velocity.
+- ``weno_*``: WENO, Jiang–Shu, and WENO-Z (``*_improved``).
+
+The flux along an axis is :func:`gridax.reconstruct`.
 
 Example:
     >>> from gridax.advection.kernels import linear_4pts
@@ -24,12 +24,6 @@ from gridax._src.advection.linear import (
     linear_5pts_left,
     linear_5pts_right,
     linear_6pts,
-)
-from gridax._src.advection.reconstruct_fn import (
-    plusminus,
-    upwind_1pt,
-    upwind_3pt,
-    upwind_5pt,
 )
 from gridax._src.advection.weno import (
     weno_3pts,
@@ -54,10 +48,6 @@ __all__ = [
     "linear_5pts_left",
     "linear_5pts_right",
     "linear_6pts",
-    "plusminus",
-    "upwind_1pt",
-    "upwind_3pt",
-    "upwind_5pt",
     "weno_3pts",
     "weno_3pts_improved",
     "weno_3pts_improved_right",
