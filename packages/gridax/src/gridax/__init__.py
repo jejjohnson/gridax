@@ -138,6 +138,7 @@ from gridax._src.diffusion.spherical_momentum import (
     SphericalMomentumAdvection2D,
     SphericalMomentumAdvection3D,
 )
+from gridax._src.fields._hook import register_when_pipekit_loads as _register
 from gridax._src.fields.cfield import CField, StaggerMismatchError
 from gridax._src.fields.combine import combine
 from gridax._src.grid import (
@@ -293,6 +294,9 @@ from gridax._src.operators.vorticity import (
 )
 
 __version__ = "0.2.0"  # x-release-please-version
+
+# CField is a pipekit carrier from the moment pipekit is imported, by anyone.
+_register()
 
 __all__ = [
     # Grids: topology, uniform metric, concrete coordinate systems

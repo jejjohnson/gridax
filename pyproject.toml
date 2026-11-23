@@ -45,6 +45,7 @@ integrix = { git = "https://github.com/jejjohnson/integrix", tag = "v0.0.9" }
 # cycle 0.1.0, jax 0.1.0); per-package tags make uv report conflicting URLs
 # for pipekit-ops. pipekit-cycle comes in through pipekit-jax.
 pipekit-ops = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-ops", tag = "pipekit-ops-v0.2.1" }
+pipekit-array = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-array", tag = "pipekit-ops-v0.2.1" }
 pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-cycle", tag = "pipekit-ops-v0.2.1" }
 pipekit-jax = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-jax", tag = "pipekit-ops-v0.2.1" }
 
