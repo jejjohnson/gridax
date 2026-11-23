@@ -564,8 +564,10 @@ class TestSphericalOpenWall:
         shape = (sphere.Ny, sphere.Nx)
         h, u, v = (jax.random.normal(k, shape) for k in (k1, k2, k3))
         for method in ("upwind1", "weno5", "van_leer"):
-            t_s = SphericalAdvection2D(grid=sphere)(h, u, v, method, wall="open")
-            t_c = Advection2D(grid=cart)(h, u, v, method, wall="open")
+            t_s = SphericalAdvection2D(grid=sphere)(
+                h, u, v, SCHEMES[method], wall="open"
+            )
+            t_c = Advection2D(grid=cart)(h, u, v, SCHEMES[method], wall="open")
             # Across 1 degree of latitude, cos varies by O(1e-4).
             # metric departure at |lat| <= 0.5 deg: 1 - cos(0.5 deg) ~ 3.8e-5
             np.testing.assert_allclose(
@@ -577,11 +579,11 @@ class TestSphericalOpenWall:
         k1, k2, k3 = jax.random.split(jax.random.PRNGKey(23), 3)
         shape = (grid3d.Nz, grid3d.Ny, grid3d.Nx)
         h, u, v = (jax.random.normal(k, shape) for k in (k1, k2, k3))
-        out3 = SphericalAdvection3D(grid=grid3d)(h, u, v, "weno5", wall="open")
+        out3 = SphericalAdvection3D(grid=grid3d)(h, u, v, WENO(5), wall="open")
         op2 = SphericalAdvection2D(grid=grid)
         for k in range(1, grid3d.Nz - 1):
             np.testing.assert_allclose(
-                out3[k], op2(h[k], u[k], v[k], "weno5", wall="open"), rtol=1e-12
+                out3[k], op2(h[k], u[k], v[k], WENO(5), wall="open"), rtol=1e-12
             )
         np.testing.assert_array_equal(out3[0], 0.0)
         np.testing.assert_array_equal(out3[-1], 0.0)
