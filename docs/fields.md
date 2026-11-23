@@ -51,3 +51,19 @@ combine(jnp.add, u, forcing)
 ```
 
 `gridax.fields` holds `combine` with the array namespace's functions: `abs`, `clip`, `cos`, `exp`, `log`, `maximum`, `minimum`, `sign`, `sin`, `sqrt`, `tanh` and `where`.
+
+## With pipekit
+
+With the `pipekit` extra, the named-dim functions of pipekit-array work on fields. A field stays a field while any grid axis remains, with its stagger trimmed to the axes left, and becomes a `pipekit_array.DimArray` when none is.
+
+```python
+import pipekit_array as pa
+
+v = CField(jnp.ones((3, *grid.shape)), dims=("member", "y", "x"), loc="V")
+pa.reduce(v, "mean", "member").loc  # "V"
+pa.reduce(v, "mean", "x").stagger  # (("y", "right"),)
+pa.reduce(v, "mean", ("y", "x"))  # a DimArray over member
+pa.map_over(v, lambda item: combine(jnp.square, item), "member")  # one vmap
+```
+
+`import gridax` never imports pipekit: the adapter registers itself the moment `pipekit_ops` is imported, whichever comes first.

@@ -42,6 +42,8 @@ jax = [
 pipekit = [
     "gridax[jax]",
     "pipekit-ops",
+    # The named-dim functions on a CField, and the DimArray it demotes to.
+    "pipekit-array",
     "pipekit-jax",
     "integrix>=0.0.9",
 ]
@@ -68,5 +70,6 @@ spectraldiffx = { git = "https://github.com/jejjohnson/spectraldiffx.git", tag =
 gaussx = { git = "https://github.com/jejjohnson/gaussx", tag = "v0.8.1" }
 integrix = { git = "https://github.com/jejjohnson/integrix", tag = "v0.0.9" }
 pipekit-ops = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-ops", tag = "pipekit-ops-v0.2.1" }
+pipekit-array = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-array", tag = "pipekit-ops-v0.2.1" }
 pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-cycle", tag = "pipekit-ops-v0.2.1" }
 pipekit-jax = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-jax", tag = "pipekit-ops-v0.2.1" }
