@@ -2,9 +2,21 @@
 
 Land/ocean masks with automatic stencil dispatch for Arakawa C-grids.
 
-## Grid Mask
+## Grid Masks
+
+The three masks share their builders and what they derive from the wet cells.
+
+::: gridax.Mask1D
+    options:
+      inherited_members: true
 
 ::: gridax.Mask2D
+    options:
+      inherited_members: true
+
+::: gridax.Mask3D
+    options:
+      inherited_members: true
 
 ## Coastal ghosts
 
@@ -12,7 +24,11 @@ Land/ocean masks with automatic stencil dispatch for Arakawa C-grids.
 
 ## Stencil Capability
 
+::: gridax.StencilCapability1D
+
 ::: gridax.StencilCapability2D
+
+::: gridax.StencilCapability3D
 
 ## Masked Sample Statistics
 

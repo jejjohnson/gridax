@@ -21,7 +21,7 @@ traced mask.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, Self
 
 from jaxtyping import Bool, Int
 import numpy as np
@@ -45,8 +45,39 @@ def _counts(h: np.ndarray, axis: int, forward: bool) -> np.ndarray:
     return np.minimum(counts, _COUNT_CAP).astype(np.int8)
 
 
+class _Capability:
+    """The one builder of the capabilities: a count per axis and direction."""
+
+    _axes: ClassVar[tuple[str, ...]]
+
+    @classmethod
+    def from_mask(cls, h: np.ndarray | Bool[Array, "*grid"]) -> Self:
+        """Build stencil capability from a wet (True) / dry (False) mask.
+
+        Construction uses NumPy; stored arrays are NumPy int8.
+
+        Parameters
+        ----------
+        h : array-like [*grid] bool
+            The wet cells.
+
+        Returns
+        -------
+        StencilCapability1D, StencilCapability2D or StencilCapability3D
+        """
+        wet = np.asarray(h, dtype=bool)
+        # NumPy arrays fill fields the type checker reads as JAX arrays: the
+        # type a consumer sees once JAX has flattened the mask.
+        fields: dict[str, Any] = {
+            f"{axis}_{way}": _counts(wet, axis=position, forward=way == "pos")
+            for position, axis in enumerate(cls._axes)
+            for way in ("pos", "neg")
+        }
+        return cls(**fields)
+
+
 @pytree_dataclass
-class StencilCapability1D:
+class StencilCapability1D(_Capability):
     """Directional count of contiguous wet neighbours for each 1-D grid cell.
 
     At each cell ``i``, stores the number of consecutive wet cells (including
@@ -60,33 +91,14 @@ class StencilCapability1D:
         Count in the −x direction.
     """
 
+    _axes: ClassVar[tuple[str, ...]] = ("x",)
+
     x_pos: Int[Array, "Nx"]
     x_neg: Int[Array, "Nx"]
 
-    @classmethod
-    def from_mask(cls, h: np.ndarray | Bool[Array, "Nx"]) -> StencilCapability1D:
-        """Build stencil capability from a 1-D wet/dry mask.
-
-        Parameters
-        ----------
-        h : array-like [Nx] bool
-
-        Returns
-        -------
-        StencilCapability1D
-        """
-        h_np = np.asarray(h, dtype=bool)
-        # NumPy arrays fill fields the type checker reads as JAX arrays: the
-        # type a consumer sees once JAX has flattened the mask.
-        fields: dict[str, Any] = {
-            "x_pos": _counts(h_np, axis=0, forward=True),
-            "x_neg": _counts(h_np, axis=0, forward=False),
-        }
-        return cls(**fields)
-
 
 @pytree_dataclass
-class StencilCapability2D:
+class StencilCapability2D(_Capability):
     """Directional count of contiguous wet neighbours for each 2-D grid cell.
 
     At each cell ``(j, i)``, stores the number of consecutive wet cells
@@ -105,40 +117,16 @@ class StencilCapability2D:
         Count in the −y direction.
     """
 
+    _axes: ClassVar[tuple[str, ...]] = ("y", "x")
+
     x_pos: Int[Array, "Ny Nx"]
     x_neg: Int[Array, "Ny Nx"]
     y_pos: Int[Array, "Ny Nx"]
     y_neg: Int[Array, "Ny Nx"]
 
-    @classmethod
-    def from_mask(cls, h: np.ndarray | Bool[Array, "Ny Nx"]) -> StencilCapability2D:
-        """Build stencil capability from a 2-D wet/dry mask.
-
-        Construction uses numpy; stored arrays are NumPy int8.
-
-        Parameters
-        ----------
-        h : array-like [Ny, Nx] bool
-            Wet (True) / dry (False) mask.
-
-        Returns
-        -------
-        StencilCapability2D
-        """
-        h_np = np.asarray(h, dtype=bool)
-        # NumPy arrays fill fields the type checker reads as JAX arrays: the
-        # type a consumer sees once JAX has flattened the mask.
-        fields: dict[str, Any] = {
-            "x_pos": _counts(h_np, axis=1, forward=True),
-            "x_neg": _counts(h_np, axis=1, forward=False),
-            "y_pos": _counts(h_np, axis=0, forward=True),
-            "y_neg": _counts(h_np, axis=0, forward=False),
-        }
-        return cls(**fields)
-
 
 @pytree_dataclass
-class StencilCapability3D:
+class StencilCapability3D(_Capability):
     """Directional count of contiguous wet neighbours for each 3-D grid cell.
 
     At each cell ``(k, j, i)``, stores the number of consecutive wet cells
@@ -161,37 +149,14 @@ class StencilCapability3D:
         Count in the −z direction.
     """
 
+    _axes: ClassVar[tuple[str, ...]] = ("z", "y", "x")
+
     x_pos: Int[Array, "Nz Ny Nx"]
     x_neg: Int[Array, "Nz Ny Nx"]
     y_pos: Int[Array, "Nz Ny Nx"]
     y_neg: Int[Array, "Nz Ny Nx"]
     z_pos: Int[Array, "Nz Ny Nx"]
     z_neg: Int[Array, "Nz Ny Nx"]
-
-    @classmethod
-    def from_mask(cls, h: np.ndarray | Bool[Array, "Nz Ny Nx"]) -> StencilCapability3D:
-        """Build stencil capability from a 3-D wet/dry mask.
-
-        Parameters
-        ----------
-        h : array-like [Nz, Ny, Nx] bool
-
-        Returns
-        -------
-        StencilCapability3D
-        """
-        h_np = np.asarray(h, dtype=bool)
-        # NumPy arrays fill fields the type checker reads as JAX arrays: the
-        # type a consumer sees once JAX has flattened the mask.
-        fields: dict[str, Any] = {
-            "x_pos": _counts(h_np, axis=2, forward=True),
-            "x_neg": _counts(h_np, axis=2, forward=False),
-            "y_pos": _counts(h_np, axis=1, forward=True),
-            "y_neg": _counts(h_np, axis=1, forward=False),
-            "z_pos": _counts(h_np, axis=0, forward=True),
-            "z_neg": _counts(h_np, axis=0, forward=False),
-        }
-        return cls(**fields)
 
 
 #: The tier sizes of every scheme up to order 9.
