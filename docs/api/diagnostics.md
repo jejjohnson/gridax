@@ -78,3 +78,9 @@ for the points each output is masked at.
 ::: gridax.potential_enstrophy
 
 ::: gridax.available_potential_energy
+
+## Sea level and streamfunction
+
+::: gridax.ssh_to_streamfn
+
+::: gridax.streamfn_to_ssh

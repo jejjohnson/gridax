@@ -31,3 +31,7 @@ The negative-definite T-point operators on a wet mask, and the Neumann gauge, th
 ::: gridax.solvers.wet_components
 
 ::: gridax.solvers.project_zero_mean
+
+## Precision
+
+::: gridax.solvers.check_dtype

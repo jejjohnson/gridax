@@ -545,7 +545,7 @@ requires-dist = [
     { name = "coverage", marker = "extra == 'test'", specifier = ">=7.6.0" },
     { name = "cyclopts", marker = "extra == 'docs'", specifier = ">=4" },
     { name = "cyclopts", marker = "extra == 'examples'", specifier = ">=2.0.0" },
-    { name = "diffrax", marker = "extra == 'test'", specifier = ">=0.6.0" },
+    { name = "diffrax", marker = "extra == 'test'", specifier = ">=0.7.0" },
     { name = "gridax", extras = ["jax", "pipekit"], editable = "packages/gridax" },
     { name = "integrix", marker = "extra == 'test'", git = "https://github.com/jejjohnson/integrix?tag=v0.0.9" },
     { name = "jupytext", marker = "extra == 'docs'", specifier = ">=1.16" },

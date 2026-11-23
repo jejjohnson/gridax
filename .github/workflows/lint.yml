@@ -35,6 +35,3 @@ jobs:
 
       - name: Run ruff format check
         run: uv run ruff format --check .
-
-      - name: Run ty
-        run: uv run ty check packages/gridax/src

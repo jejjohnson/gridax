@@ -67,7 +67,7 @@ def array_namespace(*values: Any) -> Any:
         v for v in values if v is not None and not isinstance(v, int | float | complex)
     ]
     try:
-        import array_api_compat
+        import array_api_compat  # ty: ignore[unresolved-import]  (optional)
     except ImportError:
         array_api_compat = None
     if array_api_compat is not None and arrays:

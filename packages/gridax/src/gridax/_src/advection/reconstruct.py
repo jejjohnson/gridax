@@ -282,15 +282,15 @@ def hierarchy_of(mask: Any, axis: str, scheme: Scheme) -> Hierarchy | None:
 
 
 def face_flux(
-    q: Float[Array, "*batch *spatial"],
-    u: Float[Array, "*batch *spatial"],
+    q: Float[Array, "*field"],
+    u: Float[Array, "*field"],
     *,
     axis: int,
     scheme: Scheme,
     rank: int | None = None,
     hierarchy: Hierarchy | None = None,
     wet: Float[Array, "*spatial"] | None = None,
-) -> Float[Array, "*batch *spatial"]:
+) -> Float[Array, "*field"]:
     """The advective flux ``q_face * u`` on the faces along ``axis``, on arrays.
 
         F[i+1/2] = u[i+1/2] * R+(q[i+lo .. i+hi])        u[i+1/2] >= 0
@@ -298,9 +298,9 @@ def face_flux(
 
     Parameters
     ----------
-    q : Float[Array, "*batch *spatial"]
+    q : Float[Array, "*field"]
         Cell averages at T points, with one ghost ring on every spatial axis.
-    u : Float[Array, "*batch *spatial"]
+    u : Float[Array, "*field"]
         The velocity normal to the faces along ``axis``, on ``q``'s shape.
     axis : int
         The axis of the faces, of the array.
@@ -316,7 +316,7 @@ def face_flux(
 
     Returns
     -------
-    Float[Array, "*batch *spatial"]
+    Float[Array, "*field"]
         The flux on the faces along ``axis``, with a zero ghost ring.
     """
     rank = q.ndim if rank is None else rank

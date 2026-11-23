@@ -84,40 +84,48 @@ def difference_offsets(
 ) -> tuple[int, ...] | tuple[float, ...]:
     """The offsets of one stencil, in units of the grid step.
 
-    Args:
-        derivative: The derivative order: at least 1, or 0 (an average onto
-            the faces) for ``method="staggered"``.
-        accuracy: The accuracy order, at least 1. A central or staggered
-            stencil gets the order its symmetry gives for free on top (see
-            the module docstring).
-        method: ``"central"``, ``"forward"``, ``"backward"`` or
-            ``"staggered"``.
-        bias: For ``method="staggered"`` only. ``"centred"`` takes the
-            smallest even number of half-integers at least ``n + p``;
-            ``"left"`` takes the smallest odd number, with one more on the
-            left, and ``"right"`` mirrors it. The biased sets are the upwind
-            reconstructions of advection: ``left`` for flow towards ``+x``.
+    Parameters
+    ----------
+    derivative : int
+        The derivative order: at least 1, or 0 (an average onto
+        the faces) for ``method="staggered"``.
+    accuracy : int
+        The accuracy order, at least 1. A central or staggered
+        stencil gets the order its symmetry gives for free on top (see
+        the module docstring).
+    method : Method
+        ``"central"``, ``"forward"``, ``"backward"`` or
+        ``"staggered"``.
+    bias : Bias
+        For ``method="staggered"`` only. ``"centred"`` takes the
+        smallest even number of half-integers at least ``n + p``;
+        ``"left"`` takes the smallest odd number, with one more on the
+        left, and ``"right"`` mirrors it. The biased sets are the upwind
+        reconstructions of advection: ``left`` for flow towards ``+x``.
 
-    Returns:
+    Returns
+    -------
+    tuple[int, ...] | tuple[float, ...]
         The offsets, ascending: integers for the collocated methods,
         half-integers (as floats, exact in binary) for ``"staggered"``.
 
-    Raises:
-        ValueError: An order out of range, or an unknown method.
+    Raises
+    ------
+    ValueError
+        An order out of range, or an unknown method.
 
-    Examples:
-        >>> difference_offsets(derivative=1, accuracy=2, method="forward")
-        (0, 1, 2)
-        >>> difference_offsets(derivative=2, accuracy=1, method="central")
-        (-1, 0, 1)
-        >>> difference_offsets(derivative=1, accuracy=3, method="staggered")
-        (-1.5, -0.5, 0.5, 1.5)
-        >>> difference_offsets(derivative=0, accuracy=1, method="staggered")
-        (-0.5, 0.5)
-        >>> difference_offsets(
-        ...     derivative=0, accuracy=5, method="staggered", bias="left"
-        ... )
-        (-2.5, -1.5, -0.5, 0.5, 1.5)
+    Examples
+    --------
+    >>> difference_offsets(derivative=1, accuracy=2, method="forward")
+    (0, 1, 2)
+    >>> difference_offsets(derivative=2, accuracy=1, method="central")
+    (-1, 0, 1)
+    >>> difference_offsets(derivative=1, accuracy=3, method="staggered")
+    (-1.5, -0.5, 0.5, 1.5)
+    >>> difference_offsets(derivative=0, accuracy=1, method="staggered")
+    (-0.5, 0.5)
+    >>> difference_offsets(derivative=0, accuracy=5, method="staggered", bias="left")
+    (-2.5, -1.5, -0.5, 0.5, 1.5)
     """
     if accuracy < 1:
         raise ValueError(f"accuracy must be at least 1; got {accuracy}")
@@ -166,38 +174,47 @@ def difference_coeffs(
     :math:`((s + \frac12)^{m+1} - (s - \frac12)^{m+1}) / (m + 1)` for cell
     averages. The two agree for two samples and differ from three on.
 
-    Args:
-        offsets: The stencil's offsets in units of the step, distinct:
-            integers for a collocated stencil, half-integers for a staggered
-            one, or any other floats.
-        derivative: The derivative order, at least 0; ``derivative=0`` gives
-            interpolation weights. Fewer than ``derivative + 1`` offsets
-            cannot resolve it.
-        data: ``"point"`` (the default): the samples are point values, as
-            for differences and interpolation on a C-grid. ``"cell"``: they
-            are cell averages over unit cells centred on the offsets, as a
-            finite-volume tracer carries; ``derivative=0`` is then the
-            reconstruction of a point value (a face value, for advection).
+    Parameters
+    ----------
+    offsets : tuple[int | float, ...]
+        The stencil's offsets in units of the step, distinct:
+        integers for a collocated stencil, half-integers for a staggered
+        one, or any other floats.
+    derivative : int
+        The derivative order, at least 0; ``derivative=0`` gives
+        interpolation weights. Fewer than ``derivative + 1`` offsets
+        cannot resolve it.
+    data : Data
+        ``"point"`` (the default): the samples are point values, as
+        for differences and interpolation on a C-grid. ``"cell"``: they
+        are cell averages over unit cells centred on the offsets, as a
+        finite-volume tracer carries; ``derivative=0`` is then the
+        reconstruction of a point value (a face value, for advection).
 
-    Returns:
+    Returns
+    -------
+    tuple[float, ...]
         One coefficient per offset; :math:`f^{(n)}(x) \approx h^{-n} \sum_k
         c_k f(x + s_k h)`.
 
-    Raises:
-        ValueError: A negative derivative, repeated offsets, or too few
-            offsets for the derivative.
+    Raises
+    ------
+    ValueError
+        A negative derivative, repeated offsets, or too few
+        offsets for the derivative.
 
-    Examples:
-        >>> difference_coeffs((-1, 0, 1), derivative=2)
-        (1.0, -2.0, 1.0)
-        >>> difference_coeffs((0, 1, 2), derivative=1)
-        (-1.5, 2.0, -0.5)
-        >>> [c * 24 for c in difference_coeffs((-1.5, -0.5, 0.5, 1.5), 1)]
-        [1.0, -27.0, 27.0, -1.0]
-        >>> [c * 16 for c in difference_coeffs((-1.5, -0.5, 0.5, 1.5), 0)]
-        [-1.0, 9.0, 9.0, -1.0]
-        >>> [c * 12 for c in difference_coeffs((-1.5, -0.5, 0.5, 1.5), 0, data="cell")]
-        [-1.0, 7.0, 7.0, -1.0]
+    Examples
+    --------
+    >>> difference_coeffs((-1, 0, 1), derivative=2)
+    (1.0, -2.0, 1.0)
+    >>> difference_coeffs((0, 1, 2), derivative=1)
+    (-1.5, 2.0, -0.5)
+    >>> [c * 24 for c in difference_coeffs((-1.5, -0.5, 0.5, 1.5), 1)]
+    [1.0, -27.0, 27.0, -1.0]
+    >>> [c * 16 for c in difference_coeffs((-1.5, -0.5, 0.5, 1.5), 0)]
+    [-1.0, 9.0, 9.0, -1.0]
+    >>> [c * 12 for c in difference_coeffs((-1.5, -0.5, 0.5, 1.5), 0, data="cell")]
+    [-1.0, 7.0, 7.0, -1.0]
     """
     return tuple(float(c) for c in _exact_coeffs(tuple(offsets), derivative, data))
 
@@ -267,24 +284,32 @@ def weno_stencils(
     sub-stencils are listed from the left, as ``gridax``'s ``weno_*``
     functions take them.
 
-    Args:
-        order: The order :math:`2r - 1`: 3, 5, 7, 9, …
-        bias: ``"left"`` (flow towards ``+x``: the upwind cell is at
-            :math:`-\\frac12`) or ``"right"`` (flow towards ``-x``).
+    Parameters
+    ----------
+    order : int
+        The order :math:`2r - 1`: 3, 5, 7, 9, …
+    bias : Literal['left', 'right']
+        ``"left"`` (flow towards ``+x``: the upwind cell is at
+        :math:`-\\frac12`) or ``"right"`` (flow towards ``-x``).
 
-    Returns:
+    Returns
+    -------
+    tuple[tuple[float, ...], tuple[tuple[float, ...], ...]]
         ``(full, subs)``: the :math:`2r - 1` offsets of the full stencil, and
         the :math:`r` sub-stencils, each :math:`r` offsets.
 
-    Raises:
-        ValueError: An even order, or one below 3.
+    Raises
+    ------
+    ValueError
+        An even order, or one below 3.
 
-    Examples:
-        >>> full, subs = weno_stencils(5)
-        >>> full
-        (-2.5, -1.5, -0.5, 0.5, 1.5)
-        >>> subs
-        ((-2.5, -1.5, -0.5), (-1.5, -0.5, 0.5), (-0.5, 0.5, 1.5))
+    Examples
+    --------
+    >>> full, subs = weno_stencils(5)
+    >>> full
+    (-2.5, -1.5, -0.5, 0.5, 1.5)
+    >>> subs
+    ((-2.5, -1.5, -0.5), (-1.5, -0.5, 0.5), (-0.5, 0.5, 1.5))
     """
     if order < 3 or order % 2 == 0:
         raise ValueError(f"the WENO order must be odd and at least 3; got {order}")
@@ -308,22 +333,30 @@ def optimal_weights(
     :math:`\sum_k g_k \hat c^{(k)} = c` exactly. They are the weights WENO
     falls back to where the data are smooth.
 
-    Args:
-        offsets: The full stencil's offsets.
-        sub_offsets: The sub-stencils, each a subset of ``offsets``.
+    Parameters
+    ----------
+    offsets : tuple[float, ...]
+        The full stencil's offsets.
+    sub_offsets : tuple[tuple[float, ...], ...]
+        The sub-stencils, each a subset of ``offsets``.
 
-    Returns:
+    Returns
+    -------
+    tuple[float, ...]
         One weight per sub-stencil, each the float nearest the exact value.
 
-    Raises:
-        ValueError: A sub-stencil outside ``offsets``, or sub-stencils that
-            cannot reproduce the full stencil.
+    Raises
+    ------
+    ValueError
+        A sub-stencil outside ``offsets``, or sub-stencils that
+        cannot reproduce the full stencil.
 
-    Examples:
-        >>> optimal_weights(*weno_stencils(5))
-        (0.1, 0.6, 0.3)
-        >>> [w * 35 for w in optimal_weights(*weno_stencils(7))]
-        [1.0, 12.0, 18.0, 4.0]
+    Examples
+    --------
+    >>> optimal_weights(*weno_stencils(5))
+    (0.1, 0.6, 0.3)
+    >>> [w * 35 for w in optimal_weights(*weno_stencils(7))]
+    [1.0, 12.0, 18.0, 4.0]
     """
     full = _exact_coeffs(tuple(offsets), 0, "cell")
     columns = []
@@ -364,24 +397,30 @@ def smoothness_matrix(
     are linear in :math:`\bar q`, so :math:`B` is a symmetric rational matrix,
     computed exactly.
 
-    Args:
-        sub_offsets: The :math:`r` cell offsets of the sub-stencil.
-        cell: The centre of the cell the indicator is measured on:
-            :math:`-\frac12` (the default) for a left-biased reconstruction
-            at the face 0, :math:`+\frac12` for a right-biased one.
+    Parameters
+    ----------
+    sub_offsets : tuple[float, ...]
+        The :math:`r` cell offsets of the sub-stencil.
+    cell : float
+        The centre of the cell the indicator is measured on:
+        :math:`-\frac12` (the default) for a left-biased reconstruction
+        at the face 0, :math:`+\frac12` for a right-biased one.
 
-    Returns:
+    Returns
+    -------
+    tuple[tuple[float, ...], ...]
         :math:`B`, ``r`` rows of ``r`` floats, each the float nearest the
         exact value.
 
-    Examples:
-        >>> full, subs = weno_stencils(3)
-        >>> smoothness_matrix(subs[0])  # beta = (q0 - qm)^2
-        ((1.0, -1.0), (-1.0, 1.0))
-        >>> _, (first, *_) = weno_stencils(7)
-        >>> top_row, *_ = smoothness_matrix(first)
-        >>> top_row[0] * 240
-        547.0
+    Examples
+    --------
+    >>> full, subs = weno_stencils(3)
+    >>> smoothness_matrix(subs[0])  # beta = (q0 - qm)^2
+    ((1.0, -1.0), (-1.0, 1.0))
+    >>> _, (first, *_) = weno_stencils(7)
+    >>> top_row, *_ = smoothness_matrix(first)
+    >>> top_row[0] * 240
+    547.0
     """
     points = [Fraction(s) for s in sub_offsets]
     r = len(points)
@@ -430,24 +469,32 @@ def nonuniform_coeffs(dz: Any, derivative: int = 1) -> Any:
     metres or pascals. Written on the array namespace, so traced distances
     (a ``TimeAxis`` under ``jax.jit``) work too.
 
-    Args:
-        dz: ``(..., K)`` signed distances :math:`\delta_k` from each point to
-            its stencil's points; one of them is ``0``.
-        derivative: The derivative order :math:`n`, below ``K``.
+    Parameters
+    ----------
+    dz : Any
+        ``(..., K)`` signed distances :math:`\delta_k` from each point to
+        its stencil's points; one of them is ``0``.
+    derivative : int
+        The derivative order :math:`n`, below ``K``.
 
-    Returns:
+    Returns
+    -------
+    Any
         ``(..., K)`` coefficients, in units of ``dz`` to the power ``-n``.
 
-    Raises:
-        ValueError: Too few points for the derivative.
+    Raises
+    ------
+    ValueError
+        Too few points for the derivative.
 
-    Examples:
-        >>> nonuniform_coeffs(np.array([-1.0, 0.0, 1.0]))  # the uniform stencil
-        array([-0.5,  0. ,  0.5])
-        >>> # uneven levels at 0, 1 and 3 m: still exact for a quadratic
-        >>> c = nonuniform_coeffs(np.array([-1.0, 0.0, 2.0]), derivative=2)
-        >>> float(c @ np.array([-1.0, 0.0, 2.0]) ** 2)
-        2.0
+    Examples
+    --------
+    >>> nonuniform_coeffs(np.array([-1.0, 0.0, 1.0]))  # the uniform stencil
+    array([-0.5,  0. ,  0.5])
+    >>> # uneven levels at 0, 1 and 3 m: still exact for a quadratic
+    >>> c = nonuniform_coeffs(np.array([-1.0, 0.0, 2.0]), derivative=2)
+    >>> float(c @ np.array([-1.0, 0.0, 2.0]) ** 2)
+    2.0
     """
 
     xp = array_namespace(dz)

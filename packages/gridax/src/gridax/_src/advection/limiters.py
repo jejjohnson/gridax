@@ -40,7 +40,7 @@ else:
     Array = np.ndarray
 
 
-def minmod(r: Float[Array, ...]) -> Float[Array, ...]:
+def minmod(r: Float[Array, "..."]) -> Float[Array, "..."]:
     """Minmod flux limiter.
 
     φ(r) = max(0, min(1, r))
@@ -62,7 +62,7 @@ def minmod(r: Float[Array, ...]) -> Float[Array, ...]:
     return xp.maximum(0.0, xp.minimum(1.0, r))
 
 
-def van_leer(r: Float[Array, ...]) -> Float[Array, ...]:
+def van_leer(r: Float[Array, "..."]) -> Float[Array, "..."]:
     """Van Leer flux limiter.
 
     φ(r) = (r + |r|) / (1 + |r|)
@@ -87,7 +87,7 @@ def van_leer(r: Float[Array, ...]) -> Float[Array, ...]:
     return 2.0 * a / (1.0 + a)
 
 
-def superbee(r: Float[Array, ...]) -> Float[Array, ...]:
+def superbee(r: Float[Array, "..."]) -> Float[Array, "..."]:
     """Superbee flux limiter.
 
     φ(r) = max(0, max(min(2r, 1), min(r, 2)))
@@ -112,7 +112,7 @@ def superbee(r: Float[Array, ...]) -> Float[Array, ...]:
     )
 
 
-def mc(r: Float[Array, ...]) -> Float[Array, ...]:
+def mc(r: Float[Array, "..."]) -> Float[Array, "..."]:
     """Monotonized Central (MC) flux limiter.
 
     φ(r) = max(0, min((1 + r)/2, 2r, 2))

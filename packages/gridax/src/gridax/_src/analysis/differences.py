@@ -60,40 +60,54 @@ def difference(
 
         \partial^n_s f(x_i) \approx h^{-n} \sum_k c_k\, f(x_{i + s_k})
 
-    Args:
-        f: The field; any shape.
-        axis: The axis to differentiate.
-        step: The signed step :math:`h` between centres along ``axis``: a
-            scalar, or an array broadcasting against ``f``.
-        coords: The positions of the centres along ``axis``, one per entry,
-            for an unevenly spaced axis (depth or pressure levels, irregular
-            times); replaces ``step``. Each point's stencil is then solved for
-            its actual distances (`nonuniform_coeffs`), exact for polynomials
-            of the stencil's degree.
-        derivative: The derivative order :math:`n`.
-        accuracy: The accuracy order of the one-sided stencils.
-        method: ``"central"``, ``"forward"`` or ``"backward"``.
-        periodic: The axis wraps (a global longitude): every point uses the
-            ``method`` stencil, reading across the seam. Not with ``coords``.
+    Parameters
+    ----------
+    f : Float[np.ndarray, '*shape']
+        The field; any shape.
+    axis : int
+        The axis to differentiate.
+    step : Float[np.ndarray, '*shape'] | float
+        The signed step :math:`h` between centres along ``axis``: a
+        scalar, or an array broadcasting against ``f``.
+    coords : Float[np.ndarray, ' n'] | None
+        The positions of the centres along ``axis``, one per entry,
+        for an unevenly spaced axis (depth or pressure levels, irregular
+        times); replaces ``step``. Each point's stencil is then solved for
+        its actual distances (`nonuniform_coeffs`), exact for polynomials
+        of the stencil's degree.
+    derivative : int
+        The derivative order :math:`n`.
+    accuracy : int
+        The accuracy order of the one-sided stencils.
+    method : Method
+        ``"central"``, ``"forward"`` or ``"backward"``.
+    periodic : bool
+        The axis wraps (a global longitude): every point uses the
+        ``method`` stencil, reading across the seam. Not with ``coords``.
 
-    Returns:
+    Returns
+    -------
+    Float[np.ndarray, '*shape']
         :math:`\partial^n f / \partial s^n`, ``f``'s shape.
 
-    Raises:
-        ValueError: The axis is shorter than the stencil needs, ``coords`` has
-            the wrong length, or ``coords`` meets ``periodic``.
+    Raises
+    ------
+    ValueError
+        The axis is shorter than the stencil needs, ``coords`` has
+        the wrong length, or ``coords`` meets ``periodic``.
 
-    Examples:
-        >>> f = np.array([0.0, 1.0, 4.0, 9.0, 16.0])  # x², x = 0…4
-        >>> difference(f)
-        array([1., 2., 4., 6., 7.])
-        >>> difference(f, accuracy=2)
-        array([0., 2., 4., 6., 8.])
-        >>> difference(f, derivative=2)
-        array([2., 2., 2., 2., 2.])
-        >>> z = np.array([0.0, 1.0, 3.0, 7.0, 15.0])  # uneven levels
-        >>> difference(z**2, coords=z, derivative=2)  # exact for a quadratic
-        array([2., 2., 2., 2., 2.])
+    Examples
+    --------
+    >>> f = np.array([0.0, 1.0, 4.0, 9.0, 16.0])  # x², x = 0…4
+    >>> difference(f)
+    array([1., 2., 4., 6., 7.])
+    >>> difference(f, accuracy=2)
+    array([0., 2., 4., 6., 8.])
+    >>> difference(f, derivative=2)
+    array([2., 2., 2., 2., 2.])
+    >>> z = np.array([0.0, 1.0, 3.0, 7.0, 15.0])  # uneven levels
+    >>> difference(z**2, coords=z, derivative=2)  # exact for a quadratic
+    array([2., 2., 2., 2., 2.])
     """
     if method == "staggered":
         raise ValueError(
@@ -149,28 +163,40 @@ def adaptive_difference(
     computed, so the call costs ``3 * accuracy`` stencils and runs under
     ``jax.jit``. Masked cells are ``NaN`` in the result.
 
-    Args:
-        f: The field; any shape.
-        mask: ``True`` drops the cell (the analysis mask convention: ``True`` = dropped), on ``f``'s
-            shape; ``None`` drops only non-finite cells.
-        axis: The axis to differentiate.
-        step: The signed step between centres along ``axis``.
-        coords: The centres' positions along ``axis``, for an unevenly spaced
-            axis (see :func:`difference`); replaces ``step``.
-        derivative: The derivative order.
-        accuracy: The highest accuracy order to try.
-        periodic: The axis wraps.
+    Parameters
+    ----------
+    f : Float[np.ndarray, '*shape']
+        The field; any shape.
+    mask : Bool[np.ndarray, '*shape'] | None
+        ``True`` drops the cell (the analysis mask convention: ``True`` = dropped), on ``f``'s
+        shape; ``None`` drops only non-finite cells.
+    axis : int
+        The axis to differentiate.
+    step : Float[np.ndarray, '*shape'] | float
+        The signed step between centres along ``axis``.
+    coords : Float[np.ndarray, ' n'] | None
+        The centres' positions along ``axis``, for an unevenly spaced
+        axis (see :func:`difference`); replaces ``step``.
+    derivative : int
+        The derivative order.
+    accuracy : int
+        The highest accuracy order to try.
+    periodic : bool
+        The axis wraps.
 
-    Returns:
+    Returns
+    -------
+    Float[np.ndarray, '*shape']
         The derivative, ``f``'s shape, ``NaN`` where ``f`` is masked or no
         stencil fits on valid data.
 
-    Example:
-        >>> f = np.array([0.0, 1.0, 2.0, np.nan, 4.0, 5.0, 6.0])  # f = x
-        >>> difference(f)
-        array([ 1.,  1., nan, nan, nan,  1.,  1.])
-        >>> adaptive_difference(f)
-        array([ 1.,  1.,  1., nan,  1.,  1.,  1.])
+    Examples
+    --------
+    >>> f = np.array([0.0, 1.0, 2.0, np.nan, 4.0, 5.0, 6.0])  # f = x
+    >>> difference(f)
+    array([ 1.,  1., nan, nan, nan,  1.,  1.])
+    >>> adaptive_difference(f)
+    array([ 1.,  1.,  1., nan,  1.,  1.,  1.])
     """
     xp = array_namespace(f)
     dropped = ~xp.isfinite(f)

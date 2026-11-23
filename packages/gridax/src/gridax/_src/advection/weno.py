@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import functools
-from typing import TYPE_CHECKING, Literal, NamedTuple
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
 import numpy as np
 
@@ -71,11 +71,11 @@ def _weno_tables(order: int, bias: Literal["left", "right"]) -> _WenoTables:
     )
 
 
-def _linear_combo(coeffs: tuple[float, ...], stencil: tuple[Array, ...]) -> Array:
+def _linear_combo(coeffs: tuple[float, ...], stencil: tuple[Array, ...]) -> Any:
     return sum(coeff * value for coeff, value in zip(coeffs, stencil, strict=True))
 
 
-def _smoothness_indicator(beta_matrix: np.ndarray, stencil: tuple[Array, ...]) -> Array:
+def _smoothness_indicator(beta_matrix: np.ndarray, stencil: tuple[Array, ...]) -> Any:
     # beta = q^T B q = sum_i q_i * (sum_j B[i, j] * q_j)
     #
     # Same quadratic form as

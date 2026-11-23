@@ -14,7 +14,7 @@ is left.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from typing import Any
+from typing import Any, cast
 
 from pipekit_ops import Signature, get_adapter, register_adapter
 
@@ -157,7 +157,7 @@ class CFieldAdapter:
         labels = {d: v for d, v in mapped.labels.items() if d in dims}
         if dim in x.labels:
             labels[dim] = x.labels[dim]
-        return get_adapter(out).relabel(out, labels)
+        return cast(Any, get_adapter(out)).relabel(out, labels)
 
 
 register_adapter(CField, CFieldAdapter())

@@ -26,7 +26,7 @@ Example
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from jaxtyping import Bool, Float
 import numpy as np
@@ -90,7 +90,7 @@ def area_weights(
         If the grid is not a 2-D one.
     """
     if isinstance(grid, CurvilinearGrid2D | CollocatedGrid2D | StretchedCGrid2D):
-        return grid._area(xp=xp)
+        return cast(Any, grid)._area(xp=xp)
     raise TypeError(
         f"area_weights: unsupported grid type {type(grid).__name__}. Use a 2-D grid."
     )
@@ -105,9 +105,10 @@ def volume_weights(
         xp = array_namespace(cell) if xp is None else xp
         return xp.full(grid.shape, cell)
     if isinstance(grid, CurvilinearGrid3D | CollocatedGrid3D | StretchedCGrid3D):
-        area = grid._area(xp=xp)
+        levels = cast(Any, grid)
+        area = levels._area(xp=xp)
         xp = array_namespace(area) if xp is None else xp
-        return xp.broadcast_to(area * abs(grid.spacing("z")), grid.shape)
+        return xp.broadcast_to(area * abs(levels.spacing("z")), levels.shape)
     raise TypeError(
         f"volume_weights: unsupported grid type {type(grid).__name__}. Use a 3-D grid."
     )

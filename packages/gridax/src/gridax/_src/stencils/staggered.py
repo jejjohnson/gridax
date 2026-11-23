@@ -59,13 +59,13 @@ _AXIS_INDEX = {"x": -1, "y": -2, "z": -3}
 
 
 def staggered_difference(
-    h: Float[Array, "*batch *spatial"],
+    h: Float[Array, "*field"],
     *,
     axis: Axis,
     side: Side,
     ndim: Literal[1, 2, 3],
     scheme: Scheme = CENTRED2,
-) -> Float[Array, "*batch *interior"]:
+) -> Float[Array, "*interior"]:
     """The staggered first difference of ``h`` along ``axis``, no metric applied.
 
     The result sits half a cell ahead of ``h`` (``side="fwd"``, e.g. T → U) or
@@ -80,7 +80,7 @@ def staggered_difference(
 
     Parameters
     ----------
-    h : Float[Array, "*batch *spatial"]
+    h : Float[Array, "*field"]
         Field with one ghost ring on each of its trailing ``ndim`` axes;
         leading axes are batch axes.
     axis : {"x", "y", "z"}
@@ -95,7 +95,7 @@ def staggered_difference(
 
     Returns
     -------
-    Float[Array, "*batch *interior"]
+    Float[Array, "*interior"]
         The raw difference on the interior of all ``ndim`` spatial axes.
 
     Raises
@@ -117,13 +117,13 @@ def staggered_difference(
 
 
 def staggered_average(
-    h: Float[Array, "*batch *spatial"],
+    h: Float[Array, "*field"],
     *,
     axis: Axis,
     side: Side,
     ndim: Literal[1, 2, 3],
     scheme: Scheme = CENTRED2,
-) -> Float[Array, "*batch *interior"]:
+) -> Float[Array, "*interior"]:
     """The staggered average (point-value interpolation) of ``h`` along ``axis``.
 
     As :func:`staggered_difference`, for the value instead of the first
@@ -137,7 +137,7 @@ def staggered_average(
 
     Parameters
     ----------
-    h : Float[Array, "*batch *spatial"]
+    h : Float[Array, "*field"]
         Field with one ghost ring on each of its trailing ``ndim`` axes.
     axis : {"x", "y", "z"}
         The axis to interpolate along.
@@ -150,7 +150,7 @@ def staggered_average(
 
     Returns
     -------
-    Float[Array, "*batch *interior"]
+    Float[Array, "*interior"]
         The interpolated values on the interior of all ``ndim`` spatial axes.
 
     Examples
@@ -331,7 +331,7 @@ def along_wet(
         index[position] = slice(1, -1)
         return x[tuple(index)]
 
-    def stencil(cells: Sequence[int], data: Any) -> Array:
+    def stencil(cells: Sequence[int], data: Any) -> Any:
         offsets = tuple(k - delta for k in cells)
         coeffs = difference_coeffs(offsets, derivative, data=data)
         total = None

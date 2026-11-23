@@ -82,6 +82,8 @@ nav:
       - Coriolis: coriolis.md
       - Momentum advection: momentum.md
       - Diagnostics: diagnostics.md
+      - Sums and means: reductions.md
+      - Smooth surrogates: smooth.md
   - Advection:
       - Advection: advection.md
       - Reconstruction: reconstruction.md

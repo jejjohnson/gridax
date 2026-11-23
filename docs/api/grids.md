@@ -16,13 +16,25 @@ The sizes, the ghost-ring width `ghost` and the axis names are static pytree met
 
 ::: gridax.ArakawaCGrid1D
 
+::: gridax.CurvilinearGrid1D
+
+::: gridax.CartesianCGrid1D
+
 ## 2-D Grid
 
 ::: gridax.ArakawaCGrid2D
 
+::: gridax.CurvilinearGrid2D
+
+::: gridax.CartesianCGrid2D
+
 ## 3-D Grid
 
 ::: gridax.ArakawaCGrid3D
+
+::: gridax.CurvilinearGrid3D
+
+::: gridax.CartesianCGrid3D
 
 ## Spherical Grids
 

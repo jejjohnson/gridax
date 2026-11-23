@@ -31,7 +31,7 @@ def interior(f: Any, grid: Any) -> Any:
 
     Returns
     -------
-    CField or Float[Array, "*batch *interior"]
+    CField or Float[Array, "*interior"]
         ``[*batch, Ny, Nx]`` for a field ``[*batch, Ny + 2, Nx + 2]``.
 
     Raises
@@ -56,7 +56,7 @@ def embed(values: Any, grid: Any, fill: Any = 0) -> Any:
 
     Parameters
     ----------
-    values : CField or Float[Array, "*batch *interior"]
+    values : CField or Float[Array, "*interior"]
         The interior values, as :func:`interior` gives them.
     grid : grid
         A grid of gridax.
@@ -184,7 +184,8 @@ def select(
         return array_namespace(data).concat(pieces, axis=-1)
 
     wall = isinstance(region, str) and region.startswith("wall_")
-    axis, side = _face(region.removeprefix("wall_") if wall else region, axes)
+    face = region.removeprefix("wall_") if isinstance(region, str) else region
+    axis, side = _face(face, axes)
     n = grid.shape[axes.index(axis)]
     if not wall:
         layer = ghost - 1 if side == 0 else n - ghost

@@ -18,7 +18,7 @@ so it runs on the NumPy grid and, inside a JAX transform, on the traced one.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from geophysix.earth import SPHERE
 from jaxtyping import Float
@@ -110,7 +110,7 @@ class _SphericalMetric:
         if axis == "y":
             # Δy = R dlat
             return self.R * self.dlat
-        return super().spacing(axis, at=at)
+        return cast(Any, super()).spacing(axis, at=at)
 
     def coords(self, axis: str, *, at: str = "T") -> Float[Array, "N"]:
         """The coordinate of the points ``at`` along ``axis``, ghost ring included.
@@ -145,7 +145,7 @@ class _SphericalMetric:
             return self._lon + 0.5 * self.dlon if staggered else self._lon
         if axis == "y":
             return self._lat + 0.5 * self.dlat if staggered else self._lat
-        return super().coords(axis, at=at)
+        return cast(Any, super()).coords(axis, at=at)
 
     def _area(self, *, at: str = "T", xp: Any = None) -> Float[Array, "Ny Nx"]:
         """The area of the cell around each point ``at``, exact on the sphere.

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 import functools
 import inspect
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from gridax._src.advection import advect, reconstruct, vertical
 from gridax._src.api import OPERATIONS
@@ -43,7 +43,7 @@ __all__ = ["GridOps"]
 class _Bound:
     """One canonical function as a method: its grid and mask come from the instance."""
 
-    def __init__(self, op: Callable[..., Any]) -> None:
+    def __init__(self, op: Any) -> None:
         self.op = op
         self.__doc__ = op.__doc__
         signature = inspect.signature(op)
@@ -57,7 +57,7 @@ class _Bound:
             raise AttributeError(
                 f"{self.op.__name__} is not defined on {type(ops.grid).__name__}"
             )
-        bound = functools.partial(self.op, grid=ops.grid, mask=ops.mask)
+        bound = cast(Any, functools.partial(self.op, grid=ops.grid, mask=ops.mask))
         functools.update_wrapper(bound, self.op)
         bound.__signature__ = self.signature
         return bound

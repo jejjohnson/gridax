@@ -58,6 +58,10 @@ Fourth- and sixth-order differences and averages of point values on the C-grid, 
 
 ::: gridax.diff_y_bwd_3d
 
+::: gridax.diff_z_fwd_3d
+
+::: gridax.diff_z_bwd_3d
+
 ## 1-D Averaging Stencils
 
 ::: gridax.avg_x_fwd_1d
@@ -93,3 +97,21 @@ Fourth- and sixth-order differences and averages of point values on the C-grid, 
 ::: gridax.avg_x_bwd_3d
 
 ::: gridax.avg_y_bwd_3d
+
+::: gridax.avg_z_fwd_3d
+
+::: gridax.avg_z_bwd_3d
+
+## 3-D Averaging Stencils (4-point bilinear)
+
+::: gridax.avg_xfwd_yfwd_3d
+
+::: gridax.avg_xbwd_ybwd_3d
+
+::: gridax.avg_xbwd_yfwd_3d
+
+::: gridax.avg_xfwd_ybwd_3d
+
+## Padding a result back
+
+::: gridax.stencils.interior

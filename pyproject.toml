@@ -52,7 +52,7 @@ pipekit-jax = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "p
 [project.optional-dependencies]
 test = [
     # The tests call diffrax and integrix.march directly.
-    "diffrax>=0.6.0",
+    "diffrax>=0.7.0",
     "integrix>=0.0.9",
     "pytest>=8.3.0",
     "pytest-cov>=5.0.0",
@@ -172,11 +172,6 @@ force-sort-within-sections = true
 
 [tool.ruff.format]
 docstring-code-format = true
-
-[tool.ty.rules]
-unresolved-attribute = "ignore"
-invalid-return-type = "ignore"
-unresolved-import = "ignore"
 
 [tool.coverage.report]
 precision = 1
