@@ -36,10 +36,9 @@ import numpy as np
 from gridax._src.api import grid_dispatch
 from gridax._src.fields.located import located
 from gridax._src.grid import CartesianCGrid2D, CartesianCGrid3D
-from gridax._src.mask import Mask2D, Mask3D
 from gridax._src.operators._ghost import interior
 from gridax._src.operators.calculus import _levels
-from gridax._src.pytree import array_namespace, pytree_dataclass
+from gridax._src.pytree import array_namespace
 
 if TYPE_CHECKING:
     from jaxtyping import Array
@@ -133,57 +132,3 @@ def _coriolis_cartesian(grid: Any, u: Any, v: Any, *, f: Any, mask: Any) -> Any:
         du = xp.where(mask.wet(at="U"), du, 0.0)
         dv = xp.where(mask.wet(at="V"), dv, 0.0)
     return du, dv
-
-
-@pytree_dataclass
-class Coriolis2D:
-    """The Coriolis tendencies on a 2-D Cartesian C-grid.
-
-    `gridax.coriolis` with a fixed grid and mask.
-
-    Parameters
-    ----------
-    grid : CartesianCGrid2D
-        The grid.
-    mask : Mask2D, optional
-        The wet cells.
-    """
-
-    grid: CartesianCGrid2D
-    mask: Mask2D | None = None
-
-    def __call__(
-        self,
-        u: Float[Array, "*batch Ny Nx"],
-        v: Float[Array, "*batch Ny Nx"],
-        f: float | Float[Array, "..."],
-    ) -> tuple[Float[Array, "*batch Ny Nx"], Float[Array, "*batch Ny Nx"]]:
-        """``(du, dv)`` at U and V (:func:`gridax.coriolis`)."""
-        return coriolis(u, v, self.grid, f=f, mask=self.mask)
-
-
-@pytree_dataclass
-class Coriolis3D:
-    """The Coriolis tendencies on a 3-D Cartesian C-grid, level by level.
-
-    `gridax.coriolis` with a fixed grid and mask.
-
-    Parameters
-    ----------
-    grid : CartesianCGrid3D
-        The grid.
-    mask : Mask3D, optional
-        The wet cells.
-    """
-
-    grid: CartesianCGrid3D
-    mask: Mask3D | None = None
-
-    def __call__(
-        self,
-        u: Float[Array, "*batch Nz Ny Nx"],
-        v: Float[Array, "*batch Nz Ny Nx"],
-        f: float | Float[Array, "..."],
-    ) -> tuple[Float[Array, "*batch Nz Ny Nx"], Float[Array, "*batch Nz Ny Nx"]]:
-        """``(du, dv)`` at U and V (:func:`gridax.coriolis`)."""
-        return coriolis(u, v, self.grid, f=f, mask=self.mask)

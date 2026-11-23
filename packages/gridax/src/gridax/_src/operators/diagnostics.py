@@ -8,14 +8,13 @@ and domain-integrated conservation diagnostics.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
-import warnings
 
 from geophysix.constants import STANDARD
 from jaxtyping import Float
 import numpy as np
 
 from gridax._src.api import grid_dispatch
-from gridax._src.backend import set_at, vmap
+from gridax._src.backend import set_at
 from gridax._src.fields.located import located
 from gridax._src.grid import (
     CartesianAGrid2D,
@@ -26,14 +25,19 @@ from gridax._src.grid import (
     SphericalCGrid2D,
     SphericalCGrid3D,
 )
-from gridax._src.mask import Mask3D
 from gridax._src.operators._ghost import interior
-from gridax._src.operators._utils import _sanitize, _spacing, _where
-from gridax._src.operators.calculus import _levels
-from gridax._src.operators.difference import _curl_2d, _laplacian_2d_interior
+from gridax._src.operators._utils import (
+    _metric_like,
+    _safe_div_cos,
+    _sanitize,
+    _spacing,
+    _where,
+)
+from gridax._src.operators.calculus import _levels, curl
+from gridax._src.operators.moves import interpolate
 from gridax._src.operators.stencils import (
+    _neighbours,
     avg_x_bwd_2d,
-    avg_xfwd_yfwd_2d,
     avg_y_bwd_2d,
     diff_x_bwd_2d,
     diff_x_bwd_3d,
@@ -50,7 +54,7 @@ else:
     Array = np.ndarray
 
 # ======================================================================
-# Kinetic energy & Bernoulli potential  (existing)
+# The canonical functions: they move values between points, or use the metric
 # ======================================================================
 
 
@@ -156,6 +160,308 @@ def tensor_strain(
     return tensor_strain._impl(grid, u, v, mask=mask)
 
 
+@grid_dispatch
+@located("T", h="T", u="U", v="V")
+def bernoulli_potential(
+    h: Float[Array, "..."],
+    u: Float[Array, "..."],
+    v: Float[Array, "..."],
+    grid: Any,
+    *,
+    gravity: float = STANDARD.standard_gravity,
+    mask: Any = None,
+) -> Float[Array, "..."]:
+    """The Bernoulli potential ``K + g h``, at T.
+
+    ``K`` is :func:`kinetic_energy`.
+
+    Parameters
+    ----------
+    h : CField or Float[Array, "*batch *grid"]
+        The layer thickness, at T.
+    u, v : CField or Float[Array, "*batch *grid"]
+        The velocity, at U and V.
+    grid : grid
+        A 2-D or 3-D C-grid. The metric does not enter.
+    gravity : float
+        The acceleration of gravity.
+    mask : Mask2D or Mask3D, optional
+        The wet cells. Dry interior values are read as zero, and the result is
+        zero on dry cells.
+
+    Returns
+    -------
+    CField or Float[Array, "*batch *grid"]
+        At T, with a zero ghost ring.
+
+    Examples
+    --------
+    >>> import gridax, numpy as np
+    >>> grid = gridax.CartesianCGrid2D.from_interior(3, 3, 3.0, 3.0)
+    >>> one = np.ones(grid.shape)
+    >>> gridax.bernoulli_potential(one, one, one, grid, gravity=10.0)[2].tolist()
+    [0.0, 11.0, 11.0, 11.0, 0.0]
+    """
+    return bernoulli_potential._impl(grid, h, u, v, gravity=gravity, mask=mask)
+
+
+@grid_dispatch
+@located("T", u="U", v="V")
+def strain_rate_squared(
+    u: Float[Array, "..."], v: Float[Array, "..."], grid: Any, *, mask: Any = None
+) -> Float[Array, "..."]:
+    """The squared strain rate ``σₙ² + σₛ²``, at T.
+
+    The normal strain :func:`tensor_strain` is at T; the shear strain at X is
+    averaged from the four corners, those of the south and west ghost ring
+    among them, which come from the ghost velocities.
+
+    Parameters
+    ----------
+    u, v : CField or Float[Array, "*batch *grid"]
+        The velocity, at U and V, with its ghost ring filled.
+    grid : CartesianCGrid2D
+        The grid.
+    mask : Mask2D, optional
+        The wet cells. Dry interior velocities and corners are read as zero,
+        and the result is zero on dry cells.
+
+    Returns
+    -------
+    CField or Float[Array, "*batch *grid"]
+        At T, with a zero ghost ring.
+
+    Examples
+    --------
+    >>> import gridax, numpy as np
+    >>> grid = gridax.CartesianCGrid2D.from_interior(3, 3, 3.0, 3.0)
+    >>> v = np.broadcast_to(grid.coords("x", at="V"), grid.shape)  # shear
+    >>> gridax.strain_rate_squared(0.0 * v, v, grid)[2].tolist()
+    [0.0, 1.0, 1.0, 1.0, 0.0]
+    """
+    return strain_rate_squared._impl(grid, u, v, mask=mask)
+
+
+@grid_dispatch
+@located("T", u="U", v="V")
+def okubo_weiss_parameter(
+    u: Float[Array, "..."], v: Float[Array, "..."], grid: Any, *, mask: Any = None
+) -> Float[Array, "..."]:
+    """The Okubo–Weiss parameter ``σₙ² + σₛ² - ζ²`` of a flow, at T.
+
+    As :func:`strain_rate_squared`, minus the squared vorticity, averaged from
+    the corners in the same way. Positive where strain dominates.
+
+    Parameters
+    ----------
+    u, v : CField or Float[Array, "*batch *grid"]
+        The velocity, at U and V, with its ghost ring filled.
+    grid : CartesianCGrid2D
+        The grid.
+    mask : Mask2D, optional
+        The wet cells, as in :func:`strain_rate_squared`.
+
+    Returns
+    -------
+    CField or Float[Array, "*batch *grid"]
+        At T, with a zero ghost ring.
+
+    Examples
+    --------
+    >>> import gridax, numpy as np
+    >>> grid = gridax.CartesianCGrid2D.from_interior(3, 3, 3.0, 3.0)
+    >>> v = np.broadcast_to(grid.coords("x", at="V"), grid.shape)
+    >>> gridax.okubo_weiss_parameter(0.0 * v, v, grid)[2].tolist()  # 1 - 1
+    [0.0, 0.0, 0.0, 0.0, 0.0]
+    """
+    return okubo_weiss_parameter._impl(grid, u, v, mask=mask)
+
+
+@grid_dispatch
+@located("X", u="U", v="V", h="T", f="T")
+def sw_potential_vorticity(
+    u: Float[Array, "..."],
+    v: Float[Array, "..."],
+    h: Float[Array, "..."],
+    f: Float[Array, "..."],
+    grid: Any,
+    *,
+    mask: Any = None,
+) -> Float[Array, "..."]:
+    """The shallow-water potential vorticity ``(ζ + f) / h``, at X.
+
+    ``ζ`` is :func:`curl`, and ``f`` and ``h`` are averaged to the corners.
+    Layers are leading axes.
+
+    Parameters
+    ----------
+    u, v : CField or Float[Array, "*batch *grid"]
+        The velocity, at U and V.
+    h : CField or Float[Array, "*batch *grid"]
+        The layer thickness, at T.
+    f : CField or Float[Array, "*batch *grid"]
+        The Coriolis parameter, at T; it broadcasts over leading axes.
+    grid : CartesianCGrid2D or SphericalCGrid2D
+        The grid.
+    mask : Mask2D, optional
+        The wet cells. The result is zero on the corners without four of them.
+
+    Returns
+    -------
+    CField or Float[Array, "*batch *grid"]
+        At X, with a zero ghost ring. NaN on a (wet) corner of zero thickness.
+
+    Examples
+    --------
+    >>> import gridax, numpy as np
+    >>> grid = gridax.CartesianCGrid2D.from_interior(3, 3, 3.0, 3.0)
+    >>> one = np.ones(grid.shape)
+    >>> gridax.sw_potential_vorticity(one, one, 2 * one, 3 * one, grid)[2].tolist()
+    [0.0, 1.5, 1.5, 1.5, 0.0]
+    """
+    return sw_potential_vorticity._impl(grid, u, v, h, f, mask=mask)
+
+
+@grid_dispatch
+@located("T", psi="T")
+def qg_potential_vorticity(
+    psi: Float[Array, "..."],
+    grid: Any,
+    *,
+    f0: float | Float[Array, ""],
+    beta: float | Float[Array, ""] = 0.0,
+    y: Float[Array, "..."] | None = None,
+    y0: float | Float[Array, ""] = 0.0,
+    A: Float[Array, "nl nl"] | None = None,
+    mask: Any = None,
+) -> Float[Array, "..."]:
+    """The quasi-geostrophic potential vorticity, at T.
+
+    ``q = ∇²ψ / f₀ + β (y - y₀) / f₀``, and with the coupling matrix ``A`` of a
+    stack of layers also ``- f₀ ∑ₘ A[k, m] ψ[m]`` (:func:`stretching_term`).
+
+    Parameters
+    ----------
+    psi : CField or Float[Array, "*batch Ny Nx"]
+        The streamfunction, at T; ``[nl, Ny, Nx]`` with ``A``.
+    grid : CartesianCGrid2D
+        The grid.
+    f0, beta : float
+        The Coriolis parameter and its gradient.
+    y : Float[Array, "..."], optional
+        The meridional coordinate at T; that of the grid by default.
+    y0 : float
+        Where ``β`` is centred.
+    A : Float[Array, "nl nl"], optional
+        The coupling matrix of the layers, as ``build_coupling_matrix`` of
+        sesmax-core gives it (``f₀`` is applied here).
+    mask : Mask2D, optional
+        The wet cells. ``psi`` is read as zero on dry interior cells, and the
+        result is zero on dry cells.
+
+    Returns
+    -------
+    CField or Float[Array, "*batch Ny Nx"]
+        At T, with a zero ghost ring.
+
+    Examples
+    --------
+    >>> import gridax, numpy as np
+    >>> grid = gridax.CartesianCGrid2D.from_interior(3, 3, 3.0, 3.0)
+    >>> psi = np.broadcast_to(grid.coords("x") ** 2, grid.shape)
+    >>> gridax.qg_potential_vorticity(psi, grid, f0=0.5)[2].tolist()
+    [0.0, 4.0, 4.0, 4.0, 0.0]
+    """
+    return qg_potential_vorticity._impl(
+        grid, psi, f0=f0, beta=beta, y=y, y0=y0, A=A, mask=mask
+    )
+
+
+@grid_dispatch
+@located(("U", "V"), h="T", f="T")
+def geostrophic_velocity(
+    h: Float[Array, "..."],
+    grid: Any,
+    *,
+    f: Float[Array, "..."],
+    gravity: float = STANDARD.standard_gravity,
+    mask: Any = None,
+) -> tuple[Float[Array, "..."], Float[Array, "..."]]:
+    """The geostrophic velocity of a free surface on a sphere, at U and V.
+
+    ``u = -g / (f R) ∂h/∂φ`` and ``v = g / (f R cos φ) ∂h/∂λ``, each from the
+    four cells around the face.
+
+    Parameters
+    ----------
+    h : CField or Float[Array, "Ny Nx"]
+        The height of the surface, at T.
+    grid : SphericalCGrid2D
+        The grid.
+    f : CField or Float[Array, "Ny Nx"]
+        The Coriolis parameter, at T. It may not be zero on a wet face.
+    gravity : float
+        The acceleration of gravity.
+    mask : Mask2D, optional
+        The wet cells. Dry interior heights are read as zero, and the velocity
+        is zero on dry faces.
+
+    Returns
+    -------
+    tuple
+        ``(u, v)``, at U and V, with a zero ghost ring.
+
+    Examples
+    --------
+    >>> import gridax, numpy as np
+    >>> grid = gridax.SphericalCGrid2D.from_interior(4, 3, (0, 8), (40, 46), R=1.0)
+    >>> h = np.broadcast_to(grid.coords("y")[:, None], grid.shape)
+    >>> u, v = gridax.geostrophic_velocity(h, grid, f=1.0 + 0.0 * h, gravity=2.0)
+    >>> u[2].round(6).tolist()
+    [0.0, -2.0, -2.0, -2.0, -2.0, 0.0]
+    """
+    return geostrophic_velocity._impl(grid, h, f=f, gravity=gravity, mask=mask)
+
+
+@grid_dispatch
+@located("W", u="U", v="V")
+def vertical_velocity(
+    u: Float[Array, "..."], v: Float[Array, "..."], grid: Any, *, mask: Any = None
+) -> Float[Array, "..."]:
+    """The vertical velocity of a non-divergent flow, at W.
+
+    The horizontal divergence of the interior levels, integrated upwards from a
+    rigid floor (``w = 0``)::
+
+        w[k+1/2] = w[k-1/2] - (δₓu + δᵧv)[k] Δz,   k = 1 .. Nz-2
+
+    Parameters
+    ----------
+    u, v : CField or Float[Array, "*batch Nz Ny Nx"]
+        The velocity, at U and V.
+    grid : CartesianCGrid3D
+        The grid.
+    mask : Mask3D, optional
+        The wet cells. Dry velocities are not read, dry cells have no
+        divergence, and ``w`` is zero on dry faces.
+
+    Returns
+    -------
+    CField or Float[Array, "*batch Nz Ny Nx"]
+        ``w[k]`` on the top face of ``T[k]``, with a zero ghost ring (``w[0]``
+        is the floor).
+
+    Examples
+    --------
+    >>> import gridax, numpy as np
+    >>> grid = gridax.CartesianCGrid3D.from_interior(3, 3, 3, 3.0, 3.0, 3.0)
+    >>> u = np.broadcast_to(grid.coords("x", at="U"), grid.shape)
+    >>> gridax.vertical_velocity(u, 0.0 * u, grid)[:, 2, 2].tolist()
+    [0.0, -1.0, -2.0, -3.0, 0.0]
+    """
+    return vertical_velocity._impl(grid, u, v, mask=mask)
+
+
 def _velocities(mask: Any, u: Any, v: Any) -> tuple[Any, Any]:
     """``u`` and ``v``, zero on dry interior faces (no normal flow)."""
     if mask is None:
@@ -206,6 +512,159 @@ def _tensor_strain_cartesian(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
     return _where(None if mask is None else mask.wet(), out)
 
 
+@bernoulli_potential.register(CartesianCGrid2D)
+@bernoulli_potential.register(CartesianCGrid3D)
+@bernoulli_potential.register(SphericalCGrid2D)
+@bernoulli_potential.register(SphericalCGrid3D)
+def _bernoulli_staggered(
+    grid: Any, h: Any, u: Any, v: Any, *, gravity: float, mask: Any
+) -> Any:
+    xp = array_namespace(h, u, v)
+    wet = None if mask is None else mask.wet()
+    u, v = _velocities(mask, u, v)
+    h = _sanitize(wet, xp.asarray(h, dtype=xp.result_type(h, u, v, 0.0)))
+    # p[j, i] = K[j, i] + g h[j, i]
+    ke = _kinetic_energy_interior(_levels(grid, u), _levels(grid, v))
+    out = interior(ke + gravity * _levels(grid, h)[..., 1:-1, 1:-1], h)
+    return _where(wet, out)
+
+
+def _corners(grid: Any, u: Any, v: Any, sign: float, mask: Any) -> Any:
+    """``δₓv + sign δᵧu`` at X, on the south and west ghost corners too.
+
+    The shear strain (+1) or the vorticity (-1). Under a mask the dry interior
+    corners are zero; the ghost corners are the caller's, dry or not.
+    """
+    xp = array_namespace(u, v)
+    dv_dx = (v[..., :-1, 1:] - v[..., :-1, :-1]) / _spacing(grid, "x", v, at="X")
+    du_dy = (u[..., 1:, :-1] - u[..., :-1, :-1]) / _spacing(grid, "y", u, at="X")
+    x = dv_dx + sign * du_dy
+    # out[j, i] = x[j, i] for 0 <= j <= Ny-2, 0 <= i <= Nx-2
+    out = set_at(xp.zeros_like(u, dtype=x.dtype), (..., slice(-1), slice(-1)), x)
+    return _sanitize(None if mask is None else mask.wet(at="X", kind="strict"), out)
+
+
+def _at_t(grid: Any, u: Any, v: Any, sign: float, mask: Any) -> Any:
+    return interpolate(
+        _corners(grid, u, v, sign, mask), grid, src="X", dst="T", mask=mask
+    )
+
+
+@strain_rate_squared.register(CartesianCGrid2D)
+def _strain_rate_squared(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
+    u, v = _velocities(mask, u, v)
+    sn = tensor_strain(u, v, grid)
+    out = strain_magnitude_squared(sn, _at_t(grid, u, v, 1.0, mask))
+    return _where(None if mask is None else mask.wet(), out)
+
+
+@okubo_weiss_parameter.register(CartesianCGrid2D)
+def _okubo_weiss_parameter(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
+    u, v = _velocities(mask, u, v)
+    sn = tensor_strain(u, v, grid)
+    shear, omega = (_at_t(grid, u, v, sign, mask) for sign in (1.0, -1.0))
+    out = okubo_weiss(sn, shear, omega)
+    return _where(None if mask is None else mask.wet(), out)
+
+
+@sw_potential_vorticity.register(CartesianCGrid2D)
+@sw_potential_vorticity.register(SphericalCGrid2D)
+def _sw_potential_vorticity(
+    grid: Any, u: Any, v: Any, h: Any, f: Any, *, mask: Any
+) -> Any:
+    xp = array_namespace(u, v, h, f)
+    inner = (..., slice(1, -1), slice(1, -1))
+    zeta = curl(u, v, grid, mask=mask)
+    f_on_x = interpolate(f, grid, src="T", dst="X", mask=mask)
+    h_on_x = interpolate(h, grid, src="T", dst="X", mask=mask)
+    # q = (ζ + f) / h
+    num = zeta[inner] + f_on_x[inner]
+    den = h_on_x[inner]
+    if mask is not None:
+        # h is 0 on dry corners: divide by 1 there, so that reverse mode has no
+        # 0 * inf, and zero the result below; a wet corner keeps its NaN
+        den = xp.where(mask.wet(at="X", kind="strict")[inner], den, 1.0)
+    out = interior(xp.where(den == 0, xp.nan, num / den), zeta)
+    if mask is None:
+        return out
+    return xp.where(mask.wet(at="X", kind="strict"), out, 0.0)
+
+
+@qg_potential_vorticity.register(CartesianCGrid2D)
+def _qg_potential_vorticity(
+    grid: Any, psi: Any, *, f0: Any, beta: Any, y: Any, y0: Any, A: Any, mask: Any
+) -> Any:
+    wet = None if mask is None else mask.wet()
+    # a masked elliptic solve returns zero on land; the ring is the caller's
+    psi = _sanitize(wet, psi)
+    dx, dy = _spacing(grid, "x", psi), _spacing(grid, "y", psi)
+    if y is None:
+        y = _metric_like(grid.coords("y"), psi)[:, None]
+        y_inner = y[1:-1]
+    else:
+        y_inner = y[..., 1:-1, 1:-1]
+    # q = ∇²ψ / f₀ + β (y - y₀) / f₀
+    out = interior(
+        _laplacian_interior(psi, dx, dy) / f0 + beta * (y_inner - y0) / f0, psi
+    )
+    if A is not None:
+        out = out - f0 * stretching_term(A, psi)
+    return _where(wet, out)
+
+
+def _laplacian_interior(f: Any, dx: Any, dy: Any) -> Any:
+    """∇²f on the interior of the last two axes."""
+    nb = _neighbours(f)
+    d2x = ((nb.e - nb.c) - (nb.c - nb.w)) / dx**2
+    d2y = ((nb.n - nb.c) - (nb.c - nb.s)) / dy**2
+    return d2x + d2y
+
+
+@geostrophic_velocity.register(SphericalCGrid2D)
+def _geostrophic_velocity(
+    grid: Any, h: Any, *, f: Any, gravity: float, mask: Any
+) -> tuple[Any, Any]:
+    xp = array_namespace(h, f)
+    if mask is not None:
+        h, f = _sanitize(mask.wet(), h), _sanitize(mask.wet(), f)
+    R, dlon, dlat = (_metric_like(m, h) for m in (grid.R, grid.dlon, grid.dlat))
+    c = slice(1, -1)
+    f_on_u = 0.5 * (f[..., c, 1:-1] + f[..., c, 2:])
+    f_on_v = 0.5 * (f[..., 1:-1, c] + f[..., 2:, c])
+    if mask is not None:
+        # a dry face does not divide by zero, forwards or backwards
+        f_on_u = xp.where(mask.wet(at="U")[c, c], f_on_u, 1.0)
+        f_on_v = xp.where(mask.wet(at="V")[c, c], f_on_v, 1.0)
+    # u[j, i+1/2] = -g / (f R) (h[j+1,i] + h[j+1,i+1] - h[j-1,i] - h[j-1,i+1]) / (4 dφ)
+    dlat_h = h[..., 2:, c] + h[..., 2:, 2:] - h[..., :-2, c] - h[..., :-2, 2:]
+    u = interior(-gravity / (f_on_u * R) * (dlat_h / (4.0 * dlat)), h)
+    # v[j+1/2, i] = g / (f R cos φ) (h[j,i+1] + h[j+1,i+1] - h[j,i-1] - h[j+1,i-1]) / (4 dλ)
+    dlon_h = h[..., c, 2:] + h[..., 2:, 2:] - h[..., c, :-2] - h[..., 2:, :-2]
+    cos = _metric_like(grid._cos_lat("V"), h)[c, c]
+    v = interior(_safe_div_cos(gravity * (dlon_h / (4.0 * dlon)), cos, f_on_v * R), h)
+    if mask is None:
+        return u, v
+    return xp.where(mask.wet(at="U"), u, 0.0), xp.where(mask.wet(at="V"), v, 0.0)
+
+
+@vertical_velocity.register(CartesianCGrid3D)
+def _vertical_velocity(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
+    xp = array_namespace(u, v)
+    inner = (..., slice(1, -1), slice(1, -1), slice(1, -1))
+    if mask is not None:
+        # zero dry faces before the stencil reads them (NaN-filled land)
+        u = xp.where(mask.wet(at="U"), u, 0.0)
+        v = xp.where(mask.wet(at="V"), v, 0.0)
+    dx, dy, dz = (_spacing(grid, axis, u) for axis in "xyz")
+    # div[k, j, i] on the interior levels, k = 1 .. Nz-2
+    div = diff_x_bwd_3d(u) / dx + diff_y_bwd_3d(v) / dy
+    if mask is not None:
+        div = xp.where(mask.wet()[inner], div, 0.0)
+    # w[k+1/2] = -sum_{k'=1..k} div[k'] dz; w[0] = 0 is the floor
+    w = interior(-xp.cumsum(div, axis=-3) * dz, u)
+    return w if mask is None else xp.where(mask.wet(at="W"), w, 0.0)
+
+
 def _kinetic_energy(
     u: Float[Array, "*batch Ny Nx"], v: Float[Array, "*batch Ny Nx"]
 ) -> Float[Array, "*batch Ny Nx"]:
@@ -223,41 +682,6 @@ def _kinetic_energy_interior(u: Any, v: Any) -> Any:
     dtype = xp.result_type(u, v, 0.0)
     u, v = xp.asarray(u, dtype=dtype), xp.asarray(v, dtype=dtype)
     return 0.5 * (avg_x_bwd_2d(u**2) + avg_y_bwd_2d(v**2))
-
-
-def bernoulli_potential(
-    h: Float[Array, "*batch Ny Nx"],
-    u: Float[Array, "*batch Ny Nx"],
-    v: Float[Array, "*batch Ny Nx"],
-    gravity: float = STANDARD.standard_gravity,
-) -> Float[Array, "*batch Ny Nx"]:
-    """Bernoulli potential at T-points on an Arakawa C-grid.
-
-    Eq:
-        p[j, i] = ke[j, i] + g * h[j, i]
-
-    where ke is the kinetic energy at T-points.
-
-    Args:
-        h (Array): layer thickness at T-points, shape [Ny, Nx].
-        u (Array): x-velocity at U-points (east faces), shape [Ny, Nx].
-        v (Array): y-velocity at V-points (north faces), shape [Ny, Nx].
-        gravity (float): gravitational acceleration. Default = 9.81.
-
-    Returns:
-        p (Array): Bernoulli potential at T-points, shape [Ny, Nx].
-            Ghost ring is zero; interior is [1:-1, 1:-1].
-
-    Example:
-        >>> u, v, h = ...
-        >>> p = bernoulli_potential(h=h, u=u, v=v)
-    """
-    xp = array_namespace(h, u, v)
-    dtype = xp.result_type(h, u, v, 0.0)
-    h_float = xp.asarray(h, dtype=dtype)
-    ke = _kinetic_energy(u, v)
-    out = interior(ke[..., 1:-1, 1:-1] + gravity * h_float[..., 1:-1, 1:-1], h_float)
-    return out
 
 
 # ======================================================================
@@ -443,70 +867,8 @@ def available_potential_energy(
 
 
 # ======================================================================
-# QG potential vorticity  (Issue #73)
+# QG stretching  (Issue #73)
 # ======================================================================
-
-
-def qg_potential_vorticity(
-    psi: Float[Array, "*batch Ny Nx"],
-    f0: float | Float[Array, ""],
-    beta: float | Float[Array, ""],
-    dx: float | Float[Array, ""],
-    dy: float | Float[Array, ""],
-    y: Float[Array, "*batch Ny Nx"],
-    y0: float | Float[Array, ""],
-) -> Float[Array, "*batch Ny Nx"]:
-    """QG potential vorticity at T-points (single layer).
-
-    q = nabla^2(psi) / f0 + beta * (y - y0) / f0
-
-    This computes the per-layer (barotropic) QG PV for a single ``[Ny, Nx]``
-    streamfunction.  For multi-layer QG, lift this function with
-    ``jax.vmap`` and subtract the cross-layer stretching
-    term separately::
-
-        import jax
-        from gridax import qg_potential_vorticity
-
-        # Per-layer PV (vmapped over the layer axis)
-        q = jax.vmap(lambda p: qg_potential_vorticity(p, f0, beta, dx, dy, y, y0))(
-            psi
-        )  # psi: [nl, Ny, Nx] -> q: [nl, Ny, Nx]
-
-        # Cross-layer stretching (A couples layers, cannot be vmapped);
-        # A is the raw build_coupling_matrix output, so scale by f0
-        q = q - f0 * stretching_term(A, psi)
-
-    Parameters
-    ----------
-    psi : Float[Array, "*batch Ny Nx"]
-        Streamfunction at T-points.
-    f0 : float
-        Reference Coriolis parameter.
-    beta : float
-        Meridional gradient of the Coriolis parameter.
-    dx : float
-        Grid spacing in x.
-    dy : float
-        Grid spacing in y.
-    y : Float[Array, "*batch Ny Nx"]
-        Meridional coordinate at T-points.
-    y0 : float
-        Reference latitude.
-
-    Returns
-    -------
-    Float[Array, "*batch Ny Nx"]
-        QG potential vorticity at T-points.
-        Ghost ring is zero; interior is ``[1:-1, 1:-1]``.
-    """
-    # q[j,i] = (d2psi/dx2 + d2psi/dy2) / f0 + beta * (y - y0) / f0, with the
-    # Laplacian of Difference2D.laplacian
-    q_int = (
-        _laplacian_2d_interior(psi, dx, dy) / f0 + beta * (y[..., 1:-1, 1:-1] - y0) / f0
-    )
-    out = interior(q_int, psi)
-    return out
 
 
 def stretching_term(
@@ -548,111 +910,6 @@ def stretching_term(
         out, (..., slice(None), slice(1, -1), slice(1, -1)), Ap[..., :, 1:-1, 1:-1]
     )
     return out
-
-
-# ======================================================================
-# Domain-integrated diagnostics  (Issue #73)
-# ======================================================================
-
-
-# ======================================================================
-# Vertical velocity diagnostic  (Issue #82)
-# ======================================================================
-
-
-def vertical_velocity(
-    u: Float[Array, "Nz Ny Nx"],
-    v: Float[Array, "Nz Ny Nx"],
-    dx: float | Float[Array, ""],
-    dy: float | Float[Array, ""],
-    dz: float,
-    mask: Mask3D | Float[Array, "Nz Ny Nx"] | None = None,
-) -> Float[Array, "Nz Ny Nx"]:
-    """Vertical velocity from the continuity equation.
-
-    Integrates the horizontal divergence of the physical levels upward from
-    a rigid floor (``w = 0``):
-
-        w[k+1/2] = w[k-1/2] - (du/dx + dv/dy)[k] * dz,   k = 1 .. Nz-2
-
-    The result uses the same ``[Nz, Ny, Nx]`` convention as ``Mask3D.wet(at="W")``:
-    ``w[k]`` is the **top face** of ``T[k]`` (``k + 1/2``).  So ``w[0]`` is
-    the floor (the bottom face of the first physical level ``T[1]``, zero),
-    ``w[1:-1]`` are the interfaces above the physical levels, ``w[Nz-2]`` is
-    the surface (zero for a rigid lid when the column conserves mass) and
-    ``w[Nz-1]`` is outside the domain (zero).  The z-ghost slabs ``k = 0``
-    and ``k = Nz-1`` of ``u`` and ``v`` are never read, so BC-filled
-    z-ghosts do not change the answer.
-
-    Parameters
-    ----------
-    u : Float[Array, "Nz Ny Nx"]
-        x-velocity at U-points, with ghost cells in all three dimensions.
-    v : Float[Array, "Nz Ny Nx"]
-        y-velocity at V-points, with ghost cells in all three dimensions.
-    dx : float
-        Grid spacing in x.
-    dy : float
-        Grid spacing in y.
-    dz : float
-        Grid spacing in z.
-    mask : Mask3D or Float[Array, "Nz Ny Nx"] or None, optional
-        A :class:`Mask3D`: ``u`` / ``v`` are zeroed on dry faces with
-        ``jnp.where`` before the stencil (so NaN-filled land cannot leak),
-        the divergence on dry T-points (``mask.wet()``) before the integration,
-        and the output on dry W-faces (``mask.wet(at="W")``).  ``mask.wet(at="W")[Nz-2]`` (the
-        surface) is dry wherever the top ghost slab is dry, so a non-zero
-        rigid-lid residual there is masked out too.  A raw float T-point
-        mask (deprecated) only zeroes the divergence.
-
-    Returns
-    -------
-    Float[Array, "Nz Ny Nx"]
-        Vertical velocity at W-points, ``w[k]`` on the top face of ``T[k]``,
-        written on ``[1:-1, 1:-1, 1:-1]`` with a zero ghost ring (``w[0]``
-        is the zero floor).
-
-    Examples
-    --------
-    >>> grid = CartesianCGrid3D.from_interior(6, 4, 3, Lx=1.0, Ly=1.0, Lz=1.0)
-    >>> u = jnp.broadcast_to(jnp.asarray(grid.coords("x")), (grid.Nz, grid.Ny, grid.Nx))
-    >>> w = vertical_velocity(
-    ...     u,
-    ...     jnp.zeros_like(u),
-    ...     grid.spacing("x"),
-    ...     grid.spacing("y"),
-    ...     grid.spacing("z"),
-    ... )
-    >>> w.shape, float(w[0, 2, 2]), float(w[1, 2, 2])  # du/dx = 1
-    ((5, 6, 8), 0.0, -0.333...)
-    """
-    xp = array_namespace(u, v, mask)
-    if isinstance(mask, Mask3D):
-        # zero dry faces before the stencil reads them (NaN-filled land)
-        u = xp.where(mask.wet(at="U"), u, 0.0)
-        v = xp.where(mask.wet(at="V"), v, 0.0)
-    # Horizontal divergence at the interior T-points of the physical levels
-    # div[k, j, i] = (u[k, j, i+1/2] - u[k, j, i-1/2]) / dx
-    #              + (v[k, j+1/2, i] - v[k, j-1/2, i]) / dy,   k = 1 .. Nz-2
-    div_h = diff_x_bwd_3d(u) / dx + diff_y_bwd_3d(v) / dy  # [Nz-2, Ny-2, Nx-2]
-
-    if isinstance(mask, Mask3D):
-        div_h = xp.where(mask.wet()[..., 1:-1, 1:-1, 1:-1], div_h, 0.0)
-    elif mask is not None:
-        warnings.warn(
-            "vertical_velocity(mask=<float array>) is deprecated; pass a "
-            "Mask3D (its h zeroes the divergence and its w the output).",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        div_h = div_h * mask[..., 1:-1, 1:-1, 1:-1]
-
-    # w[k+1/2] = -sum_{k'=1..k} div[k'] * dz  ->  w[k] for k = 1 .. Nz-2
-    w_int = -xp.cumsum(div_h, axis=0) * dz  # [Nz-2, Ny-2, Nx-2]
-    w = interior(w_int, u)  # [Nz, Ny, Nx]; w[0] = 0 is the floor
-    if isinstance(mask, Mask3D):
-        w = xp.where(mask.wet(at="W"), w, 0.0)
-    return w
 
 
 # ======================================================================
@@ -710,166 +967,3 @@ def ssh_to_streamfn(
         Streamfunction, same shape as *ssh*.
     """
     return (g / f0) * ssh
-
-
-# ======================================================================
-# Multilayer QG potential vorticity  (Issue #153)
-# ======================================================================
-
-
-def potential_vorticity_multilayer(
-    psi: Float[Array, "nl Ny Nx"],
-    A: Float[Array, "nl nl"],
-    f0: float,
-    beta: float,
-    dx: float | Float[Array, ""],
-    dy: float | Float[Array, ""],
-    y: Float[Array, "Ny Nx"],
-    y0: float | Float[Array, ""],
-) -> Float[Array, "nl Ny Nx"]:
-    """Multi-layer QG potential vorticity.
-
-    q_k = nabla^2(psi_k) / f0 + beta*(y - y0)/f0 - f0 * (A . psi)_k
-
-    This is the MQGeometry form ``nabla^2(psi) - f0^2 A psi + beta (y - y0)``
-    divided by ``f0``.  ``A`` is the raw output of
-    :func:`~sesmax_core.vertical.build_coupling_matrix` (``1 / (H g')``, units
-    s^2/m^2): ``f0 * A . psi`` is dimensionless like the other two terms,
-    so callers must **not** pre-multiply ``A`` by ``f0``.
-
-    Vmaps :func:`qg_potential_vorticity` over the layer axis and
-    subtracts ``f0 *`` :func:`stretching_term` in a single call.
-
-    Parameters
-    ----------
-    psi : Float[Array, "nl Ny Nx"]
-        Streamfunction at T-points for all layers.
-    A : Float[Array, "nl nl"]
-        Layer coupling (stretching) matrix, the raw output of
-        :func:`~sesmax_core.vertical.build_coupling_matrix` (s^2/m^2); the factor
-        ``f0`` is applied here.
-    f0 : float
-        Reference Coriolis parameter.
-    beta : float
-        Meridional gradient of the Coriolis parameter.
-    dx : float
-        Grid spacing in x.
-    dy : float
-        Grid spacing in y.
-    y : Float[Array, "Ny Nx"]
-        Meridional coordinate at T-points.
-    y0 : float
-        Reference meridional coordinate (m).
-
-    Returns
-    -------
-    Float[Array, "nl Ny Nx"]
-        QG potential vorticity for all layers.
-        Ghost ring is zero; interior is ``[:, 1:-1, 1:-1]``.
-    """
-    qg_pv_layer = vmap(lambda p: qg_potential_vorticity(p, f0, beta, dx, dy, y, y0))
-    # q_k = lap(psi_k)/f0 + beta (y - y0)/f0 - f0 (A psi)_k   [nl, Ny, Nx]
-    return qg_pv_layer(psi) - f0 * stretching_term(A, psi)
-
-
-# ======================================================================
-# Shallow-water potential vorticity from prognostic variables  (Issue #153)
-# ======================================================================
-
-
-def _interp_T_to_X(field: Float[Array, "*batch Ny Nx"]) -> Float[Array, "*batch Ny Nx"]:
-    """Interpolate a T-point field to X-points (corners) via 4-point average.
-
-    X[j+1/2, i+1/2] = 0.25 * (T[j,i] + T[j,i+1] + T[j+1,i] + T[j+1,i+1])
-
-    Uses the same NE-corner stencil as :meth:`Interpolation2D.T_to_X`.
-    """
-    return interior(avg_xfwd_yfwd_2d(field), field)
-
-
-def sw_potential_vorticity(
-    u: Float[Array, "*batch Ny Nx"],
-    v: Float[Array, "*batch Ny Nx"],
-    h: Float[Array, "*batch Ny Nx"],
-    f: Float[Array, "*batch Ny Nx"],
-    dx: float | Float[Array, ""],
-    dy: float | Float[Array, ""],
-) -> Float[Array, "*batch Ny Nx"]:
-    """Shallow-water potential vorticity at X-points on an Arakawa C-grid.
-
-    q[j+1/2, i+1/2] = (omega[j+1/2, i+1/2] + f_X[j+1/2, i+1/2])
-                       / h_X[j+1/2, i+1/2]
-
-    Computes relative vorticity from ``(u, v)`` at X-points, interpolates
-    ``f`` and ``h`` from T-points to X-points, then forms the PV ratio.
-
-    Parameters
-    ----------
-    u : Float[Array, "*batch Ny Nx"]
-        x-velocity at U-points.
-    v : Float[Array, "*batch Ny Nx"]
-        y-velocity at V-points.
-    h : Float[Array, "*batch Ny Nx"]
-        Layer thickness at T-points.
-    f : Float[Array, "*batch Ny Nx"]
-        Coriolis parameter at T-points.
-    dx : float
-        Grid spacing in x.
-    dy : float
-        Grid spacing in y.
-
-    Returns
-    -------
-    Float[Array, "*batch Ny Nx"]
-        Potential vorticity at X-points.  Ghost ring is zero.
-        Where ``h_X == 0`` the result is NaN.
-    """
-    xp = array_namespace(u, v, h, f)
-    omega = _curl_2d(u, v, dx, dy)
-    f_X = _interp_T_to_X(f)
-    h_X = _interp_T_to_X(h)
-    # Use 0 in ghost ring (where h_X == 0) rather than NaN, matching
-    # the ghost-ring-is-zero convention used by all other operators.
-    return xp.where(h_X == 0, 0.0, (omega + f_X) / h_X)
-
-
-def sw_potential_vorticity_multilayer(
-    u: Float[Array, "nl Ny Nx"],
-    v: Float[Array, "nl Ny Nx"],
-    h: Float[Array, "nl Ny Nx"],
-    f: Float[Array, "Ny Nx"],
-    dx: float | Float[Array, ""],
-    dy: float | Float[Array, ""],
-) -> Float[Array, "nl Ny Nx"]:
-    """Multi-layer shallow-water potential vorticity at X-points.
-
-    q_k = (omega_k + f) / h_k
-
-    Vmaps :func:`sw_potential_vorticity` over the leading layer axis.
-    Layer coupling in SWM occurs through pressure (interface heights),
-    not through PV, so no coupling matrix is needed.
-
-    Parameters
-    ----------
-    u : Float[Array, "nl Ny Nx"]
-        x-velocity at U-points for all layers.
-    v : Float[Array, "nl Ny Nx"]
-        y-velocity at V-points for all layers.
-    h : Float[Array, "nl Ny Nx"]
-        Layer thickness at T-points for all layers.
-    f : Float[Array, "Ny Nx"]
-        Coriolis parameter at T-points (shared across layers).
-    dx : float
-        Grid spacing in x.
-    dy : float
-        Grid spacing in y.
-
-    Returns
-    -------
-    Float[Array, "nl Ny Nx"]
-        Potential vorticity at X-points for all layers.
-        Ghost ring is zero.
-    """
-    return vmap(lambda u_k, v_k, h_k: sw_potential_vorticity(u_k, v_k, h_k, f, dx, dy))(
-        u, v, h
-    )

@@ -21,9 +21,8 @@ or any other backend, in one derivative stack of four layers (``docs/stencils.md
   and the mask a keyword: ``difference``, ``divergence``, ``advect``,
   ``diffuse``, ``coriolis``, ``kinetic_energy``, …; on bare collocated arrays
   :mod:`gridax.analysis`.
-- Layer 3, bindings that hold a grid and a mask: :class:`gridax.GridOps`,
-  with every canonical function as a method, and ``Difference2D``,
-  ``Advection2D``, ``Diffusion2D``, ….
+- Layer 3, the binding that holds a grid and a mask: :class:`gridax.GridOps`,
+  with every canonical function of its grid as a method.
 
 A located field is a :class:`gridax.CField`, an array with named dims and the
 point it sits on; :func:`gridax.combine` and :mod:`gridax.fields` do
@@ -35,16 +34,7 @@ imports neither.
 """
 
 from gridax._src.advection.advect import advect
-from gridax._src.advection.advection import (
-    Advection1D,
-    Advection2D,
-    Advection3D,
-)
-from gridax._src.advection.face_flux import (
-    rusanov_flux,
-    uv_center_flux,
-    uv_node_flux,
-)
+from gridax._src.advection.face_flux import rusanov_flux
 from gridax._src.advection.flux import (
     upwind_flux,
 )
@@ -55,15 +45,6 @@ from gridax._src.advection.limiters import (
     van_leer,
 )
 from gridax._src.advection.reconstruct import reconstruct
-from gridax._src.advection.reconstruction import (
-    Reconstruction1D,
-    Reconstruction2D,
-    Reconstruction3D,
-)
-from gridax._src.advection.spherical_advection import (
-    SphericalAdvection2D,
-    SphericalAdvection3D,
-)
 from gridax._src.boundary.atoms import (
     Dirichlet,
     Extrapolation,
@@ -78,27 +59,7 @@ from gridax._src.boundary.atoms import (
 )
 from gridax._src.boundary.fill import BC, fill_ghosts
 from gridax._src.boundary.regions import apply_mask, embed, interior, select
-from gridax._src.diffusion.diffuse import biharmonic, diffuse
-from gridax._src.diffusion.diffusion import (
-    BiharmonicDiffusion2D,
-    BiharmonicDiffusion3D,
-    Diffusion2D,
-    Diffusion3D,
-)
-from gridax._src.diffusion.momentum import (
-    MomentumAdvection2D,
-    MomentumAdvection3D,
-)
-from gridax._src.diffusion.spherical_diffusion import (
-    SphericalBiharmonicDiffusion2D,
-    SphericalBiharmonicDiffusion3D,
-    SphericalDiffusion2D,
-    SphericalDiffusion3D,
-)
-from gridax._src.diffusion.spherical_momentum import (
-    SphericalMomentumAdvection2D,
-    SphericalMomentumAdvection3D,
-)
+from gridax._src.diffusion.diffuse import biharmonic, diffuse, diffusive_fluxes
 from gridax._src.fields._hook import register_when_pipekit_loads as _register
 from gridax._src.fields.cfield import CField, StaggerMismatchError
 from gridax._src.fields.combine import combine
@@ -155,52 +116,31 @@ from gridax._src.operators.conversions import (
     collocate,
     stagger,
 )
-from gridax._src.operators.coriolis import (
-    Coriolis2D,
-    Coriolis3D,
-    coriolis,
-)
-from gridax._src.operators.diagnostic_operators import (
-    Energetics2D,
-    QGPotentialVorticity2D,
-    Strain2D,
-)
+from gridax._src.operators.coriolis import coriolis
 from gridax._src.operators.diagnostics import (
     available_potential_energy,
     bernoulli_potential,
     enstrophy,
+    geostrophic_velocity,
     kinetic_energy,
     okubo_weiss,
+    okubo_weiss_parameter,
     potential_enstrophy,
     potential_vorticity,
-    potential_vorticity_multilayer,
     qg_potential_vorticity,
     shear_strain,
     ssh_to_streamfn,
     strain_magnitude_squared,
+    strain_rate_squared,
     streamfn_to_ssh,
     stretching_term,
     sw_potential_vorticity,
-    sw_potential_vorticity_multilayer,
     tensor_strain,
     vertical_velocity,
 )
-from gridax._src.operators.difference import (
-    Difference1D,
-    Difference2D,
-    Difference3D,
-)
 from gridax._src.operators.differentiable import smooth_abs, smooth_clamp, smooth_max
-from gridax._src.operators.divergence import Divergence2D
-from gridax._src.operators.interpolation import (
-    Interpolation1D,
-    Interpolation2D,
-    Interpolation3D,
-)
-from gridax._src.operators.jacobian import (
-    ArakawaJacobian2D,
-    arakawa_jacobian,
-)
+from gridax._src.operators.jacobian import arakawa_jacobian
+from gridax._src.operators.momentum import advect_momentum, pv_flux
 from gridax._src.operators.moves import difference, interpolate
 from gridax._src.operators.reductions import (
     area_mean,
@@ -212,18 +152,6 @@ from gridax._src.operators.reductions import (
     volume_mean,
     volume_sum,
     volume_weights,
-)
-from gridax._src.operators.spherical_compound import (
-    SphericalDivergence2D,
-    SphericalDivergence3D,
-    SphericalLaplacian2D,
-    SphericalLaplacian3D,
-    SphericalVorticity2D,
-    SphericalVorticity3D,
-)
-from gridax._src.operators.spherical_difference import (
-    SphericalDifference2D,
-    SphericalDifference3D,
 )
 from gridax._src.operators.stencils import (
     avg_x_bwd_1d,
@@ -259,18 +187,12 @@ from gridax._src.operators.stencils import (
     diff_z_bwd_3d,
     diff_z_fwd_3d,
 )
-from gridax._src.operators.vorticity import (
-    Vorticity2D,
-    Vorticity3D,
-    pv_flux_arakawa_lamb,
-    pv_flux_blend,
-    vorticity_flux_upwind,
-)
 
 __version__ = "0.2.0"  # x-release-please-version
 
 # CField is a pipekit carrier from the moment pipekit is imported, by anyone.
 _register()
+from gridax._src.operators.vorticity import vorticity_flux_upwind
 
 __all__ = [
     # Grids: topology, uniform metric, concrete coordinate systems
@@ -314,14 +236,24 @@ __all__ = [
     # Canonical transport and rotation
     "advect",
     "reconstruct",
+    "advect_momentum",
+    "pv_flux",
     "diffuse",
+    "diffusive_fluxes",
     "biharmonic",
     "coriolis",
     "arakawa_jacobian",
     # Canonical diagnostics
     "kinetic_energy",
+    "bernoulli_potential",
     "shear_strain",
     "tensor_strain",
+    "strain_rate_squared",
+    "okubo_weiss_parameter",
+    "sw_potential_vorticity",
+    "qg_potential_vorticity",
+    "geostrophic_velocity",
+    "vertical_velocity",
     # The canonical functions on one grid and mask
     "GridOps",
     # Located fields (element-wise functions in gridax.fields)
@@ -400,87 +332,34 @@ __all__ = [
     "volume_sum",
     "volume_weights",
     # C-grid difference operators
-    "Difference1D",
-    "Difference2D",
-    "Difference3D",
     # C-grid interpolation operators
-    "Interpolation1D",
-    "Interpolation2D",
-    "Interpolation3D",
     # Divergence
-    "Divergence2D",
     # Vorticity and PV fluxes
-    "Vorticity2D",
-    "Vorticity3D",
-    "pv_flux_arakawa_lamb",
-    "pv_flux_blend",
     "vorticity_flux_upwind",
     # Arakawa Jacobian
-    "ArakawaJacobian2D",
     # Coriolis
-    "Coriolis2D",
-    "Coriolis3D",
     # Diagnostic operators
-    "Energetics2D",
-    "QGPotentialVorticity2D",
-    "Strain2D",
     # Functional diagnostics
     "available_potential_energy",
-    "bernoulli_potential",
     "enstrophy",
     "okubo_weiss",
     "potential_enstrophy",
     "potential_vorticity",
-    "potential_vorticity_multilayer",
-    "qg_potential_vorticity",
     "ssh_to_streamfn",
     "strain_magnitude_squared",
     "streamfn_to_ssh",
     "stretching_term",
-    "sw_potential_vorticity",
-    "sw_potential_vorticity_multilayer",
-    "vertical_velocity",
     # Spherical differences
-    "SphericalDifference2D",
-    "SphericalDifference3D",
     # Spherical divergence, vorticity and Laplacian
-    "SphericalDivergence2D",
-    "SphericalDivergence3D",
-    "SphericalLaplacian2D",
-    "SphericalLaplacian3D",
-    "SphericalVorticity2D",
-    "SphericalVorticity3D",
     # Advection
-    "Advection1D",
-    "Advection2D",
-    "Advection3D",
     # Reconstruction operators
-    "Reconstruction1D",
-    "Reconstruction2D",
-    "Reconstruction3D",
     # Spherical advection
-    "SphericalAdvection2D",
-    "SphericalAdvection3D",
     # Face fluxes
     "rusanov_flux",
-    "uv_center_flux",
-    "uv_node_flux",
     # Diffusion
-    "BiharmonicDiffusion2D",
-    "BiharmonicDiffusion3D",
-    "Diffusion2D",
-    "Diffusion3D",
     # Momentum advection
-    "MomentumAdvection2D",
-    "MomentumAdvection3D",
     # Spherical diffusion
-    "SphericalBiharmonicDiffusion2D",
-    "SphericalBiharmonicDiffusion3D",
-    "SphericalDiffusion2D",
-    "SphericalDiffusion3D",
     # Spherical momentum advection
-    "SphericalMomentumAdvection2D",
-    "SphericalMomentumAdvection3D",
     # Boundary conditions
     "BC",
     "fill_ghosts",

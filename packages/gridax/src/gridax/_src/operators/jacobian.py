@@ -24,11 +24,10 @@ import numpy as np
 from gridax._src.api import grid_dispatch
 from gridax._src.fields.located import located
 from gridax._src.grid import CartesianCGrid2D
-from gridax._src.mask import Mask2D
 from gridax._src.operators._ghost import interior
 from gridax._src.operators._utils import _sanitize, _spacing
 from gridax._src.operators.stencils import _neighbours
-from gridax._src.pytree import array_namespace, pytree_dataclass
+from gridax._src.pytree import array_namespace
 
 if TYPE_CHECKING:
     from jaxtyping import Array
@@ -155,27 +154,3 @@ def _jacobian(f: Any, g: Any, dx: Any, dy: Any) -> Any:
     )
 
     return (Jpp + Jpx + Jxp) / (12.0 * dx * dy)
-
-
-@pytree_dataclass
-class ArakawaJacobian2D:
-    """The Arakawa Jacobian on a 2-D Cartesian C-grid.
-
-    `gridax.arakawa_jacobian` with a fixed grid and mask.
-
-    Parameters
-    ----------
-    grid : CartesianCGrid2D
-        The grid.
-    mask : Mask2D, optional
-        The wet cells.
-    """
-
-    grid: CartesianCGrid2D
-    mask: Mask2D | None = None
-
-    def __call__(
-        self, f: Float[Array, "*batch Ny Nx"], g: Float[Array, "*batch Ny Nx"]
-    ) -> Float[Array, "*batch Ny Nx"]:
-        """``J(f, g)`` at T (:func:`gridax.arakawa_jacobian`)."""
-        return arakawa_jacobian(f, g, self.grid, mask=self.mask)

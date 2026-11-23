@@ -15,6 +15,7 @@ from gridax._src.operators import (
     coriolis,
     diagnostics,
     jacobian,
+    momentum,
     moves,
     reductions,
 )
@@ -30,6 +31,7 @@ _DECLARED_IN = (
     coriolis,
     diagnostics,
     jacobian,
+    momentum,
     moves,
     reductions,
 )
