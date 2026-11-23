@@ -22,6 +22,10 @@ or any other backend, in one derivative stack of four layers (``docs/stencils.md
   ``Advection2D``, ``Diffusion2D``, … (the C-grid operators, advection,
   diffusion and boundary conditions live here, in gridax).
 
+A located field is a :class:`gridax.CField`, an array with named dims and the
+point it sits on; :func:`gridax.combine` and :mod:`gridax.fields` do
+element-wise maths on them.
+
 The solvers are :mod:`gridax.solvers` (the ``jax`` extra) and the pipekit
 operators :mod:`gridax.pipekit` (the ``pipekit`` extra); ``import gridax``
 imports neither.
@@ -134,6 +138,8 @@ from gridax._src.diffusion.spherical_momentum import (
     SphericalMomentumAdvection2D,
     SphericalMomentumAdvection3D,
 )
+from gridax._src.fields.cfield import CField, StaggerMismatchError
+from gridax._src.fields.combine import combine
 from gridax._src.grid import (
     ArakawaCGrid1D,
     ArakawaCGrid2D,
@@ -301,6 +307,10 @@ __all__ = [
     "CartesianCGrid3D",
     "SphericalCGrid2D",
     "SphericalCGrid3D",
+    # Located fields (element-wise functions in gridax.fields)
+    "CField",
+    "combine",
+    "StaggerMismatchError",
     "t_point_coordinates",
     # Masks
     "Mask1D",

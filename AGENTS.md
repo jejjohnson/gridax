@@ -21,6 +21,7 @@ The repository is a uv workspace with one package, `packages/gridax/` (`src/grid
 | Area | Path (under `gridax/_src/`) | Owns |
 |---|---|---|
 | Grids | `gridax/_src/grid/` | `ArakawaCGrid*` (topology) → `CurvilinearGrid*` (uniform metric) → `CartesianCGrid1D/2D/3D`, `SphericalCGrid2D/3D` (`base.py`, `cartesian.py`, `spherical.py`): frozen dataclasses built with NumPy, registered as JAX pytrees by `gridax/_src/pytree.py` when JAX is importable |
+| Located fields | `gridax/_src/fields/` (public: `gridax.CField`, `gridax.combine`, `gridax.fields`), `gridax/_src/grid/points.py` | `CField`: an array with named dims and a stagger per axis, its array the only pytree leaf; `combine` and the element-wise functions, which raise `StaggerMismatchError` on fields at different points; the point names and their staggers |
 | Masks | `gridax/_src/mask/` | `Mask1D/2D/3D` (`cartesian.py`), frozen NumPy dataclasses like the grids: staggered wet masks, coast classification, `StencilCapability*` (`base.py`), adaptive stencil hierarchies; numpy / scipy construction helpers (`utils.py`) |
 | Analysis kernels | `gridax/_src/analysis/` (public: `gridax.analysis`) | Finite differences on collocated grids (`difference`, `adaptive_difference`, 1-D / 2-D / 3-D gradient, divergence, curl, Laplacian) and axis remapping (`remap_axis`, `remap_axis_columns`), array-API code that runs on NumPy, JAX or any backend; the kernels behind geoops' and xrops' calculus and remap operators |
 | Layer 0: coefficients | `gridax/_src/stencils/coefficients.py` (public: `gridax.stencils`) | `difference_offsets` / `difference_coeffs`: offsets and exact coefficients from the Taylor conditions, for point values or cell averages (`data=`), collocated or staggered (`method="staggered"`, `bias=`); `weno_stencils`, `optimal_weights`, `smoothness_matrix` (the linear parts of WENO); `nonuniform_coeffs` |
@@ -109,6 +110,7 @@ whether it exists:
 | A flux-form advective tendency, upwind / WENO / TVD face values | `Advection1D/2D/3D(...)(h, u, v, method=...)`, `Reconstruction1D/2D/3D`, `gridax.advection.reconstruct(q, u, axis=, scheme=Upwind(k) \| Centred() \| WENO(k) \| TVD(limiter), mask=)`, `upwind_flux`, the `weno_*` / `linear_*` stencils, the limiters `minmod` / `van_leer` / `superbee` / `mc`, `rusanov_flux` |
 | Harmonic / biharmonic diffusion, momentum advection, Coriolis | `Diffusion2D/3D`, `BiharmonicDiffusion2D/3D`, `MomentumAdvection2D/3D`, `Coriolis2D/3D` (and `Spherical*`) |
 | Kinetic energy, PV, enstrophy, strain, Okubo–Weiss, an Arakawa Jacobian | `Energetics2D`, `Vorticity2D`, `Strain2D`, `QGPotentialVorticity2D`, `ArakawaJacobian2D`; functional `kinetic_energy`, `arakawa_jacobian`, `okubo_weiss`, … |
+| Element-wise maths on fields that know their point | `gridax.combine`, `gridax.fields` (`sqrt`, `where`, `clip`, …) on `gridax.CField`; `f.like(array)` for a full array |
 | Filling ghost cells | `BoundaryConditionSet` of `Dirichlet1D` / `Neumann1D` / `Periodic1D` / …; `enforce_periodic`, `zero_gradient_boundaries`, `no_slip_boundaries`, `wall_boundaries` |
 | Land / ocean masks, coastal stencil fallback | `Mask2D.from_mask` (or `from_center`, `from_u_face`, …), `mask.get_adaptive_masks`, `StencilCapability2D` |
 | Area / volume integrals and masked means | `area_sum`, `area_mean`, `volume_mean`, `masked_mean`, `masked_moments` (grid-polymorphic; `cartesian_*` / `spherical_*` explicit) |
@@ -571,6 +573,7 @@ Two tools build one site (`docs/README.md` has the details): mystmd builds the t
 |---|---|---|
 | Grid, staggering, ghost cells | `docs/cgrid_discretization.md` | `docs/api/grids.md` |
 | Masks | `docs/masks.md` | `docs/api/masks.md` |
+| Located fields | `docs/fields.md` | `docs/api/fields.md` |
 | Multilayer vs 3-D | `docs/multilayer_vs_3d.md` | |
 | Raw stencils, the derivative stack | `docs/stencils.md` | `docs/api/stencils.md` |
 | Difference / interpolation | `docs/difference.md`, `docs/interpolation.md` | `docs/api/difference.md`, `docs/api/interpolation.md` |

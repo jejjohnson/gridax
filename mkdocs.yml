@@ -67,6 +67,7 @@ nav:
   - Overview: index.md
   - Grids and masks:
       - Grids: grids.md
+      - Located fields: fields.md
       - Analysis kernels (gridax): analysis.md
       - Masks: masks.md
   - Stencils and operators:
