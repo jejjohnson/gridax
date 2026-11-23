@@ -113,8 +113,8 @@ def test_argument_errors() -> None:
         gridax.reconstruct(q, q, grid, axis="x", scheme="weno5")  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="axis"):
         gridax.reconstruct(q, q, grid, axis="z", scheme=WENO(5))
-    with pytest.raises(ValueError, match="WENO"):
-        WENO(7, "z")
+    with pytest.raises(ValueError, match="WENO-Z goes up to order 9"):
+        WENO(11, "z")
     with pytest.raises(ValueError, match="limiter"):
         TVD("koren")
     with pytest.raises(ValueError, match="order"):

@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from fractions import Fraction
+import functools
 from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
@@ -65,36 +66,63 @@ _LIMITERS: dict[str, Callable[[Any], Any]] = {
 }
 
 
+#: The highest order of WENO-Z: its global indicator is known up to there.
+_WENO_Z_MAX = 9
+
+
+@functools.lru_cache(maxsize=64)
+def _weno_tier(order: int, variant: Literal["js", "z"]) -> Tier:
+    """The tier of one order: a hand-written kernel, or a generated one."""
+    family = _WENO_JS if variant == "js" else _WENO_Z
+    if order in family:
+        return family[order]
+    half = order // 2
+    return Tier(
+        -half,
+        half,
+        weno.weno_kernel(order, "left", variant),
+        weno.weno_kernel(order, "right", variant),
+    )
+
+
 @dataclass(frozen=True, repr=False)
 class WENO(Scheme):
-    """WENO face values of cell averages, of ``order`` 3, 5, 7 or 9.
+    """WENO face values of cell averages, of any odd ``order`` from 3 on.
 
+    The sub-stencils, their smoothness and their linear weights come from
+    Layer 0; orders 3 to 9 (3 and 5 for ``"z"``) have hand-written kernels.
     Near a wall the face falls back through the narrower WENO stencils to
     first-order upwind, so it never reads a downwind cell.
 
     Parameters
     ----------
     order : int, default 5
-        The formal order on smooth data.
+        The formal order on smooth data: odd, at least 3.
     variant : {"js", "z"}, default "js"
-        Jiang–Shu, or WENO-Z (orders 3 and 5).
+        Jiang–Shu, or WENO-Z (orders 3 to 9).
 
     Examples
     --------
     >>> from gridax.schemes import WENO
     >>> WENO(5)
     WENO(order=5, variant='js') # (2, -13, 47, 27, -3)/60 on smooth data
+    >>> WENO(11).halo(staggered=True)
+    6
     """
 
-    order: Literal[3, 5, 7, 9] = 5
+    order: int = 5
     variant: Literal["js", "z"] = "js"
 
     def __post_init__(self) -> None:
-        family = _WENO_JS if self.variant == "js" else _WENO_Z
-        if self.variant not in ("js", "z") or self.order not in family:
+        if self.variant not in ("js", "z"):
+            raise ValueError(f"WENO variant must be 'js' or 'z'; got {self.variant!r}")
+        if self.order < 3 or self.order % 2 == 0:
             raise ValueError(
-                f"WENO supports orders {sorted(_WENO_JS)} (js) and {sorted(_WENO_Z)}"
-                f" (z); got order={self.order!r}, variant={self.variant!r}"
+                f"WENO order must be odd and at least 3; got {self.order!r}"
+            )
+        if self.variant == "z" and self.order > _WENO_Z_MAX:
+            raise ValueError(
+                f"WENO-Z goes up to order {_WENO_Z_MAX}; got {self.order!r}"
             )
 
     @property
@@ -106,11 +134,8 @@ class WENO(Scheme):
         return True
 
     def tiers(self) -> tuple[Tier, ...]:
-        family = _WENO_JS if self.variant == "js" else _WENO_Z
-        return (
-            *(family[k] for k in sorted(family, reverse=True) if k <= self.order),
-            UPWIND1,
-        )
+        orders = range(self.order, 1, -2)
+        return (*(_weno_tier(k, self.variant) for k in orders), UPWIND1)
 
     def _stencil(self) -> str:
         return f"{super()._stencil()} on smooth data"

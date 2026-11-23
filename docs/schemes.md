@@ -9,10 +9,10 @@ A scheme says which values an operation reads around its output, and with what w
 | `Centred(order, data)` | any even `order` (2) | symmetric | `difference`, `interpolate`, `reconstruct` |
 | `Biased(order, side, data)` | any `order` (2), `side` required | leans to `side` | `difference`, `interpolate`, `reconstruct` |
 | `Upwind(order)` | any odd `order` (1) | leans upwind | `reconstruct` |
-| `WENO(order, variant)` | `order` 3, 5, 7, 9 (5) | nonlinear, upwind | `reconstruct` |
+| `WENO(order, variant)` | any odd `order` ≥ 3 (5); `variant` `"js"`, or `"z"` up to order 9 | nonlinear, upwind | `reconstruct` |
 | `TVD(limiter)` | `limiter` (`"minmod"`) | nonlinear, upwind | `reconstruct` |
 
-**The order** is the formal order of accuracy everywhere. A centred stencil has an even order by symmetry. An upwind stencil of order $2k - 1$ is the centred stencil of order $2k - 2$ with one more upwind cell; its leading error is an even derivative, so it is dissipative. WENO of order $2r - 1$ blends $r$ sub-stencils of $r$ cells. `Upwind(2)` is fully one-sided and dispersive, and is kept for compatibility.
+**The order** is the formal order of accuracy everywhere. A centred stencil has an even order by symmetry. An upwind stencil of order $2k - 1$ is the centred stencil of order $2k - 2$ with one more upwind cell; its leading error is an even derivative, so it is dissipative. WENO of order $2r - 1$ blends $r$ sub-stencils of $r$ cells; its linear weights, its sub-stencils and their smoothness come from Layer 0 for any $r$, and the orders up to 9 have hand-written kernels. Jiang–Shu weights lose some of the order at a crest, where the first derivative vanishes: on a sine, `WENO(7)` converges at order 6 in the mean, `WENO(11)` at 10.2 to 10.4, and WENO-Z keeps 7 at order 7. `Upwind` has no such loss. `Upwind(2)` is fully one-sided and dispersive, and is kept for compatibility.
 
 **The data.** `data="point"` says the values are point values, as C-grid velocities are, and `data="cell"` that they are cell averages, as a finite-volume tracer carries. The two give different weights from the third value on. `None` leaves it to the operation: `reconstruct` reads cell averages, `difference` and `interpolate` point values. `Upwind`, `WENO` and `TVD` always read cell averages.
 
