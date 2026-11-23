@@ -22,23 +22,7 @@ import numpy as np
 
 from gridax._src.grid import CurvilinearGrid1D, CurvilinearGrid2D, CurvilinearGrid3D
 from gridax._src.mask import Mask1D, Mask2D, Mask3D
-from gridax._src.operators._ghost import interior
-from gridax._src.operators.stencils import (
-    avg_x_bwd_1d,
-    avg_x_bwd_2d,
-    avg_x_bwd_3d,
-    avg_x_fwd_1d,
-    avg_x_fwd_2d,
-    avg_x_fwd_3d,
-    avg_xbwd_ybwd_2d,
-    avg_xbwd_yfwd_2d,
-    avg_xfwd_ybwd_2d,
-    avg_xfwd_yfwd_2d,
-    avg_y_bwd_2d,
-    avg_y_bwd_3d,
-    avg_y_fwd_2d,
-    avg_y_fwd_3d,
-)
+from gridax._src.operators.moves import interpolate
 from gridax._src.pytree import pytree_dataclass
 
 if TYPE_CHECKING:
@@ -81,10 +65,7 @@ class Interpolation1D:
             Scalar interpolated to U-points.  When ``self.mask`` is
             set, the output is zeroed at dry U-faces via ``* mask.wet(at="U")``.
         """
-        out = interior(avg_x_fwd_1d(h), h)
-        if self.mask is not None:
-            out = out * self.mask.wet(at="U")
-        return out
+        return interpolate(h, self.grid, src="T", dst="U", mask=self.mask)
 
     def U_to_T(self, u: Float[Array, "Nx"]) -> Float[Array, "Nx"]:
         """Interpolate U-point -> T-point (cell centre).
@@ -102,10 +83,7 @@ class Interpolation1D:
             Velocity interpolated to T-points.  When ``self.mask`` is
             set, the output is zeroed at dry T-cells via ``* mask.wet()``.
         """
-        out = interior(avg_x_bwd_1d(u), u)
-        if self.mask is not None:
-            out = out * self.mask.wet()
-        return out
+        return interpolate(u, self.grid, src="U", dst="T", mask=self.mask)
 
 
 @pytree_dataclass
@@ -148,30 +126,21 @@ class Interpolation2D:
 
         h_on_u[j, i+1/2] = 1/2 * (h[j, i] + h[j, i+1])
         """
-        out = interior(avg_x_fwd_2d(h), h)
-        if self.mask is not None:
-            out = out * self.mask.wet(at="U")
-        return out
+        return interpolate(h, self.grid, src="T", dst="U", mask=self.mask)
 
     def T_to_V(self, h: Float[Array, "*batch Ny Nx"]) -> Float[Array, "*batch Ny Nx"]:
         """T-point -> V-point (north face), y-average.
 
         h_on_v[j+1/2, i] = 1/2 * (h[j, i] + h[j+1, i])
         """
-        out = interior(avg_y_fwd_2d(h), h)
-        if self.mask is not None:
-            out = out * self.mask.wet(at="V")
-        return out
+        return interpolate(h, self.grid, src="T", dst="V", mask=self.mask)
 
     def T_to_X(self, h: Float[Array, "*batch Ny Nx"]) -> Float[Array, "*batch Ny Nx"]:
         """T-point -> X-point (NE corner), bilinear average.
 
         h_on_q[j+1/2, i+1/2] = 1/4 * (h[j,i] + h[j,i+1] + h[j+1,i] + h[j+1,i+1])
         """
-        out = interior(avg_xfwd_yfwd_2d(h), h)
-        if self.mask is not None:
-            out = out * self.mask.wet(at="X", kind="strict")
-        return out
+        return interpolate(h, self.grid, src="T", dst="X", mask=self.mask)
 
     # ------------------------------------------------------------------
     # X-point -> face points
@@ -182,20 +151,14 @@ class Interpolation2D:
 
         q_on_u[j, i+1/2] = 1/2 * (q[j+1/2, i+1/2] + q[j-1/2, i+1/2])
         """
-        out = interior(avg_y_bwd_2d(q), q)
-        if self.mask is not None:
-            out = out * self.mask.wet(at="U")
-        return out
+        return interpolate(q, self.grid, src="X", dst="U", mask=self.mask)
 
     def X_to_V(self, q: Float[Array, "*batch Ny Nx"]) -> Float[Array, "*batch Ny Nx"]:
         """X-point (corner) -> V-point (north face), x-average.
 
         q_on_v[j+1/2, i] = 1/2 * (q[j+1/2, i+1/2] + q[j+1/2, i-1/2])
         """
-        out = interior(avg_x_bwd_2d(q), q)
-        if self.mask is not None:
-            out = out * self.mask.wet(at="V")
-        return out
+        return interpolate(q, self.grid, src="X", dst="V", mask=self.mask)
 
     # ------------------------------------------------------------------
     # Face points -> T-point
@@ -206,20 +169,14 @@ class Interpolation2D:
 
         u_on_h[j, i] = 1/2 * (u[j, i+1/2] + u[j, i-1/2])
         """
-        out = interior(avg_x_bwd_2d(u), u)
-        if self.mask is not None:
-            out = out * self.mask.wet()
-        return out
+        return interpolate(u, self.grid, src="U", dst="T", mask=self.mask)
 
     def V_to_T(self, v: Float[Array, "*batch Ny Nx"]) -> Float[Array, "*batch Ny Nx"]:
         """V-point -> T-point, y-average.
 
         v_on_h[j, i] = 1/2 * (v[j+1/2, i] + v[j-1/2, i])
         """
-        out = interior(avg_y_bwd_2d(v), v)
-        if self.mask is not None:
-            out = out * self.mask.wet()
-        return out
+        return interpolate(v, self.grid, src="V", dst="T", mask=self.mask)
 
     def X_to_T(self, q: Float[Array, "*batch Ny Nx"]) -> Float[Array, "*batch Ny Nx"]:
         """X-point (corner) -> T-point, bilinear average.
@@ -227,10 +184,7 @@ class Interpolation2D:
         q_on_h[j, i] = 1/4 * (q[j+1/2,i+1/2] + q[j-1/2,i+1/2]
                              + q[j+1/2,i-1/2] + q[j-1/2,i-1/2])
         """
-        out = interior(avg_xbwd_ybwd_2d(q), q)
-        if self.mask is not None:
-            out = out * self.mask.wet()
-        return out
+        return interpolate(q, self.grid, src="X", dst="T", mask=self.mask)
 
     # ------------------------------------------------------------------
     # Face/center -> X-point (corner)
@@ -241,20 +195,14 @@ class Interpolation2D:
 
         u_on_q[j+1/2, i+1/2] = 1/2 * (u[j, i+1/2] + u[j+1, i+1/2])
         """
-        out = interior(avg_y_fwd_2d(u), u)
-        if self.mask is not None:
-            out = out * self.mask.wet(at="X", kind="strict")
-        return out
+        return interpolate(u, self.grid, src="U", dst="X", mask=self.mask)
 
     def V_to_X(self, v: Float[Array, "*batch Ny Nx"]) -> Float[Array, "*batch Ny Nx"]:
         """V-point -> X-point (corner), x-average.
 
         v_on_q[j+1/2, i+1/2] = 1/2 * (v[j+1/2, i] + v[j+1/2, i+1])
         """
-        out = interior(avg_x_fwd_2d(v), v)
-        if self.mask is not None:
-            out = out * self.mask.wet(at="X", kind="strict")
-        return out
+        return interpolate(v, self.grid, src="V", dst="X", mask=self.mask)
 
     # ------------------------------------------------------------------
     # Cross-face (bilinear 4-point)
@@ -266,10 +214,7 @@ class Interpolation2D:
         u_on_v[j+1/2, i] = 1/4 * (u[j,   i+1/2] + u[j+1, i+1/2]
                                  + u[j,   i-1/2] + u[j+1, i-1/2])
         """
-        out = interior(avg_xbwd_yfwd_2d(u), u)
-        if self.mask is not None:
-            out = out * self.mask.wet(at="V")
-        return out
+        return interpolate(u, self.grid, src="U", dst="V", mask=self.mask)
 
     def V_to_U(self, v: Float[Array, "*batch Ny Nx"]) -> Float[Array, "*batch Ny Nx"]:
         """V-point -> U-point (cross-face bilinear, 4-point).
@@ -277,10 +222,7 @@ class Interpolation2D:
         v_on_u[j, i+1/2] = 1/4 * (v[j+1/2, i] + v[j-1/2, i]
                                  + v[j+1/2, i+1] + v[j-1/2, i+1])
         """
-        out = interior(avg_xfwd_ybwd_2d(v), v)
-        if self.mask is not None:
-            out = out * self.mask.wet(at="U")
-        return out
+        return interpolate(v, self.grid, src="V", dst="U", mask=self.mask)
 
 
 @pytree_dataclass
@@ -308,37 +250,25 @@ class Interpolation3D:
 
         h_on_u[k, j, i+1/2] = 1/2 * (h[k, j, i] + h[k, j, i+1])
         """
-        out = interior(avg_x_fwd_3d(h), h)
-        if self.mask is not None:
-            out = out * self.mask.wet(at="U")
-        return out
+        return interpolate(h, self.grid, src="T", dst="U", mask=self.mask)
 
     def T_to_V(self, h: Float[Array, "Nz Ny Nx"]) -> Float[Array, "Nz Ny Nx"]:
         """T -> V (y-average) over all z-levels.
 
         h_on_v[k, j+1/2, i] = 1/2 * (h[k, j, i] + h[k, j+1, i])
         """
-        out = interior(avg_y_fwd_3d(h), h)
-        if self.mask is not None:
-            out = out * self.mask.wet(at="V")
-        return out
+        return interpolate(h, self.grid, src="T", dst="V", mask=self.mask)
 
     def U_to_T(self, u: Float[Array, "Nz Ny Nx"]) -> Float[Array, "Nz Ny Nx"]:
         """U -> T (x-average) over all z-levels.
 
         u_on_h[k, j, i] = 1/2 * (u[k, j, i+1/2] + u[k, j, i-1/2])
         """
-        out = interior(avg_x_bwd_3d(u), u)
-        if self.mask is not None:
-            out = out * self.mask.wet()
-        return out
+        return interpolate(u, self.grid, src="U", dst="T", mask=self.mask)
 
     def V_to_T(self, v: Float[Array, "Nz Ny Nx"]) -> Float[Array, "Nz Ny Nx"]:
         """V -> T (y-average) over all z-levels.
 
         v_on_h[k, j, i] = 1/2 * (v[k, j+1/2, i] + v[k, j-1/2, i])
         """
-        out = interior(avg_y_bwd_3d(v), v)
-        if self.mask is not None:
-            out = out * self.mask.wet()
-        return out
+        return interpolate(v, self.grid, src="V", dst="T", mask=self.mask)
