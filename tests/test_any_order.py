@@ -197,6 +197,7 @@ def test_masked_and_periodic(scheme: Any) -> None:
     assert abs(got.sum()) < 1e-10 * np.abs(got).sum()
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("scheme", [WENO(11), WENO(9, "z")], ids=repr)
 def test_gradient_and_dtype(scheme: Any) -> None:
     n = scheme.order
