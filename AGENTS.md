@@ -23,12 +23,12 @@ The repository is a uv workspace with one package, `packages/gridax/` (`src/grid
 | Grids | `gridax/_src/grid/` | `ArakawaCGrid*` (topology) → `CurvilinearGrid*` (uniform metric) → `CartesianCGrid1D/2D/3D`, `SphericalCGrid2D/3D` (`base.py`, `cartesian.py`, `spherical.py`), and beside them the collocated `CollocatedGrid*` → `CartesianAGrid1D/2D/3D`, `SphericalAGrid2D` (`collocated.py`: T points only, no ghost ring, irregular axes, `agrid_from` a raster); `agrid.staggered()` and `cgrid.collocated()` convert between the two, through `StretchedCGrid1D/2D/3D` (`stretched.py`) where an axis is irregular: frozen dataclasses built with NumPy, registered as JAX pytrees by `gridax/_src/pytree.py` when JAX is importable |
 | Located fields | `gridax/_src/fields/` (public: `gridax.CField`, `gridax.combine`, `gridax.fields`), `gridax/_src/grid/points.py` | `CField`: an array with named dims and a stagger per axis, its array the only pytree leaf; `combine` and the element-wise functions, which raise `StaggerMismatchError` on fields at different points; the pipekit adapter (`adapter.py`, loaded by `_hook.py` once something imports `pipekit_ops`); the point names and their staggers |
 | Masks | `gridax/_src/mask/` | `Mask1D/2D/3D` (`cartesian.py`), frozen NumPy dataclasses like the grids: staggered wet masks, `StencilCapability*`, and what is derived from them on request, so it works on a traced mask and is not stored (`MaskBase` in `base.py`): stencil tiers, coastal ghosts, coast classification; numpy / scipy construction helpers (`utils.py`) |
-| Analysis kernels | `gridax/_src/analysis/` (public: `gridax.analysis`) | Finite differences on collocated grids (`difference`, `adaptive_difference`, 1-D / 2-D / 3-D gradient, divergence, curl, Laplacian) and axis remapping (`remap_axis`, `remap_axis_columns`), array-API code that runs on NumPy, JAX or any backend; the kernels behind geoops' and xrops' calculus and remap operators |
+| Analysis kernels | `gridax/_src/analysis/` (public: `gridax.analysis`) | The finite difference along one axis of a collocated array (`difference`) and axis remapping (`remap_axis`, `remap_axis_columns`), array-API code that runs on NumPy, JAX or any backend |
 | Layer 0: coefficients | `gridax/_src/stencils/coefficients.py` (public: `gridax.stencils`) | `difference_offsets` / `difference_coeffs`: offsets and exact coefficients from the Taylor conditions, for point values or cell averages (`data=`), collocated or staggered (`method="staggered"`, `bias=`); `weno_stencils`, `optimal_weights`, `smoothness_matrix` (the linear parts of WENO); `nonuniform_coeffs` |
 | Layer 1: raw stencils | `gridax/_src/operators/stencils.py`, `gridax/_src/stencils/staggered.py`, `gridax/_src/operators/_ghost.py` (public: `gridax.stencils`) | `<op>_<axis>_<side>_<d>d` index arithmetic with no metric and no padding, on any backend; `staggered_difference` / `staggered_average` for fourth and sixth order; `interior` pads a result back to the full shape |
 | Schemes | `gridax/_src/schemes/` (public: `gridax.schemes`) | `Scheme` and `Tier`, and `Centred`, `Biased`, `Upwind`, `WENO`, `TVD`; a scheme writes `order` and `tiers()`, and its footprint, halo and exact weights are derived; `Adaptive(scheme, edges=, mask=)` says what it does at the edges and next to dry points, and an operation reads it through `policies()` |
-| Layer 2: canonical functions | `gridax/_src/operators/{moves,calculus,coriolis,jacobian,diagnostics,reductions}.py`, `gridax/_src/advection/{advect,reconstruct}.py`, `gridax/_src/diffusion/diffuse.py`; `gridax/_src/api.py` | `op(fields…, grid, *, scheme=…, mask=None)`, one per operation (ADR 1, `docs/design/adr/0001-canonical-functions.md`): `difference`, `interpolate`, `divergence`, `curl`, `laplacian`, `advect`, `reconstruct`, `diffuse`, `biharmonic`, `coriolis`, `arakawa_jacobian`, `kinetic_energy`, `shear_strain`, `tensor_strain`, `area_sum`, …; the pointwise diagnostics and the array helpers beside them (`enstrophy`, `okubo_weiss`, `upwind_flux`, `gridax.advection.kernels`) take no grid |
-| Layer 3: bindings | `gridax/_src/gridops.py`: `GridOps(grid, mask)`, a method per canonical function, generated from `OPERATIONS`; and `gridax/_src/operators/` (`difference.py`, `interpolation.py`, `divergence.py`, `vorticity.py`, `coriolis.py`, `diagnostic_operators.py`, `spherical_*.py`), `gridax/_src/advection/` (`advection.py`, `reconstruction.py`, `spherical_advection.py`), `gridax/_src/diffusion/` | `Difference*`, `Interpolation*`, `Advection*`, `Reconstruction*`, `Diffusion*`, `MomentumAdvection*`, `Vorticity*`, `Coriolis*`, `Energetics2D`, … and their `Spherical*` siblings; mask-aware through a `mask` field |
+| Layer 2: canonical functions | `gridax/_src/operators/{moves,calculus,coriolis,jacobian,momentum,diagnostics,reductions}.py`, `gridax/_src/advection/{advect,reconstruct}.py`, `gridax/_src/diffusion/diffuse.py`; `gridax/_src/api.py` | `op(fields…, grid, *, scheme=…, mask=None)`, one per operation (ADR 1, `docs/design/adr/0001-canonical-functions.md`): `difference`, `interpolate`, `divergence`, `curl`, `laplacian`, `advect`, `reconstruct`, `diffuse`, `biharmonic`, `coriolis`, `advect_momentum`, `pv_flux`, `arakawa_jacobian`, `kinetic_energy`, `shear_strain`, `tensor_strain`, `qg_potential_vorticity`, `area_sum`, …; the pointwise diagnostics and the array helpers beside them (`enstrophy`, `okubo_weiss`, `upwind_flux`, `gridax.advection.kernels`) take no grid |
+| Layer 3: the binding | `gridax/_src/gridops.py` | `GridOps(grid, mask)`, a method per canonical function, generated from `OPERATIONS`; it is the only one (#493), and the classes `Difference2D`, `Advection2D`, … the tests name are `tests/fixtures/bindings.py` |
 | Boundary conditions | `gridax/_src/boundary/` | One-face atoms `Dirichlet` … `Slip` (`atoms.py`), `BC` and `fill_ghosts` (`fill.py`), presets by physical role as its classmethods; the regions of a field, `interior`, `embed`, `select`, `apply_mask` (`regions.py`) |
 | Solvers | `solvers/` (public: `gridax.solvers`, the `jax` extra) | Spectral solvers re-exported from spectraldiffx (`spectral.py`, `spectral_transforms.py`); capacitance wrapper (`elliptic.py`; the `streamfunction_from_vorticity` / `pressure_from_divergence` / `pv_inversion` wrappers moved to `sesmax_core.gfd`, #475); the T-point `masked_laplacian`, `masked_neumann_laplacian`, `masked_face_dirichlet_laplacian`, `wet_components`, `project_zero_mean` (`iterative.py`); `make_spectral_preconditioner` (`preconditioners.py`); CG itself is gaussx's (`gaussx.linear_solve_with_info` with `gaussx.CGSolver`); `MultigridSolver` (`multigrid.py`); known-value lifting (`inhomogeneous.py`); tridiagonal solve re-exported from gaussx (`tridiagonal.py`); the dtype rule `check_dtype` (`dtype.py`) |
 | Time integration | not here | `solve_ocean_pde` moved to `sesmax_core.solve_pde` (#475); the time steppers live in `integrix.march`, the semi-Lagrangian scheme included (#476, with `gridax.t_point_coordinates` for its nodes), and gridax has no alias for them; `gridax/_src/pipekit/timestep.py` imports `integrix.march` directly |
@@ -36,7 +36,7 @@ The repository is a uv workspace with one package, `packages/gridax/` (`src/grid
 | pipekit layer (Tier B) | `pipekit/` (public: `gridax.pipekit`) | `FVXOperator` / `GridOperator` on `pipekit_jax.JaxOperator` (each with a `halo`), `graph_halo`, `over_leading`, `check_operator` (`gridax.pipekit.testing`); behind the `pipekit` extra, never imported by `import gridax` |
 | Shared | `gridax/_src/backend.py`, `gridax/_src/pytree.py`, `gridax/_src/api.py` (`grid_dispatch`: the canonical functions dispatch on the grid type; `SUPPORT` lists the grid types of each); constants from geophysix | the backend hooks and `pytree_dataclass` (see Boundaries); physical constants are geophysix records (`geophysix.earth.SPHERE`, `WGS84`, `geophysix.constants.STANDARD`), used as parameter defaults only (contract 6). The Coriolis helpers and the linear equation of state are `geophysix.rotation` and `geophysix.seawater` (#446), and gridax has no alias for them |
 
-The four layers of the derivative stack are the ones `docs/stencils.md` ("The derivative stack") and `docs/masks.md` describe: Layer 0 coefficients (numbers, no arrays), Layer 1 raw stencils, Layer 2 canonical functions (one per operation, `grid` positional, `mask=` keyword; `gridax.analysis` is its collocated part on bare arrays), Layer 3 bindings (a binding holds a grid, a mask and caches derived from them, and each method is one call of a Layer 2 function). ADR 1 has the reasons and the rejected alternatives.
+The four layers of the derivative stack are the ones `docs/stencils.md` ("The derivative stack") and `docs/masks.md` describe: Layer 0 coefficients (numbers, no arrays), Layer 1 raw stencils, Layer 2 canonical functions (one per operation, `grid` positional, `mask=` keyword; `gridax.analysis` is its collocated part on bare arrays), Layer 3 the binding (`GridOps` holds a grid and a mask, and each method is one call of a Layer 2 function). ADR 1 has the reasons and the rejected alternatives.
 
 `scripts/` holds example models (`swm_linear.py`, `shallow_water.py`,
 `qg_1p5_layer.py`, smoke-tested by `tests/test_scripts.py`) and the docs
@@ -92,8 +92,8 @@ whether it exists:
    operator families document the stencil, the ghost cells they read and the
    mask semantics there.
 3. **If it is missing, add it at its layer**, in the subpackage that owns the
-   concept: a raw index pattern in `operators/stencils.py`, a metric-scaled
-   function next to its family, a mask-aware class over both. A helper two
+   concept: a raw index pattern in `operators/stencils.py`, a canonical
+   function next to its family. A helper two
    modules need goes into the owning module (or `operators/_ghost.py`,
    `operators/_utils.py`), not inline in one caller.
 4. **One object, one name.** A finitevolX name never means something
@@ -107,11 +107,11 @@ whether it exists:
 | `h[1:-1, 2:] - h[1:-1, 1:-1]`, `0.5 * (h[1:-1, 1:-1] + h[2:, 1:-1])` | the raw stencils `<op>_<axis>_<side>_<d>d` (`diff_x_fwd_2d`, `avg_y_bwd_3d`, `avg_xfwd_yfwd_2d`, …): they read the trailing `d` axes of `[*batch, *spatial]`, trim every spatial axis and shift along `<axis>` |
 | `out = jnp.zeros_like(h); out = out.at[1:-1, 1:-1].set(...)` | inside gridax `interior(values, like)` of `operators/_ghost.py` (`gridax.stencils.interior`; `ghost=2` for advection) |
 | `f[1:-1, 1:-1]`, a ghost row, a wall row, `jnp.where(mask.wet(...), f, 0)` | `gridax.interior(f, grid)` and its inverse `embed`, `gridax.select(f, grid, "north")`, `gridax.apply_mask(f, mask, at="U")` |
-| A gradient, divergence, curl or Laplacian | `gridax.gradient`, `divergence`, `curl`, `laplacian`, `grad_perp` `(…, grid, mask=mask)` on any grid, staggered or collocated, Cartesian or spherical (`operators/calculus.py`); `Difference*`, `Divergence2D`, `Vorticity*` and the `Spherical*` classes bind a grid and a mask to them; `gridax.analysis` on bare collocated arrays |
-| Moving a field between T / U / V / X points | `gridax.interpolate(f, grid, src="T", dst="U", mask=mask)`, `gridax.difference(f, grid, axis="x", src="T", dst="U", mask=mask)` on any C-grid (the tables of moves are in `operators/triples.py`); `Interpolation*` and `Difference*` bind a grid and a mask to them |
-| A flux-form advective tendency, upwind / WENO / TVD face values | `gridax.advect(q, u, v, grid, scheme=, mask=)`, `gridax.reconstruct(q, u, grid, axis=, scheme=, mask=)` with a scheme of `gridax.schemes` (`Upwind(k)` \| `Centred(k)` \| `Biased(k, side)` \| `WENO(k)` \| `TVD(limiter)`, alone or in `Adaptive`), `Advection1D/2D/3D(...)(h, u, v, scheme=...)`, `Reconstruction1D/2D/3D`, `upwind_flux`, the `weno_*` / `linear_*` stencils of `gridax.advection.kernels`, the limiters `minmod` / `van_leer` / `superbee` / `mc`, `rusanov_flux` |
-| Harmonic / biharmonic diffusion, momentum advection, Coriolis | `Diffusion2D/3D`, `BiharmonicDiffusion2D/3D`, `MomentumAdvection2D/3D`, `Coriolis2D/3D` (and `Spherical*`) |
-| Kinetic energy, PV, enstrophy, strain, Okubo–Weiss, an Arakawa Jacobian | `Energetics2D`, `Vorticity2D`, `Strain2D`, `QGPotentialVorticity2D`, `ArakawaJacobian2D`; functional `kinetic_energy`, `arakawa_jacobian`, `okubo_weiss`, … |
+| A gradient, divergence, curl or Laplacian | `gridax.gradient`, `divergence`, `curl`, `laplacian`, `grad_perp` `(…, grid, mask=mask)` on any grid, staggered or collocated, Cartesian or spherical (`operators/calculus.py`); `gridax.analysis.difference` along one axis of a bare collocated array |
+| Moving a field between T / U / V / X points | `gridax.interpolate(f, grid, src="T", dst="U", mask=mask)`, `gridax.difference(f, grid, axis="x", src="T", dst="U", mask=mask)` on any C-grid (the tables of moves are in `operators/triples.py`) |
+| A flux-form advective tendency, upwind / WENO / TVD face values | `gridax.advect(q, u, v, grid, scheme=, mask=)`, `gridax.reconstruct(q, u, grid, axis=, scheme=, mask=)` with a scheme of `gridax.schemes` (`Upwind(k)` \| `Centred(k)` \| `Biased(k, side)` \| `WENO(k)` \| `TVD(limiter)`, alone or in `Adaptive`), `upwind_flux`, the `weno_*` / `linear_*` stencils of `gridax.advection.kernels`, the limiters `minmod` / `van_leer` / `superbee` / `mc`, `rusanov_flux` |
+| Harmonic / biharmonic diffusion, momentum advection, Coriolis | `diffuse`, `biharmonic`, `advect_momentum`, `coriolis` |
+| Kinetic energy, PV, enstrophy, strain, Okubo–Weiss, an Arakawa Jacobian | `kinetic_energy`, `sw_potential_vorticity`, `qg_potential_vorticity`, `okubo_weiss_parameter`, `arakawa_jacobian`; pointwise `enstrophy`, `okubo_weiss`, … |
 | Element-wise maths on fields that know their point | `gridax.combine`, `gridax.fields` (`sqrt`, `where`, `clip`, …) on `gridax.CField`; `f.like(array)` for a full array |
 | Moving an A-grid field to a C-grid, or back | `gridax.stagger(f, agrid, dst="U", bc=…)`, `gridax.collocate(f, cgrid, src="U")` (`operators/conversions.py`; they warn `LossyConversionWarning` unless T to T) |
 | Filling ghost cells, and the dry points behind a coast | `gridax.fill_ghosts(f, grid, gridax.BC(x=gridax.Dirichlet(0.0), …), mask=mask)` with `Dirichlet` / `Neumann` / `Periodic` / …, or a preset: `BC.no_flux()`, `BC.zero()`, `BC.periodic("x")`, `BC.wall_normal()`, `BC.wall_tangential(slip=)`, joined with `\|` |
@@ -152,7 +152,7 @@ The long form, with figures, is in `docs/cgrid_discretization.md`,
   - `X[j, i]` → NE corner `(j+1/2, i+1/2)`
 - In 3-D only the horizontal axes are staggered; `k = 0` and `k = Nz-1` are
   ghost slabs. Multilayer fields `[nl, Ny, Nx]` have **no** ghost layers:
-  lift a 2-D operator with `jax.vmap` rather than using a `3D` operator
+  lift a 2-D operator with `jax.vmap` rather than using a 3-D grid
   (`docs/multilayer_vs_3d.md`).
 
 All four types share the `[Ny, Nx]` shape, but the meaning of the ghost ring
@@ -206,20 +206,19 @@ Without BCs, `diff_x_U_to_T` at `i = 1` sees a zero west ghost U-face and
 returns `(u[j, 1] - 0) / dx`. That is the **expected** behaviour, not a bug:
 apply BCs to intermediate fields before chaining operators.
 
-### 2. Operators: the interior idiom and the three layers
+### 2. Operators: the interior idiom and the layers
 
 - **Write only the interior.** An operator returns an array of the input's
   shape, written only on `[1:-1, 1:-1]` (via `interior(values, like)`), with
   a zero ghost ring. The caller owns boundary conditions.
-- **Advection is the exception.** `Advection1D/2D` write `[2:-2]` /
+- **Advection is the exception.** `advect` writes `[2:-2]` /
   `[2:-2, 2:-2]` (`interior(..., ghost=2)`) under the default
-  `wall="closed"`, so they never read ghost flux cells; `Advection3D` writes
+  `wall="closed"`, so it never reads ghost flux cells; in 3-D it writes
   `[1:-1, 2:-2, 2:-2]` (z-levels are independent). Never widen the
   closed-wall horizontal write region to `[1:-1, ...]`.
 - **Closed walls by default.** Advection writes the tendency only on the
   strict interior and treats the four domain walls as no-flux; diffusion
-  leaves the wall-face fluxes at zero. `wall="open"` on `Advection1D/2D/3D`,
-  `SphericalAdvection2D/3D` and `Diffusion2D/3D` instead computes the wall faces from the caller-filled
+  leaves the wall-face fluxes at zero. `wall="open"` on `advect` and `diffuse` instead computes the wall faces from the caller-filled
   ghost ring (first-order upwind for advection, `κ (h_edge − h_ghost) / dx`
   for diffusion; open advection then writes the full interior), so
   Dirichlet / outflow / periodic BCs drive transport while the flux stays
@@ -230,14 +229,9 @@ apply BCs to intermediate fields before chaining operators.
   caller scales by any metric (`dx`, `R cos φ dλ`, …) and pads with
   `interior`.
 - **A canonical function** is declared with `@grid_dispatch` (`_src/api.py`) over `@located(out, f=…)` (`_src/fields/located.py`), which names the point of every field argument and of the result, and is listed in `SUPPORT`; its implementations work on arrays only.
-- **Layer 2 functions** are the canonical form: one per operation, with `grid` positional wherever values move between points or the metric enters (never loose `dx, dy`), and `mask=` a keyword (ADR 1). A family that has not moved yet still takes spacings and no mask; don't add to that form.
-- **Layer 3 classes** are bindings: `pytree_dataclass`es (in gridax) holding `grid` and `mask` (default
-  `None`), with any precomputation (an inner
-  `Interpolation2D`, …) done once in `__init__`. Cartesian operators are
-  annotated with `CartesianCGrid*` (coordinate-agnostic ones such as
-  `Interpolation*` and `Reconstruction*` accept any grid of their
-  dimension); spherical operators take `SphericalCGrid*` and are separate
-  `Spherical*` classes that share the raw stencils.
+- **Layer 2 functions** are the canonical form: one per operation, with `grid` positional wherever values move between points or the metric enters (never loose `dx, dy`), and `mask=` a keyword (ADR 1). One name serves every rank and geometry: the type of the grid picks the implementation.
+- **Layer 3 is `GridOps`**, whose methods are generated from `OPERATIONS`. Don't
+  add an operator class.
 - **Comment every stencil with its half-index formula** and track shapes in
   comments (`# [Ny, Nx]`).
 - **Write stencils that lower to one fused pass**, forward and VJP: slice
@@ -253,17 +247,17 @@ apply BCs to intermediate fields before chaining operators.
 ### 3. Masks
 
 - Build masks once, eagerly, from a binary T-point mask: `Mask2D.from_grid(grid, wet_t)` (which checks the shape against the grid) or `Mask2D.from_mask(wet_t)` derives the wet U, V and X points, the coast classification and the stencil capability with numpy / scipy, and stores them as NumPy arrays (a `pytree_dataclass`, so the mask modules import without JAX); `Mask2D.from_bathymetry(depth, min_depth)` thresholds a depth array first. Read them by point: `mask.wet(at="U")` (`True` = wet), with `kind="strict"` (all four cells wet) and the wall kinds at X; `at=` also takes a field's stagger.
-- A class operator with a mask zeroes its output on the dry points **of its
+- A function with a mask zeroes its output on the dry points **of its
   output stagger** (`mask.wet()` for T, `mask.wet(at="U")` for U, `mask.wet(at="V")` for V,
   `mask.wet(at="X", kind="strict")` for X). `mask=None` must reproduce the unmasked
   result bit for bit, and an all-ocean mask must equal `mask=None`.
-- Masked advection (`Advection1D/2D/3D`, `SphericalAdvection2D/3D`) is
+- Masked advection is
   land-safe for every scheme: dry inputs are zeroed with `jnp.where`, every
   upwind-biased scheme falls back to narrower stencils near the coast
   through `upwind_flux` and the tiers of the mask (`mask.tiers`)
-  (`naive` reads only the two cells beside a face), and the fluxes on dry
+  (`Centred(2)` reads only the two cells beside a face), and the fluxes on dry
   faces (`mask.wet(at="U")` / `mask.wet(at="V")` false) are zeroed before the divergence, as in
-  `Diffusion2D`.
+  `diffuse`.
 - Where land may hold `NaN` (e.g. `Mask2D.from_center`), zero the dry
   inputs with `jnp.where` before any stencil reads them **and** mask the
   outputs with `jnp.where`: multiplying by a
@@ -358,9 +352,9 @@ docstring before changing what it checks.
 | `tests/test_jax_transforms.py`, `tests/test_differentiable.py` | `jit` / `vmap` match eager execution; the smooth surrogates differentiate |
 | `tests/test_registry_parity.py` | Every canonical function is implemented on exactly the grid types `SUPPORT` lists, and raises `NotImplementedError` naming the others |
 | `tests/test_gridops.py` | `GridOps` has a method per canonical function defined on its grid, equal to it bit for bit, eager and jitted with the binding as an argument |
-| `tests/test_moves.py` | `difference` and `interpolate` are exact on the coordinates for every move and C-grid, and the bindings equal them bit for bit |
+| `tests/test_moves.py` | `difference` and `interpolate` are exact on the coordinates for every move and C-grid |
 | `tests/test_located.py` | Every canonical function declares the points of its operands and result (`@located`), its `CField` path gives the array path's data exactly, and an operand on another point raises |
-| `tests/test_calculus.py` | The vector calculus: exact on linear fields, discrete identities (∇·∇⊥ψ = 0, ∇×∇f = 0, summation by parts), bindings equal it, collocated equals `gridax.analysis` |
+| `tests/test_calculus.py` | The vector calculus: exact on linear fields, discrete identities (∇·∇⊥ψ = 0, ∇×∇f = 0, summation by parts) |
 | `tests/test_batch_dims.py` | Every 2-D entry point annotated `*batch Ny Nx` equals a loop over the batch members, masked and unmasked, eager and under `jit` |
 | `tests/test_dtype_behavior.py` | float32 and float64 agree; outputs are finite on extreme inputs |
 | `tests/test_open_walls.py`, conservation tests in `test_advection.py`, `test_jacobian.py`, `test_momentum.py`, `test_diagnostics.py` | Mass / energy / enstrophy conservation of the flux-form and Arakawa schemes, including `wall="open"` |
@@ -381,7 +375,7 @@ agent can read and follow them):
 
 | Job | Recipe |
 |---|---|
-| Add a raw stencil, functional helper or mask-aware class operator (difference, interpolation, vorticity, diffusion, diagnostic, spherical) | `add-stencil-operator` |
+| Add a raw stencil or a canonical function (difference, interpolation, vorticity, diffusion, diagnostic, spherical) | `add-stencil-operator` |
 | Add a reconstruction scheme, WENO variant, flux limiter or face flux | `add-advection-scheme` |
 | Add a boundary-condition atom, BC set or ghost-ring filler | `add-boundary-condition` |
 | Add an elliptic solver path, preconditioner or multigrid option | `add-elliptic-solver` |

@@ -9,7 +9,7 @@ description: Review a change or pull request in finitevolX against the repo's ow
    which areas it touches (grid, masks, stencils, operators, advection,
    diffusion, boundary, forcing, solvers, timestepping, vertical, docs).
 2. **Reuse** — run the `reuse-reviewer` subagent on the diff: hand-written
-   slices that duplicate a raw stencil or an `Interpolation*` method, a
+   slices that duplicate a raw stencil or a move of `interpolate`, a
    spectral solve or DCT / DST, a tridiagonal solve, a CG loop, a ghost-ring
    fill or a diagnostic are the main way finitevolX drifts from itself and
    from spectraldiffx / gaussx.
