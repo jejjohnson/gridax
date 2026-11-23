@@ -41,7 +41,6 @@ MODULES = (
     "gridax._src.operators.coriolis",
     "gridax._src.operators.diagnostics",
     "gridax._src.operators.diagnostic_operators",
-    "gridax._src.boundary.boundary",
 )
 
 
