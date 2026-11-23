@@ -1,8 +1,7 @@
-"""Tests for Divergence2D and Difference2D.divergence, and the deprecated divergence_2d."""
+"""Tests for Divergence2D and Difference2D.divergence."""
 
 from __future__ import annotations
 
-import gridax
 from gridax import CartesianCGrid2D
 from gridax._src.operators.difference import Difference2D
 from gridax._src.operators.divergence import Divergence2D
@@ -22,7 +21,7 @@ def div_op(grid):
 
 
 # ---------------------------------------------------------------------------
-# Difference2D.divergence (the one route; gridax.divergence_2d is deprecated)
+# Difference2D.divergence (the binding; gridax.divergence is the function)
 # ---------------------------------------------------------------------------
 
 
@@ -115,18 +114,6 @@ class TestDivergence2DClass:
         u = jnp.broadcast_to(x, (grid.Ny, grid.Nx))
         v = jnp.broadcast_to(y[:, None], (grid.Ny, grid.Nx))
         np.testing.assert_allclose(div_op(u, v), diff.divergence(u, v), atol=1e-12)
-
-    def test_deprecated_divergence_2d_warns_and_matches(self, div_op, grid):
-        """gridax.divergence_2d warns (#456) and still equals the class, bit for bit."""
-        rng = np.random.default_rng(0)
-        u = jnp.asarray(rng.standard_normal((grid.Ny, grid.Nx)))
-        v = jnp.asarray(rng.standard_normal((grid.Ny, grid.Nx)))
-        with pytest.warns(DeprecationWarning, match="Difference2D"):
-            divergence_2d = gridax.divergence_2d
-        np.testing.assert_array_equal(
-            div_op(u, v),
-            divergence_2d(u, v, dx=grid.spacing("x"), dy=grid.spacing("y")),
-        )
 
     def test_geostrophic_velocity_nondivergent(self):
         """div(grad_perp(psi)) = 0 for any streamfunction psi.

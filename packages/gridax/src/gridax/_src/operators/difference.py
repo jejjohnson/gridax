@@ -25,18 +25,14 @@ import numpy as np
 from gridax._src.grid import CartesianCGrid1D, CartesianCGrid2D, CartesianCGrid3D
 from gridax._src.mask import Mask1D, Mask2D, Mask3D
 from gridax._src.operators._ghost import interior
-from gridax._src.operators._utils import _spacing
+from gridax._src.operators.calculus import curl, divergence, grad_perp, laplacian
 from gridax._src.operators.moves import difference
 from gridax._src.operators.stencils import (
     _neighbours,
-    diff_x_bwd_2d,
-    diff_x_bwd_3d,
     diff_x_fwd_2d,
-    diff_y_bwd_2d,
-    diff_y_bwd_3d,
     diff_y_fwd_2d,
 )
-from gridax._src.pytree import array_namespace, pytree_dataclass
+from gridax._src.pytree import pytree_dataclass
 
 if TYPE_CHECKING:
     from jaxtyping import Array
@@ -61,22 +57,6 @@ def _curl_2d(
     """
     out = interior(diff_x_fwd_2d(v) / dx - diff_y_fwd_2d(u) / dy, u)
     return out
-
-
-def _divergence_2d(
-    u: Float[Array, "*batch Ny Nx"],
-    v: Float[Array, "*batch Ny Nx"],
-    dx: float | Float[Array, ""],
-    dy: float | Float[Array, ""],
-) -> Float[Array, "*batch Ny Nx"]:
-    """Divergence at T-points.  Shared implementation.
-
-    delta[j, i] = (u[j, i+1/2] - u[j, i-1/2]) / dx
-                + (v[j+1/2, i] - v[j-1/2, i]) / dy
-    """
-    xp = array_namespace(u, v)
-    like = xp.zeros(u.shape, dtype=xp.result_type(u, v))
-    return interior(diff_x_bwd_2d(u) / dx + diff_y_bwd_2d(v) / dy, like)
 
 
 def _laplacian_2d_interior(
@@ -177,16 +157,7 @@ class Difference1D:
             ``self.mask`` is set, the output is zeroed at dry T-cells
             via ``* self.mask.wet()``.
         """
-        # Each offset is sliced once (see `_Neighbours2D` for why); the
-        # arithmetic is unchanged:
-        #   (h_e - h_c) - (h_c - h_w)  ≡  diff_x_fwd_1d(h) - diff_x_bwd_1d(h)
-        h_c, h_e, h_w = h[1:-1], h[2:], h[:-2]  # h[i], h[i+1], h[i-1]  [Nx-2]
-        out = interior(
-            ((h_e - h_c) - (h_c - h_w)) / _spacing(self.grid, "x", h) ** 2, h
-        )
-        if self.mask is not None:
-            out = out * self.mask.wet()
-        return out
+        return laplacian(h, self.grid, mask=self.mask)
 
 
 @pytree_dataclass
@@ -413,12 +384,7 @@ class Difference2D:
             Divergence at T-points.  When ``self.mask`` is set, the
             output is zeroed at dry T-cells via ``* mask.wet()``.
         """
-        out = _divergence_2d(
-            u, v, _spacing(self.grid, "x", u), _spacing(self.grid, "y", v)
-        )
-        if self.mask is not None:
-            out = out * self.mask.wet()
-        return out
+        return divergence(u, v, self.grid, mask=self.mask)
 
     def curl(
         self,
@@ -445,15 +411,7 @@ class Difference2D:
             ``self.mask`` is set, the output is zeroed at dry X-corners
             via ``* mask.wet(at="X", kind="strict")``.
         """
-        out = _curl_2d(
-            u,
-            v,
-            _spacing(self.grid, "x", v, at="X"),
-            _spacing(self.grid, "y", u, at="X"),
-        )
-        if self.mask is not None:
-            out = out * self.mask.wet(at="X", kind="strict")
-        return out
+        return curl(u, v, self.grid, mask=self.mask)
 
     def laplacian(
         self, h: Float[Array, "*batch Ny Nx"]
@@ -474,15 +432,7 @@ class Difference2D:
             Laplacian at T-points.  When ``self.mask`` is set, the
             output is zeroed at dry T-cells via ``* mask.wet()``.
         """
-        out = interior(
-            _laplacian_2d_interior(
-                h, _spacing(self.grid, "x", h), _spacing(self.grid, "y", h)
-            ),
-            h,
-        )
-        if self.mask is not None:
-            out = out * self.mask.wet()
-        return out
+        return laplacian(h, self.grid, mask=self.mask)
 
     def grad_perp(
         self,
@@ -531,35 +481,7 @@ class Difference2D:
         >>> psi = jnp.ones((grid.Ny, grid.Nx))
         >>> u, v = diff.grad_perp(psi)
         """
-        # u[j, i+1/2] = -(ψ[j+1,i] + ψ[j+1,i+1] - ψ[j-1,i] - ψ[j-1,i+1]) / (4·dy)
-        u = interior(
-            -(
-                psi[..., 2:, 1:-1]
-                + psi[..., 2:, 2:]
-                - psi[..., :-2, 1:-1]
-                - psi[..., :-2, 2:]
-            )
-            / (4.0 * _spacing(self.grid, "y", psi, at="U")),
-            psi,
-        )
-
-        # v[j+1/2, i] = (ψ[j,i+1] + ψ[j+1,i+1] - ψ[j,i-1] - ψ[j+1,i-1]) / (4·dx)
-        v = interior(
-            (
-                psi[..., 1:-1, 2:]
-                + psi[..., 2:, 2:]
-                - psi[..., 1:-1, :-2]
-                - psi[..., 2:, :-2]
-            )
-            / (4.0 * _spacing(self.grid, "x", psi, at="V")),
-            psi,
-        )
-
-        if self.mask is not None:
-            u = u * self.mask.wet(at="U")
-            v = v * self.mask.wet(at="V")
-
-        return u, v
+        return grad_perp(psi, self.grid, at="T", mask=self.mask)
 
 
 @pytree_dataclass
@@ -680,21 +602,7 @@ class Difference3D:
             the same T-point output stagger, so the mask is already
             baked into each addend).
         """
-        # One fused stencil instead of two full-size outputs plus an add:
-        #   self.diff_x_U_to_T(u) + self.diff_y_V_to_T(v)
-        # gives the same values (the zero ghost rings add to zero and, for a
-        # 0/1 mask, a*m + b*m == (a + b)*m exactly).
-        # du[k, j, i] = (u[k, j, i+1/2] - u[k, j, i-1/2]) / dx
-        #             + (v[k, j+1/2, i] - v[k, j-1/2, i]) / dy   [Nz-2, Ny-2, Nx-2]
-        # `interior` takes the dtype of u and the values, i.e. result_type(u, v).
-        out = interior(
-            diff_x_bwd_3d(u) / _spacing(self.grid, "x", u)
-            + diff_y_bwd_3d(v) / _spacing(self.grid, "y", v),
-            u,
-        )
-        if self.mask is not None:
-            out = out * self.mask.wet()
-        return out
+        return divergence(u, v, self.grid, mask=self.mask)
 
     def laplacian(self, h: Float[Array, "Nz Ny Nx"]) -> Float[Array, "Nz Ny Nx"]:
         """Horizontal Laplacian at T-points over all z-levels.
@@ -713,13 +621,4 @@ class Difference3D:
             Laplacian at T-points.  When ``self.mask`` is set, the
             output is zeroed at dry T-cells via ``* mask.wet()``.
         """
-        # Each offset is sliced once (see `_Neighbours2D`); same arithmetic as
-        #   d2x = (diff_x_fwd_3d(h) - diff_x_bwd_3d(h)) / dx**2
-        #   d2y = (diff_y_fwd_3d(h) - diff_y_bwd_3d(h)) / dy**2
-        nb = _neighbours(h[1:-1])  # z-interior levels, views [Nz-2, Ny-2, Nx-2]
-        d2x = ((nb.e - nb.c) - (nb.c - nb.w)) / _spacing(self.grid, "x", h) ** 2
-        d2y = ((nb.n - nb.c) - (nb.c - nb.s)) / _spacing(self.grid, "y", h) ** 2
-        out = interior(d2x + d2y, h)
-        if self.mask is not None:
-            out = out * self.mask.wet()
-        return out
+        return laplacian(h, self.grid, mask=self.mask)

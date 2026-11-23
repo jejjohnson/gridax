@@ -16,22 +16,15 @@ from typing import TYPE_CHECKING
 from jaxtyping import Float
 import numpy as np
 
-from gridax._src.backend import vmap
 from gridax._src.grid import SphericalCGrid2D, SphericalCGrid3D
 from gridax._src.mask import Mask2D, Mask3D
-from gridax._src.operators._ghost import interior, zero_z_ghosts
+from gridax._src.operators._ghost import interior
 from gridax._src.operators._utils import (
     _metric_like,
     _safe_div_cos,
-    _spherical_d2_lon,
-    _spherical_laplacian_merid,
 )
+from gridax._src.operators.calculus import curl, divergence, laplacian
 from gridax._src.operators.interpolation import Interpolation2D
-from gridax._src.operators.stencils import (
-    _neighbours,
-    diff_x_bwd_2d,
-    diff_x_fwd_2d,
-)
 from gridax._src.operators.vorticity import (
     _pv_flux_corner_product,
     _warn_arakawa_lamb,
@@ -76,24 +69,7 @@ class SphericalDivergence2D:
 
         div[j, i] = 1/(R·cos(lat_T)) · [du/dλ + d(v·cos(lat_V))/dφ]
         """
-        dlon = _metric_like(self.grid.dlon, u)
-        dlat = _metric_like(self.grid.dlat, v)
-        R = _metric_like(self.grid.R, u)
-
-        # du/dλ at T: backward diff U → T
-        du_dlon = diff_x_bwd_2d(u) / dlon
-
-        # d(v·cosφ)/dφ at T: backward diff V → T
-        cos_V = _metric_like(self.grid._cos_lat("V"), v)
-        v_cos_N = v[1:-1, 1:-1] * cos_V[1:-1, 1:-1]
-        v_cos_S = v[:-2, 1:-1] * cos_V[:-2, 1:-1]
-        dvc_dlat = (v_cos_N - v_cos_S) / dlat
-
-        cos_T = _metric_like(self.grid._cos_lat("T"), u)[1:-1, 1:-1]
-        out = interior(_safe_div_cos(du_dlon + dvc_dlat, cos_T, R), u)
-        if self.mask is not None:
-            out = out * self.mask.wet()
-        return out
+        return divergence(u, v, self.grid, mask=self.mask)
 
 
 @pytree_dataclass
@@ -152,24 +128,7 @@ class SphericalVorticity2D:
 
         ζ[j+½, i+½] = 1/(R·cos(lat_X)) · [dv/dλ − d(u·cosφ)/dφ]
         """
-        dlon = _metric_like(self.grid.dlon, v)
-        dlat = _metric_like(self.grid.dlat, u)
-        R = _metric_like(self.grid.R, u)
-
-        # dv/dλ at X: forward diff V → X
-        dv_dlon = diff_x_fwd_2d(v) / dlon
-
-        # d(u·cosφ)/dφ at X: forward diff U → X
-        cos_U = _metric_like(self.grid._cos_lat("U"), u)
-        u_cos_N = u[2:, 1:-1] * cos_U[2:, 1:-1]
-        u_cos_S = u[1:-1, 1:-1] * cos_U[1:-1, 1:-1]
-        duc_dlat = (u_cos_N - u_cos_S) / dlat
-
-        cos_X = _metric_like(self.grid._cos_lat("X"), u)[1:-1, 1:-1]
-        out = interior(_safe_div_cos(dv_dlon - duc_dlat, cos_X, R), u)
-        if self.mask is not None:
-            out = out * self.mask.wet(at="X", kind="strict")
-        return out
+        return curl(u, v, self.grid, mask=self.mask)
 
     def potential_vorticity(
         self,
@@ -295,27 +254,7 @@ class SphericalLaplacian2D:
 
     def __call__(self, h: Float[Array, "Ny Nx"]) -> Float[Array, "Ny Nx"]:
         """Laplacian at T-points on a sphere."""
-        R = self.grid.R
-        cos_T = _metric_like(self.grid._cos_lat("T"), h)[1:-1, 1:-1]
-
-        # Each offset of h is sliced once (see `_Neighbours2D`), so the VJP
-        # is one fused pass; the two terms are SphericalDifference2D's
-        # diff2_lon and laplacian_merid.
-        nb = _neighbours(h)  # c, e, w, n, s views  [Ny-2, Nx-2]
-        # V-face cosines from the grid, as SphericalDivergence2D reads them:
-        #   cos_V_N = cos_V[j] (north face), cos_V_S = cos_V[j-1]
-        cos_V = _metric_like(self.grid._cos_lat("V"), h)
-        cos_V_N = cos_V[1:-1, 1:-1]
-        cos_V_S = cos_V[:-2, 1:-1]
-
-        lon_term = _spherical_d2_lon(nb.c, nb.e, nb.w, cos_T, self.grid.dlon, R)
-        lat_term = _spherical_laplacian_merid(
-            nb.c, nb.n, nb.s, cos_V_N, cos_V_S, cos_T, self.grid.dlat, R
-        )
-        out = interior(lon_term + lat_term, h)
-        if self.mask is not None:
-            out = out * self.mask.wet()
-        return out
+        return laplacian(h, self.grid, mask=self.mask)
 
 
 def geostrophic_velocity_sphere(
@@ -390,16 +329,15 @@ def _geostrophic_velocity_sphere(
 
 
 # ======================================================================
-# 3-D wrappers (vmap over z-levels)
+# 3-D wrappers (every level)
 # ======================================================================
 
 
 @pytree_dataclass
 class SphericalDivergence3D:
-    """3-D spherical divergence (vmap over z-levels).
+    """3-D spherical divergence (every level).
 
-    Pattern A (post-compute) — the inner 2-D op is mask-free and the
-    3-D result is post-multiplied by ``mask.wet()``.
+    The output is post-multiplied by ``mask.wet()``.
 
     Parameters
     ----------
@@ -409,17 +347,7 @@ class SphericalDivergence3D:
     """
 
     grid: SphericalCGrid3D
-    mask: Mask3D | None
-    _div2d: SphericalDivergence2D
-
-    def __init__(
-        self,
-        grid: SphericalCGrid3D,
-        mask: Mask3D | None = None,
-    ) -> None:
-        self.grid = grid
-        self.mask = mask
-        self._div2d = SphericalDivergence2D(grid=grid.horizontal_grid())
+    mask: Mask3D | None = None
 
     def __call__(
         self,
@@ -427,18 +355,14 @@ class SphericalDivergence3D:
         v: Float[Array, "Nz Ny Nx"],
     ) -> Float[Array, "Nz Ny Nx"]:
         """Horizontal divergence at T-points over all z-levels."""
-        out = zero_z_ghosts(vmap(self._div2d)(u, v))
-        if self.mask is not None:
-            out = out * self.mask.wet()
-        return out
+        return divergence(u, v, self.grid, mask=self.mask)
 
 
 @pytree_dataclass
 class SphericalVorticity3D:
-    """3-D spherical vorticity (vmap over z-levels).
+    """3-D spherical vorticity (every level).
 
-    Pattern A (post-compute) — the inner 2-D op is mask-free and the
-    3-D result is post-multiplied by ``mask.wet(at="X", kind="strict")``.
+    The output is post-multiplied by ``mask.wet(at="X", kind="strict")``.
 
     Parameters
     ----------
@@ -448,17 +372,7 @@ class SphericalVorticity3D:
     """
 
     grid: SphericalCGrid3D
-    mask: Mask3D | None
-    _vort2d: SphericalVorticity2D
-
-    def __init__(
-        self,
-        grid: SphericalCGrid3D,
-        mask: Mask3D | None = None,
-    ) -> None:
-        self.grid = grid
-        self.mask = mask
-        self._vort2d = SphericalVorticity2D(grid=grid.horizontal_grid())
+    mask: Mask3D | None = None
 
     def relative_vorticity(
         self,
@@ -466,18 +380,14 @@ class SphericalVorticity3D:
         v: Float[Array, "Nz Ny Nx"],
     ) -> Float[Array, "Nz Ny Nx"]:
         """Relative vorticity at X-points over all z-levels."""
-        out = zero_z_ghosts(vmap(self._vort2d.relative_vorticity)(u, v))
-        if self.mask is not None:
-            out = out * self.mask.wet(at="X", kind="strict")
-        return out
+        return curl(u, v, self.grid, mask=self.mask)
 
 
 @pytree_dataclass
 class SphericalLaplacian3D:
-    """3-D spherical Laplacian (vmap over z-levels).
+    """3-D spherical Laplacian (every level).
 
-    Pattern A (post-compute) — the inner 2-D op is mask-free and the
-    3-D result is post-multiplied by ``mask.wet()``.
+    The output is post-multiplied by ``mask.wet()``.
 
     Parameters
     ----------
@@ -487,21 +397,8 @@ class SphericalLaplacian3D:
     """
 
     grid: SphericalCGrid3D
-    mask: Mask3D | None
-    _lap2d: SphericalLaplacian2D
-
-    def __init__(
-        self,
-        grid: SphericalCGrid3D,
-        mask: Mask3D | None = None,
-    ) -> None:
-        self.grid = grid
-        self.mask = mask
-        self._lap2d = SphericalLaplacian2D(grid=grid.horizontal_grid())
+    mask: Mask3D | None = None
 
     def __call__(self, h: Float[Array, "Nz Ny Nx"]) -> Float[Array, "Nz Ny Nx"]:
         """Laplacian at T-points over all z-levels."""
-        out = zero_z_ghosts(vmap(self._lap2d)(h))
-        if self.mask is not None:
-            out = out * self.mask.wet()
-        return out
+        return laplacian(h, self.grid, mask=self.mask)

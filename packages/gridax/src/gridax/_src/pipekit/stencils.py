@@ -36,8 +36,8 @@ from gridax._src.boundary.boundary import (
     zero_boundaries,
     zero_gradient_boundaries,
 )
+from gridax._src.operators.calculus import curl, divergence, grad_perp, laplacian
 from gridax._src.operators.coriolis import Coriolis2D
-from gridax._src.operators.difference import Difference2D
 from gridax._src.operators.moves import difference, interpolate
 from gridax._src.operators.triples import PAIRS, TRIPLES, choose
 from gridax._src.pipekit.base import FVXOperator, GridOperator
@@ -84,28 +84,28 @@ class Divergence(GridOperator):
     """∇·(u, v) at T-points: δₓu / Δx + δᵧv / Δy.  ``(U, V) → T``."""
 
     def _apply(self, u: Field, v: Field) -> Field:
-        return Difference2D(grid=self.grid).divergence(u, v)
+        return divergence(u, v, self.grid)
 
 
 class Curl(GridOperator):
     """Relative vorticity ζ = δₓv / Δx − δᵧu / Δy at X-points.  ``(U, V) → X``."""
 
     def _apply(self, u: Field, v: Field) -> Field:
-        return Difference2D(grid=self.grid).curl(u, v)
+        return curl(u, v, self.grid)
 
 
 class Laplacian(GridOperator):
     """Five-point Laplacian ∇²h at T-points.  ``T → T``."""
 
     def _apply(self, h: Field) -> Field:
-        return Difference2D(grid=self.grid).laplacian(h)
+        return laplacian(h, self.grid)
 
 
 class GradPerp(GridOperator):
-    """Rotated gradient (u, v) = (−∂ᵧψ, ∂ₓψ) of a streamfunction.  ``X → (U, V)``."""
+    """Rotated gradient (u, v) = (−∂ᵧψ, ∂ₓψ) of a streamfunction.  ``T → (U, V)``."""
 
     def _apply(self, psi: Field) -> tuple[Field, Field]:
-        return Difference2D(grid=self.grid).grad_perp(psi)
+        return grad_perp(psi, self.grid, at="T")
 
 
 class Interp(GridOperator):

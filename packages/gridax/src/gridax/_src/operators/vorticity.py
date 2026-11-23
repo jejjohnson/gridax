@@ -12,14 +12,14 @@ import warnings
 from jaxtyping import Float
 import numpy as np
 
-from gridax._src.backend import set_at, vmap
+from gridax._src.backend import set_at
 from gridax._src.grid import CartesianCGrid2D, CartesianCGrid3D
 from gridax._src.mask import Mask2D, Mask3D
-from gridax._src.operators._ghost import interior, zero_z_ghosts
-from gridax._src.operators._utils import _spacing
+from gridax._src.operators._ghost import interior
+from gridax._src.operators.calculus import curl
 from gridax._src.operators.diagnostic_operators import _sanitize
 from gridax._src.operators.diagnostics import enstrophy, potential_enstrophy
-from gridax._src.operators.difference import Difference2D, _curl_2d
+from gridax._src.operators.difference import Difference2D
 from gridax._src.operators.interpolation import Interpolation2D
 from gridax._src.operators.stencils import (
     avg_x_bwd_2d,
@@ -457,9 +457,7 @@ class Vorticity3D:
     mask : Mask3D or None, optional
         Optional land/ocean mask.  When provided, the result of
         :meth:`relative_vorticity` is post-multiplied by
-        ``mask.wet(at="X", kind="strict")``.  Applied externally rather than
-        pass-down because the underlying ``_curl_2d`` is a free
-        function (no sub-operator to inject a mask into).
+        ``mask.wet(at="X", kind="strict")``.
     """
 
     grid: CartesianCGrid3D
@@ -488,14 +486,7 @@ class Vorticity3D:
             Relative vorticity at X-points.  When ``self.mask`` is
             set, dry X-corners are zero via ``* mask.wet(at="X", kind="strict")``.
         """
-        dx = _spacing(self.grid, "x", v, at="X")
-        dy = _spacing(self.grid, "y", u, at="X")
-        out = vmap(lambda u_k, v_k: _curl_2d(u_k, v_k, dx, dy))(u, v)
-        # Zero z-ghost slices to match 3D ghost-ring convention.
-        out = zero_z_ghosts(out)
-        if self.mask is not None:
-            out = out * self.mask.wet(at="X", kind="strict")
-        return out
+        return curl(u, v, self.grid, mask=self.mask)
 
 
 def pv_flux_blend(

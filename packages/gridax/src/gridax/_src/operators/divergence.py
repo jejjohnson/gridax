@@ -14,59 +14,13 @@ import numpy as np
 from gridax._src.backend import set_at
 from gridax._src.grid import CartesianCGrid2D
 from gridax._src.mask import Mask2D
-from gridax._src.operators.difference import Difference2D, _divergence_2d
+from gridax._src.operators.difference import Difference2D
 from gridax._src.pytree import pytree_dataclass
 
 if TYPE_CHECKING:
     from jaxtyping import Array
 else:
     Array = np.ndarray
-
-
-def divergence_2d(
-    u: Float[Array, "*batch Ny Nx"],
-    v: Float[Array, "*batch Ny Nx"],
-    dx: float,
-    dy: float,
-) -> Float[Array, "*batch Ny Nx"]:
-    """Compute ∇·(u, v) at T-points on the 2-D Arakawa C-grid.
-
-    delta[j, i] = (u[j, i+1/2] - u[j, i-1/2]) / dx
-                + (v[j+1/2, i] - v[j-1/2, i]) / dy
-
-    Only interior cells ``[1:-1, 1:-1]`` are written; the ghost ring is
-    left as zero.  The caller is responsible for setting ghost-cell
-    boundary conditions before calling this function.
-
-    This is a standalone functional form that shares the same underlying
-    implementation as :meth:`Difference2D.divergence`.
-
-    Parameters
-    ----------
-    u : Float[Array, "*batch Ny Nx"]
-        x-velocity at U-points (east faces).
-    v : Float[Array, "*batch Ny Nx"]
-        y-velocity at V-points (north faces).
-    dx : float
-        Grid spacing in x.
-    dy : float
-        Grid spacing in y.
-
-    Returns
-    -------
-    Float[Array, "*batch Ny Nx"]
-        Divergence at T-points, same shape as the inputs.
-
-    Examples
-    --------
-    >>> import jax.numpy as jnp
-    >>> u = jnp.zeros((10, 10))
-    >>> v = jnp.zeros((10, 10))
-    >>> div = divergence_2d(u, v, dx=0.1, dy=0.1)
-    >>> div.shape
-    (10, 10)
-    """
-    return _divergence_2d(u, v, dx, dy)
 
 
 @pytree_dataclass

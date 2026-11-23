@@ -837,18 +837,3 @@ class TestConservation:
         psi_int = psi[1:-1, 1:-1]
         energy_tendency = jnp.sum(psi_int * J) * dx * dy
         np.testing.assert_allclose(energy_tendency, 0.0, atol=1e-10)
-
-
-def test_deprecated_relative_vorticity_cgrid_warns_and_matches(grid2d):
-    """gridax.relative_vorticity_cgrid warns (#456) and equals Difference2D.curl."""
-    import gridax
-
-    rng = np.random.default_rng(0)
-    u = jnp.asarray(rng.standard_normal((grid2d.Ny, grid2d.Nx)))
-    v = jnp.asarray(rng.standard_normal((grid2d.Ny, grid2d.Nx)))
-    with pytest.warns(DeprecationWarning, match="Difference2D"):
-        relative_vorticity_cgrid = gridax.relative_vorticity_cgrid
-    np.testing.assert_array_equal(
-        Difference2D(grid=grid2d).curl(u, v),
-        relative_vorticity_cgrid(u, v, grid2d.spacing("x"), grid2d.spacing("y")),
-    )
