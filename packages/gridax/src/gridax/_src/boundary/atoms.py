@@ -49,6 +49,10 @@ def _check_unit(name: str, value: Any) -> None:
 class _Atom:
     """The mirror rules shared by the atoms; subclasses give the formulas."""
 
+    def at(self, axis: str, point: str | Stagger, axes: tuple[str, ...]) -> Any:
+        """The atom a face of ``axis`` has for a field at ``point``, or ``None``."""
+        return self
+
     def _ghost(self, phi: Interior, k: int, step: Any) -> Any:
         """Layer ``k`` outside a wall half a cell from the first node."""
         raise NotImplementedError
@@ -459,6 +463,42 @@ class Slip(_Atom):
         return _value_like(self.coefficient, phi(1)) * phi(1)
 
 
+@pytree_dataclass
+class Wall(_Atom):
+    """A solid wall: one condition for the normal component, one for the others.
+
+    The normal component of a vector has its nodes on the wall (U across x, V
+    across y, W across z), and the fields that have not take the tangential
+    one. ``None`` leaves such a field alone. `BC.wall_normal` and
+    `BC.wall_tangential` build it.
+
+    Parameters
+    ----------
+    normal, tangential : atom, optional
+        The conditions.
+    """
+
+    normal: Any = None
+    tangential: Any = None
+
+    def at(self, axis: str, point: str | Stagger, axes: tuple[str, ...]) -> Any:
+        """The condition of the component that a field at ``point`` is."""
+        return self.normal if axis in point_axes(point, axes) else self.tangential
+
+    def fill(
+        self,
+        f: Float[Array, "..."],
+        grid: Any,
+        axis: str,
+        side: int,
+        point: str | Stagger,
+        width: int,
+    ) -> Float[Array, "..."]:
+        """Write this face's ghost layers with the condition of the component."""
+        atom = self.at(axis, point, grid.axes)
+        return f if atom is None else atom.fill(f, grid, axis, side, point, width)
+
+
 type Atom = (
     Dirichlet
     | Neumann
@@ -469,4 +509,5 @@ type Atom = (
     | Robin
     | Extrapolation
     | Slip
+    | Wall
 )

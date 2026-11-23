@@ -148,7 +148,7 @@ f_T = F0 * jnp.ones((grid.Ny, grid.Nx))
 
 
 def rhs_tier_a(s):
-    h, u, v = (fvx.enforce_periodic(s[k]) for k in "huv")
+    h, u, v = (fvx.fill_ghosts(s[k], grid, fvx.BC.periodic()) for k in "huv")
     cu, cv = fvx.Coriolis2D(grid=grid)(u, v, f_T)
     return {
         "h": -H * D.divergence(u, v),

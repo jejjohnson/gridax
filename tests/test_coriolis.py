@@ -10,7 +10,6 @@ from gridax import (
     Interpolation2D,
     Mask2D,
     Mask3D,
-    enforce_periodic,
     fill_ghosts,
 )
 from gridax._src.operators._ghost import interior
@@ -20,6 +19,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
+from tests.fixtures._helpers import periodic
 
 
 @pytest.fixture
@@ -418,11 +419,11 @@ class TestCoriolisEnergyConservation:
     def test_periodic_non_divergent_beta_plane(self):
         """Periodic ghosts (f too), random non-divergent flow from a streamfunction."""
         g = self._grid()
-        psi = enforce_periodic(jax.random.normal(jax.random.PRNGKey(0), (g.Ny, g.Nx)))
+        psi = periodic(jax.random.normal(jax.random.PRNGKey(0), (g.Ny, g.Nx)))
         # u[j, i+1/2] = -(psi[j+1/2] - psi[j-1/2]) / dy, v[j+1/2, i] = (psi[i+1/2] - psi[i-1/2]) / dx
-        u = enforce_periodic(interior(-diff_y_bwd_2d(psi) / g.spacing("y"), psi))
-        v = enforce_periodic(interior(diff_x_bwd_2d(psi) / g.spacing("x"), psi))
-        du, dv = Coriolis2D(grid=g)(u, v, enforce_periodic(self._beta_f(g)))
+        u = periodic(interior(-diff_y_bwd_2d(psi) / g.spacing("y"), psi))
+        v = periodic(interior(diff_x_bwd_2d(psi) / g.spacing("x"), psi))
+        du, dv = Coriolis2D(grid=g)(u, v, periodic(self._beta_f(g)))
         assert self._rel_dE(u, v, du, dv) < 1e-13
 
     def test_masked_closed_basin(self):

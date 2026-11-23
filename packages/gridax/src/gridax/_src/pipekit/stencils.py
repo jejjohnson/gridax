@@ -17,7 +17,6 @@ changes Tier B with it.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import Any, ClassVar
 
 import equinox as eqx
@@ -26,16 +25,8 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Float
 
-from gridax import Mask2D
-from gridax._src.boundary.boundary import (
-    enforce_periodic,
-    free_slip_boundaries,
-    no_flux_boundaries,
-    no_slip_boundaries,
-    wall_boundaries,
-    zero_boundaries,
-    zero_gradient_boundaries,
-)
+from gridax import CartesianCGrid2D, Mask2D
+from gridax._src.boundary.fill import BC, fill_ghosts
 from gridax._src.operators.calculus import curl, divergence, grad_perp, laplacian
 from gridax._src.operators.coriolis import coriolis
 from gridax._src.operators.moves import difference, interpolate
@@ -213,15 +204,15 @@ class Coriolis(GridOperator):
         return coriolis(u, v, self.grid, f=f)
 
 
-#: ``kind -> ghost-ring filler`` for `FillGhosts`.
-GHOST_FILLERS: dict[str, Callable[..., Field]] = {
-    "periodic": enforce_periodic,
-    "zero": zero_boundaries,
-    "zero_gradient": zero_gradient_boundaries,
-    "no_flux": no_flux_boundaries,
-    "no_slip": no_slip_boundaries,
-    "free_slip": free_slip_boundaries,
-    "wall": wall_boundaries,
+_WALL = BC.wall_normal()
+
+#: ``kind -> boundary condition`` of `FillGhosts`.
+GHOST_FILLERS: dict[str, BC] = {
+    "periodic": BC.periodic(),
+    "zero": BC.zero(),
+    "no_flux": BC.no_flux(),
+    "no_slip": _WALL | BC.wall_tangential(slip="no"),
+    "free_slip": _WALL | BC.wall_tangential(slip="free"),
 }
 
 
@@ -231,20 +222,23 @@ class FillGhosts(FVXOperator):
     Attributes
     ----------
     kind : str
-        One of `GHOST_FILLERS`: ``periodic``, ``zero``, ``zero_gradient``,
-        ``no_flux``, ``no_slip``, ``free_slip`` or ``wall``.
-    staggering : {"h", "u", "v", "q"}
-        Only for ``kind="wall"``: the C-grid variable (see
-        `wall_boundaries`).
+        One of `GHOST_FILLERS`: ``periodic``, ``zero`` (the value), ``no_flux``
+        (a tracer), ``no_slip`` or ``free_slip`` (a velocity).
+    stagger : {"T", "U", "V", "X"}
+        The point of the field, which says where the wall is.
     """
 
     kind: str = eqx.field(static=True)
-    staggering: str = eqx.field(static=True, default="h")
+    stagger: str = eqx.field(static=True, default="T")
 
     def __check_init__(self) -> None:
         if self.kind not in GHOST_FILLERS:
             raise ValueError(
                 f"kind {self.kind!r} is not available; valid: {sorted(GHOST_FILLERS)}"
+            )
+        if self.stagger not in STAGGERS:
+            raise ValueError(
+                f"stagger {self.stagger!r} is not available; valid: {list(STAGGERS)}"
             )
 
     @property
@@ -253,9 +247,10 @@ class FillGhosts(FVXOperator):
         return 1
 
     def _apply(self, x: Field) -> Field:
-        if self.kind == "wall":
-            return wall_boundaries(x, staggering=self.staggering)
-        return GHOST_FILLERS[self.kind](x)
+        # none of these reads a spacing, so any grid of the shape will do
+        ny, nx = x.shape[-2:]
+        grid = CartesianCGrid2D.from_interior(nx - 2, ny - 2, nx - 2, ny - 2)
+        return fill_ghosts(x, grid, GHOST_FILLERS[self.kind], stagger=self.stagger)
 
 
 #: ``stagger -> kind`` of the wet points `ApplyMask` keeps (contract 3).

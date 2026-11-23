@@ -189,7 +189,7 @@ depending on direction:
 
 **Operators write only to `[1:-1, 1:-1]`.**  Ghost cells remain at their
 initialised value (typically zero).  Callers are responsible for filling
-ghosts via boundary-condition helpers (`fill_ghosts`, `enforce_periodic`, etc.) before the next operator call.
+ghosts via boundary-condition helpers (`fill_ghosts` with a `BC`) before the next operator call.
 
 ---
 
@@ -472,7 +472,6 @@ A typical shallow-water advection step uses all four co-location points:
 ```python
 from gridax import (
     CartesianCGrid2D, Difference2D, Interpolation2D, Vorticity2D,
-    enforce_periodic,
 )
 import jax.numpy as jnp
 

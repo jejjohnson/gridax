@@ -151,3 +151,26 @@ def cg_solve(
         solver=gaussx.CGSolver(rtol=rtol, atol=atol, max_steps=max_steps, throw=False),
         preconditioner=pc,
     )
+
+
+def _filled(f, bc):
+    """``fill_ghosts`` of T points with a condition that reads no spacing."""
+    import gridax
+
+    ny, nx = f.shape[-2:]
+    grid = gridax.CartesianCGrid2D.from_interior(nx - 2, ny - 2, nx - 2, ny - 2)
+    return gridax.fill_ghosts(f, grid, bc)
+
+
+def periodic(f):
+    """``f`` with a periodic ghost ring."""
+    import gridax
+
+    return _filled(f, gridax.BC.periodic())
+
+
+def copied(f):
+    """``f`` with the nearest interior value in its ghost ring."""
+    import gridax
+
+    return _filled(f, gridax.BC.no_flux())

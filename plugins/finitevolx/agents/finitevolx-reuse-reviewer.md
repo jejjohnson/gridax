@@ -50,7 +50,7 @@ list grouped by module, plus spectraldiffx and gaussx.
      stencils `gridax.diff_x_fwd_2d`, `gridax.avg_x_fwd_2d`, … with
      `interior` of `gridax.stencils`;
    - ghost-cell fills (`q.at[:, 0].set(q[:, -2])`, `jnp.pad(..., mode="wrap")`)
-     → `gridax.enforce_periodic`, `gridax.zero_gradient_boundaries`,
+     → `gridax.fill_ghosts` with `gridax.BC.periodic()`, `gridax.BC.no_flux()`,
      `gridax.fill_ghosts` with a `gridax.BC` of `gridax.Dirichlet` /
      `gridax.Neumann` / `gridax.Periodic` conditions;
    - wet-face masks computed by hand → `gridax.Mask2D.from_mask`;

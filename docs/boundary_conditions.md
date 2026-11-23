@@ -126,10 +126,7 @@ the opposite face.  Both faces of an axis must be periodic.
 - Doubly-periodic channels and basins.
 - Zonal re-entrant channels (periodic in x, closed in y).
 
-:::{note} enforce_periodic helper
-For fully periodic domains the helper `enforce_periodic(field, ...)` is
-available as a thin wrapper that wraps both axes at once.  Prefer `BC` for per-face control.
-:::
+`BC.periodic()` wraps both axes, and `BC.periodic("x")` one.
 
 ### `Reflective`
 
@@ -248,6 +245,35 @@ T-point pressure solve the face is half a cell from any cell
 centre, so non-zero `Dirichlet` faces are not supported there.  See
 [Known Boundary Values](elliptic_solvers_usage.md#known-boundary-values-inhomogeneous-dirichlet)
 for arbitrary per-cell values and interior observations.
+
+### Presets
+
+The physics of a wall depends on the field, and the point alone does not say it: a tracer and a pressure are both at T. The presets are named by role.
+
+| Preset | Physics | Conditions |
+|---|---|---|
+| `BC.no_flux()` | no flux through the wall: tracers, pressure | `Neumann(0)` on every face |
+| `BC.wall_normal()` | no flow through the wall | `Dirichlet(0)` on the faces normal to a component |
+| `BC.wall_tangential(slip="no")` | no slip along it | `Dirichlet(0)` on the faces along a component |
+| `BC.wall_tangential(slip="free")` | free slip along it | `Neumann(0)` on the faces along a component |
+| `BC.zero()` | zero at the wall: a streamfunction | `Dirichlet(0)` on every face |
+| `BC.periodic("x")` | periodic axes | `Periodic()` on those axes |
+
+They cover x and y, or the axes they are given (`BC.no_flux("x")` on a 1-D grid). `|` joins two of them, so one `BC` can serve both velocity components:
+
+```python
+import gridax
+import numpy as np
+
+grid = gridax.CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
+solid = gridax.BC.wall_normal() | gridax.BC.wall_tangential(slip="no")
+u, v = np.ones((2, *grid.shape))
+u = gridax.fill_ghosts(u, grid, solid, stagger="U")  # zero on W/E faces, mirrored S/N
+v = gridax.fill_ghosts(v, grid, solid, stagger="V")  # zero on S/N faces, mirrored W/E
+
+channel = gridax.BC.periodic("x") | gridax.BC.no_flux("y")
+h = gridax.fill_ghosts(np.ones(grid.shape), grid, channel)
+```
 
 ### Several fields
 
@@ -399,18 +425,6 @@ A face is also `(axis, "low")` or `(axis, "high")`. Which row or column a wall i
 
 `gridax.stencils.interior(values, like)` is another thing, the Layer 1 padding that puts the interior result of a raw stencil back on a full array.
 
-## Helpers
-
-### `enforce_periodic`
-
-Convenience wrapper: applies periodic BCs in x, y, or both directions:
-
-```python
-from gridax import enforce_periodic
-
-q = enforce_periodic(q, x=True, y=True)   # both directions
-```
-
 ---
 
 ## Decision Guide
@@ -434,7 +448,7 @@ What physical condition applies?
 │   └── Slip(0.0)  or  Dirichlet(0.0)
 │
 ├── Periodic domain
-│   └── Periodic()  or  enforce_periodic(field)
+│   └── BC.periodic()  or  Periodic() on an axis
 │
 ├── Open boundary, outflow
 │   ├── Zero gradient   → Outflow()  or  Reflective()

@@ -40,8 +40,8 @@ in `AGENTS.md`.
      method;
    - `jnp.zeros_like(x).at[1:-1, 1:-1].set(...)` → `interior(values, x)`;
    - a hand-filled ghost ring (`.at[0, :].set(...)` on a field) →
-     `gridax.fill_ghosts` with a `gridax.BC`, or `enforce_periodic`,
-     `zero_gradient_boundaries`, `wall_boundaries`, …;
+     `gridax.fill_ghosts` with a `gridax.BC` (`BC.periodic()`, `BC.no_flux()`,
+     `BC.wall_normal()`, …);
    - a wet-face mask computed by hand (`h[:, :-1] & h[:, 1:]`) →
      `Mask2D.from_mask(...).u` / `.v` / `.xy_corner_strict`;
    - `np.sum(field * dx * dy)`, a cos-latitude-weighted mean → `area_sum`,

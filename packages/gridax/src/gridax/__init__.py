@@ -74,16 +74,7 @@ from gridax._src.boundary.atoms import (
     Robin,
     Slip,
     Sponge,
-)
-from gridax._src.boundary.boundary import (
-    enforce_periodic,
-    fix_boundary_corners,
-    free_slip_boundaries,
-    no_flux_boundaries,
-    no_slip_boundaries,
-    wall_boundaries,
-    zero_boundaries,
-    zero_gradient_boundaries,
+    Wall,
 )
 from gridax._src.boundary.fill import BC, fill_ghosts
 from gridax._src.boundary.regions import apply_mask, embed, interior, select
@@ -491,14 +482,6 @@ __all__ = [
     "Reflective",
     "Sponge",
     "Slip",
-    # Ghost-ring fillers
-    "enforce_periodic",
-    "fix_boundary_corners",
-    "free_slip_boundaries",
-    "no_flux_boundaries",
-    "no_slip_boundaries",
-    "wall_boundaries",
-    "zero_boundaries",
-    "zero_gradient_boundaries",
+    "Wall",
     # Constants
 ]

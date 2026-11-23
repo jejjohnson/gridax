@@ -15,6 +15,7 @@ import jax.numpy as jnp
 import numpy as np
 from pipekit_ops import Graph, Input
 
+from tests.fixtures._helpers import periodic
 from tests.fixtures.inputs import make_grid_2d, make_mask_2d
 
 GRID = make_grid_2d()
@@ -64,18 +65,14 @@ CASES = [
         2,
     ),
     *[
-        (f"FillGhosts-{k}", fp.FillGhosts(kind=k), f, 1)
-        for k, f in sorted(fp.GHOST_FILLERS.items())
-        if k != "wall"
-    ],
-    *[
         (
-            f"FillGhosts-wall-{s}",
-            fp.FillGhosts(kind="wall", staggering=s),
-            lambda x, s=s: fvx.wall_boundaries(x, staggering=s),
+            f"FillGhosts-{k}-{s}",
+            fp.FillGhosts(kind=k, stagger=s),
+            lambda x, bc=bc, s=s: fvx.fill_ghosts(x, GRID, bc, stagger=s),
             1,
         )
-        for s in "huvq"
+        for k, bc in sorted(fp.GHOST_FILLERS.items())
+        for s in "TUVX"
     ],
     *[
         (
@@ -187,7 +184,7 @@ def sw_tendency() -> Graph:
 
 
 def sw_tendency_tier_a(h, u, v):
-    h, u, v = (fvx.enforce_periodic(x) for x in (h, u, v))
+    h, u, v = (periodic(x) for x in (h, u, v))
     cu, cv = fvx.Coriolis2D(grid=GRID)(u, v, _f_beta(F0, 0.0))
     return {
         "h": -H * D.divergence(u, v),

@@ -1,6 +1,6 @@
 ---
 name: add-boundary-condition
-description: Add a boundary condition to finitevolX — an atom for gridax.BC (like Dirichlet, Neumann, Robin, Slip, Sponge) with its half-cell placement and its wall node, or a functional ghost-ring filler (like wall_boundaries) — with the Atom union, tests and docs. Use when asked to add, port or fix a boundary condition, ghost-cell fill, wall or open-boundary treatment in gridax/_src/boundary.
+description: Add a boundary condition to finitevolX — an atom for gridax.BC (like Dirichlet, Neumann, Robin, Slip, Sponge) with its half-cell placement and its wall node, or a preset of BC (like BC.no_flux) — with the Atom union, tests and docs. Use when asked to add, port or fix a boundary condition, ghost-cell fill, wall or open-boundary treatment in gridax/_src/boundary.
 ---
 
 # Add a boundary condition
@@ -11,7 +11,7 @@ contract 4 (boundary conditions) in `AGENTS.md`, then
 
 ## 1. Make sure it does not exist yet
 
-Search `docs/capabilities.md` (the `boundary` groups): `Dirichlet`, `Neumann`, `Robin` (a·u + b·∂u/∂n = c), `Periodic`, `Outflow`, `Extrapolation` (`order=`), `Reflective`, `Sponge`, `Slip`; `BC` and `fill_ghosts`; the fillers `enforce_periodic`, `zero_boundaries`, `zero_gradient_boundaries`, `no_slip_boundaries`, `free_slip_boundaries`, `no_flux_boundaries`, `wall_boundaries`, `fix_boundary_corners`. Many "new" conditions are a `Robin` with particular coefficients, or a `BC` of existing atoms.
+Search `docs/capabilities.md` (the `boundary` groups): `Dirichlet`, `Neumann`, `Robin` (a·u + b·∂u/∂n = c), `Periodic`, `Outflow`, `Extrapolation` (`order=`), `Reflective`, `Sponge`, `Slip`; `BC` and `fill_ghosts`; the presets `BC.no_flux`, `BC.zero`, `BC.periodic`, `BC.wall_normal`, `BC.wall_tangential`. Many "new" conditions are a `Robin` with particular coefficients, or a `BC` of existing atoms.
 
 ## 2. Write it (`packages/gridax/src/gridax/_src/boundary/`)
 
@@ -21,7 +21,7 @@ Search `docs/capabilities.md` (the `boundary` groups): `Dirichlet`, `Neumann`, `
 - Implement `_outside(self, wall, phi, k, step)` only when the layers outside a node on the wall are not the odd mirror `2 wall - phi(k)` (as `Neumann`, `Outflow` and `Reflective` do). A condition that needs more than this (as `Periodic`, which copies from the far side) overrides `fill`.
 - The atom runs on any array backend: use `xp = array_namespace(...)` and `set_at`, never `jnp` or `.at[]` (the AGENTS.md "Backends" rule).
 - Add the class to the `Atom` union at the bottom of `atoms.py` (it types `BC`'s faces).
-- **A functional filler** goes in `boundary.py` and should be a thin wrapper over `fill_ghosts` where possible (as `enforce_periodic` is).
+- **A preset** is a classmethod of `BC` in `fill.py`, named by the physical role of the field.
 - The elliptic inversions in sesmax-core (`sesmax_core.gfd`) take a `gridax.BC` as `bc=`: all faces Dirichlet select the DST, zero Neumann the DCT and Periodic the FFT. A new atom is rejected there with a clear message; don't extend that mapping unless the spectral solver has a matching transform.
 
 ## 3. Export and document
@@ -30,12 +30,12 @@ Search `docs/capabilities.md` (the `boundary` groups): `Dirichlet`, `Neumann`, `
 
 ## 4. Tests
 
-In `tests/test_fill_ghosts.py`: the ghost value on each face against a hand computation with `dx != dy`, for a cell-centred point and a point with the node on the wall, with `width` 1 and more, that the interior and the other faces are untouched, the validation error, and that the condition holds at the wall (e.g. `0.5 * (ghost + interior) == value`). `tests/test_boundary_helpers.py` for functional fillers. The elliptic wrappers that read a `BC` moved to `sesmax_core.gfd` with their tests (#475).
+In `tests/test_fill_ghosts.py`: the ghost value on each face against a hand computation with `dx != dy`, for a cell-centred point and a point with the node on the wall, with `width` 1 and more, that the interior and the other faces are untouched, the validation error, and that the condition holds at the wall (e.g. `0.5 * (ghost + interior) == value`). `tests/test_presets.py` for presets. The elliptic wrappers that read a `BC` moved to `sesmax_core.gfd` with their tests (#475).
 
 ## 5. Verify
 
 ```bash
-uv run pytest -n 2 tests/test_fill_ghosts.py tests/test_boundary_helpers.py \
+uv run pytest -n 2 tests/test_fill_ghosts.py tests/test_presets.py \
   tests/test_open_walls.py tests/test_capabilities.py
 ```
 

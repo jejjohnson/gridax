@@ -7,7 +7,7 @@ from typing import Any, Literal
 
 import numpy as np
 
-from gridax._src.boundary.atoms import Atom, Periodic, _Atom
+from gridax._src.boundary.atoms import Atom, Dirichlet, Neumann, Periodic, Wall, _Atom
 from gridax._src.fields.cfield import CField, StaggerMismatchError
 from gridax._src.grid.points import (
     GRID_AXES,
@@ -121,13 +121,132 @@ class BC:
         self.coast = coast
         self.corners = corners
 
-    def at_coast(self, axis: str, side: int) -> Atom | None:
+    def at_face(
+        self, axis: str, side: int, point: Stagger, axes: tuple[str, ...]
+    ) -> Atom | None:
+        """The condition of a face for a field at ``point``, ``None`` for none."""
+        atom = self.faces.get(axis, (None, None))[side]
+        return None if atom is None else atom.at(axis, point, axes)
+
+    def at_coast(
+        self, axis: str, side: int, point: Stagger, axes: tuple[str, ...]
+    ) -> Atom | None:
         """The condition of the coasts on a side of the water, ``None`` for none."""
         for bc in (self.coast, self):
-            atom = None if bc is None else bc.faces.get(axis, (None, None))[side]
+            atom = None if bc is None else bc.at_face(axis, side, point, axes)
             if atom is not None and not isinstance(atom, Periodic):
                 return atom
         return None
+
+    # ── presets, by physical role ────────────────────────────────────────────
+
+    @classmethod
+    def no_flux(cls, *axes: str) -> BC:
+        """No flux through the walls, ``∂φ/∂n = 0``: tracers, pressure.
+
+        Parameters
+        ----------
+        *axes : str
+            The axes with walls: x and y by default.
+        """
+        return cls._same(Neumann(0.0), axes)
+
+    @classmethod
+    def zero(cls, *axes: str) -> BC:
+        """Zero at the walls, ``φ = 0``: a streamfunction.
+
+        Parameters
+        ----------
+        *axes : str
+            The axes with walls: x and y by default.
+        """
+        return cls._same(Dirichlet(0.0), axes)
+
+    @classmethod
+    def periodic(cls, *axes: str) -> BC:
+        """Periodic axes.
+
+        Parameters
+        ----------
+        *axes : str
+            The periodic axes: x and y by default.
+        """
+        return cls._same(Periodic(), axes)
+
+    @classmethod
+    def wall_normal(cls, *axes: str) -> BC:
+        """No flow through the walls, ``u·n = 0``, for the velocity normal to them.
+
+        U across x, V across y, W across z. Faces along a component are left
+        alone: ``BC.wall_normal() | BC.wall_tangential(slip="no")`` is a solid
+        wall for every component.
+
+        Parameters
+        ----------
+        *axes : str
+            The axes with walls: x and y by default.
+        """
+        return cls._same(Wall(normal=Dirichlet(0.0)), axes)
+
+    @classmethod
+    def wall_tangential(cls, *axes: str, slip: Literal["no", "free"]) -> BC:
+        """The velocity along the walls: zero (no slip), or of zero gradient.
+
+        Faces normal to a component are left alone.
+
+        Parameters
+        ----------
+        *axes : str
+            The axes with walls: x and y by default.
+        slip : {"no", "free"}
+            ``"no"``: ``u_t = 0`` at the wall. ``"free"``: ``∂u_t/∂n = 0``.
+
+        Raises
+        ------
+        ValueError
+            If ``slip`` is neither.
+        """
+        if slip not in ("no", "free"):
+            raise ValueError(f"slip must be 'no' or 'free', got {slip!r}")
+        atom = Dirichlet(0.0) if slip == "no" else Neumann(0.0)
+        return cls._same(Wall(tangential=atom), axes)
+
+    @classmethod
+    def _same(cls, atom: Atom, axes: tuple[str, ...]) -> BC:
+        faces: dict[str, Any] = dict.fromkeys(axes or ("x", "y"), atom)
+        return cls(**faces)
+
+    def __or__(self, other: BC) -> BC:
+        """The conditions of both, those of ``self`` where they both have one.
+
+        Two walls combine: the normal condition of one and the tangential of
+        the other.
+        """
+        if not isinstance(other, BC):
+            return NotImplemented
+
+        def join(a: Any, b: Any) -> Any:
+            if isinstance(a, Wall) and isinstance(b, Wall):
+                return Wall(
+                    normal=b.normal if a.normal is None else a.normal,
+                    tangential=b.tangential if a.tangential is None else a.tangential,
+                )
+            return b if a is None else a
+
+        none = (None, None)
+        faces: dict[str, Any] = {
+            axis: tuple(
+                join(a, b)
+                for a, b in zip(
+                    self.faces.get(axis, none), other.faces.get(axis, none), strict=True
+                )
+            )
+            for axis in dict.fromkeys((*self.faces, *other.faces))
+        }
+        coast = self.coast
+        if other.coast is not None:
+            coast = other.coast if coast is None else coast | other.coast
+        return BC(corners=self.corners, coast=coast, **faces)
 
 
 def fill_ghosts(
@@ -285,33 +404,44 @@ def _fill_coasts(
     *,
     layers: int,
 ) -> Any:
-    """Write ``layers`` dry points behind the coasts, the nearest first."""
+    """Write ``layers`` dry points behind the coasts, the nearest first.
+
+    Nearest by distance from the water: the nodes on a coast come before any
+    mirror, so a wall keeps its value where it ends next to another one.
+    """
     xp = array_namespace(f)
-    along = point_axes(stagger, grid.axes)
-    kind = "strict" if len(along) == 2 else "default"
+    on_wall = point_axes(stagger, grid.axes)
+    kind = "strict" if len(on_wall) == 2 else "default"
     coasts = [
         (axis, side, atom)
         for axis in grid.axes
         for side in (0, 1)
-        if (atom := bc.at_coast(axis, side)) is not None
+        if (atom := bc.at_coast(axis, side, stagger, grid.axes)) is not None
     ]
-    written: Any = False
-    for layer in range(1, layers + 2):
+    written: Any = None
+    # in half cells from the coast: the nodes and the layers behind them are at
+    # 0, 2, 4, … and the layers of a cell-centred direction at 1, 3, 5, …
+    for distance in range(2 * layers + 1):
         total: Any = 0.0
         count: Any = 0
         for axis, side, atom in coasts:
-            if layer > layers and axis not in along:
-                continue  # only a node on the wall comes before the layers
+            if (axis in on_wall) != (distance % 2 == 0):
+                continue
+            dry = distance // 2 + 1
             points = mask.coast_ghosts(
-                axis, ("low", "high")[side], at=stagger, kind=kind, layer=layer
+                axis, ("low", "high")[side], at=stagger, kind=kind, layer=dry
             ).points
-            values = atom.coast(f, grid, axis, side, stagger, layer)
+            values = atom.coast(f, grid, axis, side, stagger, dry)
             total = total + xp.where(points, values, xp.zeros_like(values))
             count = count + xp.asarray(points, dtype=xp.int8)
-        here = (count > 0) & ~written
-        mean = total / xp.asarray(xp.where(count > 0, count, 1), dtype=f.dtype)
+        if isinstance(count, int):
+            continue  # no coast at this distance
+        here = count > 0
+        mean = total / xp.asarray(xp.where(here, count, 1), dtype=f.dtype)
+        if written is not None:
+            here = here & ~written
         f = xp.where(here, mean, f)
-        written = written | here
+        written = here if written is None else written | here
     return f
 
 
@@ -366,7 +496,7 @@ def extend(
     if unknown:
         raise ValueError(f"bc has the axes {unknown}, not in grid axes {grid.axes}")
     for name, (axis, side) in FACES.items():
-        if axis in axes and bc.faces.get(axis, (None, None))[side] is None:
+        if axis in axes and bc.at_face(axis, side, stagger, grid.axes) is None:
             raise ValueError(f"bc has no condition for the {name} face")
     xp = array_namespace(f)
     for axis in axes:
