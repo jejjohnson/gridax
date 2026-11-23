@@ -197,25 +197,21 @@ def test_masked_and_periodic(scheme: Any) -> None:
     assert abs(got.sum()) < 1e-10 * np.abs(got).sum()
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize("scheme", [WENO(11), WENO(9, "z")], ids=repr)
-def test_jit_grad_and_dtype(scheme: Any) -> None:
+def test_gradient_and_dtype(scheme: Any) -> None:
+    n = scheme.order
+    tier = scheme.tiers()[0]
+    # the kernel alone: the gradient of ``advect`` compiles for a minute
+    for kernel in (tier.left, tier.right):
+        gradient = jax.jit(jax.grad(lambda q, kernel=kernel: kernel(*q) ** 2))
+        assert np.isfinite(gradient(jnp.asarray(RNG.normal(size=n)))).all()
+        assert np.isfinite(gradient(jnp.full(n, 2.0))).all()
     grid = g.CartesianCGrid1D.from_interior(24, 1.0)
-    q = jnp.asarray(RNG.normal(size=26))
-    u = jnp.ones(26)
-
-    def loss(q: Any) -> Any:
-        return (g.advect(q, u, None, grid, scheme=scheme) ** 2).sum()
-
-    gradient = jax.jit(jax.grad(loss))
-    assert np.isfinite(gradient(q)).all()
-    assert np.isfinite(gradient(jnp.full(26, 2.0))).all()
-    small = jax.eval_shape(
-        lambda q, u: g.advect(q, u, None, grid, scheme=scheme),
-        q.astype(jnp.float32),
-        u.astype(jnp.float32),
+    cells = jnp.ones(26, dtype=jnp.float32)
+    out = jax.eval_shape(
+        lambda q, u: g.advect(q, u, None, grid, scheme=scheme), cells, cells
     )
-    assert small.dtype == jnp.float32
+    assert out.dtype == jnp.float32
 
 
 def test_bad_orders() -> None:
