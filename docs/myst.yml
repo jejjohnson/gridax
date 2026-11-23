@@ -55,6 +55,8 @@ project:
       children:
         - file: stencils.md
           title: Raw stencils
+        - file: schemes.md
+          title: Schemes
         - file: performance.md
           title: Writing fast stencils
     - title: Operators

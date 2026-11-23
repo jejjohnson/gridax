@@ -250,6 +250,7 @@ A stencil wider than two points reads past the one-cell ghost ring on the faces 
 import gridax
 import gridax.advection as gadv
 import gridax.analysis as ga
+from gridax.schemes import WENO
 import gridax.stencils as gs
 
 grid = gridax.CartesianCGrid2D.from_interior(60, 40, 120.0e3, 40.0e3)  # Ny, Nx = 42, 62
@@ -263,7 +264,7 @@ raw4 = gs.staggered_difference(h, axis="x", side="fwd", ndim=2, accuracy=3)
 # Layer 2, collocated: dh/dx on the same points → (42, 62)
 dh_dx_collocated = ga.difference(h, axis=-1, step=grid.spacing("x"))
 # Layer 2, advection: the WENO-5 flux on the east faces → (42, 62)
-flux = gadv.reconstruct(h, u, axis=-1, scheme=gadv.WENO(5))
+flux = gadv.reconstruct(h, u, axis=-1, scheme=WENO(5))
 # Layer 3: dh/dx at U points, zeroed at dry faces → (42, 62)
 dh_dx = gridax.Difference2D(grid=grid, mask=mask).diff_x_T_to_U(h)
 ```

@@ -13,6 +13,7 @@ import warnings
 import _reconstruction_cases as cases
 import gridax
 import gridax.advection as gadv
+from gridax.schemes import TVD, WENO, Centred, Upwind
 import numpy as np
 import pytest
 
@@ -62,12 +63,12 @@ def test_reconstruction3d_gains_upwind2_and_upwind3(order: int, axis: str) -> No
 @pytest.mark.parametrize(
     "scheme",
     [
-        gadv.Upwind(1),
-        gadv.Upwind(3),
-        gadv.Centred(),
-        gadv.WENO(5),
-        gadv.WENO(5, "z"),
-        gadv.TVD("van_leer"),
+        Upwind(1),
+        Upwind(3),
+        Centred(),
+        WENO(5),
+        WENO(5, "z"),
+        TVD("van_leer"),
     ],
     ids=repr,
 )
@@ -86,10 +87,10 @@ def test_any_axis_of_a_3d_array(scheme, axis: int) -> None:
 @pytest.mark.parametrize(
     ("scheme", "order"),
     [
-        (gadv.WENO(5), 5),
-        (gadv.WENO(5, "z"), 5),
-        (gadv.Upwind(3), 3),
-        (gadv.Upwind(5), 5),
+        (WENO(5), 5),
+        (WENO(5, "z"), 5),
+        (Upwind(3), 3),
+        (Upwind(5), 5),
     ],
     ids=repr,
 )
@@ -113,33 +114,33 @@ def test_old_signature_warns_and_matches() -> None:
     with pytest.warns(DeprecationWarning, match="axis=-1"):
         old = gridax.reconstruct(q, u, 1, "wenoz", 5)
     np.testing.assert_array_equal(
-        old, gadv.reconstruct(q, u, axis=-1, scheme=gadv.WENO(5, "z"))
+        old, gadv.reconstruct(q, u, axis=-1, scheme=WENO(5, "z"))
     )
 
 
 def test_argument_errors() -> None:
     q = np.zeros((6, 6))
     with pytest.raises(TypeError, match="either"):
-        gadv.reconstruct(q, q, 1, axis=-1, scheme=gadv.WENO(5))
+        gadv.reconstruct(q, q, 1, axis=-1, scheme=WENO(5))
     with pytest.raises(TypeError, match="axis"):
-        gadv.reconstruct(q, q, scheme=gadv.WENO(5))
+        gadv.reconstruct(q, q, scheme=WENO(5))
     with pytest.raises(ValueError, match="WENO"):
-        gadv.WENO(7, "z")
+        WENO(7, "z")
     with pytest.raises(ValueError, match="limiter"):
-        gadv.TVD("koren")
+        TVD("koren")
     with pytest.raises(ValueError, match="order"):
-        gadv.Upwind(4)  # type: ignore[arg-type]
+        Upwind(4)  # type: ignore[arg-type]
 
 
 def test_tier_sizes_are_the_mask_hierarchy() -> None:
     # the sizes Advection*D uses for get_adaptive_masks: 2, 4, 6, 8, 10
-    assert [tier.size for tier in gadv.WENO(9).tiers] == [10, 8, 6, 4, 2]
-    assert [tier.size for tier in gadv.Upwind(2).tiers] == [4, 2]
-    assert [tier.size for tier in gadv.TVD().tiers] == [4, 2]
+    assert [tier.size for tier in WENO(9).tiers()] == [10, 8, 6, 4, 2]
+    assert [tier.size for tier in Upwind(2).tiers()] == [4, 2]
+    assert [tier.size for tier in TVD().tiers()] == [4, 2]
 
 
 @pytest.mark.skipif(jax is None, reason="JAX is not installed")
-@pytest.mark.parametrize("scheme", [gadv.WENO(5), gadv.TVD("superbee")], ids=repr)
+@pytest.mark.parametrize("scheme", [WENO(5), TVD("superbee")], ids=repr)
 def test_jit_matches_eager(scheme) -> None:
     rng = np.random.default_rng(2)
     q, u = (jnp.asarray(a, dtype=jnp.float32) for a in rng.standard_normal((2, 10, 12)))

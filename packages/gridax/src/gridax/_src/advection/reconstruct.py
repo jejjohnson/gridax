@@ -17,9 +17,9 @@ from jaxtyping import Float
 import numpy as np
 
 from gridax._src.advection.flux import upwind_flux
-from gridax._src.advection.schemes import Scheme, Tier, _Ladder
 from gridax._src.operators._ghost import interior
 from gridax._src.pytree import array_namespace
+from gridax._src.schemes.base import Ladder, Scheme, Tier
 
 if TYPE_CHECKING:
     from jaxtyping import Array
@@ -65,8 +65,8 @@ def reconstruct(
         The axis of the faces: ``-1`` (x), ``-2`` (y) or ``-3`` (z), or the
         same as a non-negative index.
     scheme : Scheme
-        ``Upwind(order)``, ``Centred()``, ``WENO(order, variant)`` or
-        ``TVD(limiter)`` from ``gridax.advection``.
+        One of ``gridax.schemes``: ``Upwind(order)``, ``Centred(order)``,
+        ``Biased(order, side)``, ``WENO(order, variant)`` or ``TVD(limiter)``.
     mask : Mask1D, Mask2D or Mask3D, optional
         A wet mask of ``q``'s rank; the tiers then also stop at the coast.
     dim, method, num_pts
@@ -88,8 +88,9 @@ def reconstruct(
     --------
     >>> import numpy as np
     >>> import gridax.advection as gadv
+    >>> from gridax.schemes import WENO
     >>> q, u = np.ones((6, 8)), np.ones((6, 8))
-    >>> flux = gadv.reconstruct(q, u, axis=-1, scheme=gadv.WENO(5))
+    >>> flux = gadv.reconstruct(q, u, axis=-1, scheme=WENO(5))
     >>> flux.shape, float(flux[2, 3])
     ((6, 8), 1.0)
     """
@@ -110,7 +111,7 @@ def reconstruct(
     # the other axes keep their interior only; the faces along `axis` are 1 .. N-2
     crop = (*([slice(1, -1)] * (q.ndim - 1)), slice(None))
     last, velocity = last[crop], velocity[crop][..., 1:-1]
-    tiers = scheme.tiers
+    tiers = scheme.tiers()
     positive = _faces(xp, last, tiers, upwind="left")
     if scheme.upwinded:
         negative = _faces(xp, last, tiers, upwind="right")
@@ -126,7 +127,8 @@ def _legacy(
     """Map the old ``reconstruct(q, u, dim, method, num_pts)`` call, with a warning."""
     import warnings
 
-    from gridax._src.advection.schemes import WENO, Upwind
+    from gridax._src.schemes.linear import Upwind
+    from gridax._src.schemes.nonlinear import WENO
 
     method = "weno" if method is None else method
     num_pts = 5 if num_pts is None else num_pts
@@ -141,13 +143,13 @@ def _legacy(
     if num_pts == 1:
         scheme: Scheme = Upwind(1)
     elif method == "linear":
-        scheme = Upwind(num_pts)  # type: ignore[arg-type]
+        scheme = Upwind(num_pts)
     else:
         scheme = WENO(num_pts, "z" if method == "wenoz" else "js")  # type: ignore[arg-type]
     warnings.warn(
         "reconstruct(q, u, dim, method, num_pts) is deprecated and will be removed in"
         f" the next release: use reconstruct(q, u, axis={-1 if dim == 1 else -2},"
-        f" scheme={scheme!r}) from gridax.advection.",
+        f" scheme={type(scheme).__name__}({scheme.order})) from gridax.advection.",
         DeprecationWarning,
         stacklevel=3,
     )
@@ -193,7 +195,9 @@ def _reads(tier: Tier, upwind: str) -> tuple[int, int]:
 
 def _masked(q: Array, u: Array, position: int, scheme: Scheme, mask: Any) -> Array:
     """Blend the tiers by the mask's adaptive hierarchy, as ``Advection*D`` does."""
-    tiers = scheme.tiers
+    if not scheme.upwinded:
+        return _masked_fixed(q, u, position, scheme, mask)
+    tiers = scheme.tiers()
     sizes = tuple(sorted({tier.size for tier in tiers}))
     if q.ndim == 1:
         hierarchy = mask.get_adaptive_masks(stencil_sizes=sizes)
@@ -204,7 +208,7 @@ def _masked(q: Array, u: Array, position: int, scheme: Scheme, mask: Any) -> Arr
     # each size reconstructs with that rung and the narrower ones below it
     rec_funcs = {}
     for k, tier in enumerate(tiers):
-        rung = _Ladder(tiers[k:])
+        rung = Ladder(tiers[k:], scheme)
 
         def rec(field: Array, vel: Array, _rung: Scheme = rung) -> Array:
             return reconstruct(field, vel, axis=position, scheme=_rung)
@@ -213,3 +217,34 @@ def _masked(q: Array, u: Array, position: int, scheme: Scheme, mask: Any) -> Arr
     return upwind_flux(
         q, u, dim=position, rec_funcs=rec_funcs, mask_hierarchy=hierarchy
     )
+
+
+def _masked_fixed(
+    q: Array, u: Array, position: int, scheme: Scheme, mask: Any
+) -> Array:
+    """The widest tier whose cells are all wet, for a scheme that is not upwinded.
+
+    Such a scheme reads the same cells for either sign of the velocity, so a
+    tier fits a face if every cell it reads is wet, and a face with a dry cell
+    on either side has no flux.
+    """
+    xp = array_namespace(q, u)
+    tiers = scheme.tiers()
+    wet = xp.moveaxis(xp.asarray(mask.wet(), dtype=bool), position, -1)
+    reach = max(max(-tier.lo, tier.hi) for tier in tiers)
+    land = xp.zeros((*wet.shape[:-1], reach), dtype=bool)
+    padded = xp.concat([land, wet, land], axis=-1)
+    size = q.shape[position]
+
+    def cells(offset: int) -> Array:
+        """Whether cell ``i + offset`` is wet, per face ``i + 1/2``."""
+        return padded[..., reach + offset : reach + offset + size]
+
+    flux = xp.zeros_like(xp.moveaxis(q, position, -1))
+    for k in range(len(tiers) - 1, -1, -1):
+        fits = cells(0) & cells(1)
+        for offset in range(tiers[k].lo, tiers[k].hi + 1):
+            fits = fits & cells(offset)
+        rung = reconstruct(q, u, axis=position, scheme=Ladder(tiers[k:], scheme))
+        flux = xp.where(fits, xp.moveaxis(rung, position, -1), flux)
+    return xp.moveaxis(flux, -1, position)

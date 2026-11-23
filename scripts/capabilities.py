@@ -1,7 +1,7 @@
 """Generate, or check, the capability index: every public name in gridax.
 
 ``docs/capabilities.md`` lists the ``__all__`` of each public gridax module
-(``gridax``, its ``stencils`` / ``advection`` / ``analysis`` / ``fields`` namespaces,
+(``gridax``, its ``stencils`` / ``schemes`` / ``advection`` / ``analysis`` / ``fields`` namespaces,
 ``gridax.solvers`` and ``gridax.pipekit``), grouped by the private module
 that defines each name, with the first sentence of its docstring; names
 gridax re-exports from spectraldiffx, gaussx or integrix are grouped by the
@@ -43,6 +43,7 @@ PACKAGES: dict[str, list[str]] = {
     "gridax": [
         "gridax",
         "gridax.stencils",
+        "gridax.schemes",
         "gridax.advection",
         "gridax.analysis",
         "gridax.fields",
@@ -310,7 +311,7 @@ def render() -> str:
         " ".join(
             [
                 f"Every public name in gridax ({total} entries), listed per public",
-                "module (`gridax`, its `stencils`, `advection` and `analysis`",
+                "module (`gridax`, its `stencils`, `schemes`, `advection` and `analysis`",
                 "namespaces, `gridax.solvers` behind the `jax` extra and",
                 "`gridax.pipekit` behind the `pipekit` extra) and grouped by the",
                 "module that defines it (names re-exported from spectraldiffx,",

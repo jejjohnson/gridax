@@ -1,0 +1,74 @@
+# Schemes
+
+A scheme says which values an operation reads around its output, and with what weights. `gridax.schemes` has five, one object each, and the same object goes to every operation that takes `scheme=`.
+
+## The five schemes
+
+| Scheme | Arguments (default) | Stencil | Taken by |
+|---|---|---|---|
+| `Centred(order, data)` | any even `order` (2) | symmetric | `reconstruct` |
+| `Biased(order, side, data)` | any `order` (2), `side` required | leans to `side` | `reconstruct` |
+| `Upwind(order)` | any odd `order` (1) | leans upwind | `reconstruct` |
+| `WENO(order, variant)` | `order` 3, 5, 7, 9 (5) | nonlinear, upwind | `reconstruct` |
+| `TVD(limiter)` | `limiter` (`"minmod"`) | nonlinear, upwind | `reconstruct` |
+
+**The order** is the formal order of accuracy everywhere. A centred stencil has an even order by symmetry. An upwind stencil of order $2k - 1$ is the centred stencil of order $2k - 2$ with one more upwind cell; its leading error is an even derivative, so it is dissipative. WENO of order $2r - 1$ blends $r$ sub-stencils of $r$ cells. `Upwind(2)` is fully one-sided and dispersive, and is kept for compatibility.
+
+**The data.** `data="point"` says the values are point values, as C-grid velocities are, and `data="cell"` that they are cell averages, as a finite-volume tracer carries. The two give different weights from the third value on. `None` leaves it to the operation: `reconstruct` reads cell averages. `Upwind`, `WENO` and `TVD` always read cell averages.
+
+**The side.** On a staggered grid a `Biased` stencil has one more point on `side` than on the other if their number is odd and two more if it is even, so `Biased(3, "left")` is `Upwind(3)` for flow towards `+x`, whatever the velocity. On a collocated grid it is fully one-sided: `"right"` is the forward difference and `"left"` the backward one.
+
+## Face values
+
+Write $q_i$ for the value in cell $i$ and $\hat q$ for the face value at $i + 1/2$. For flow towards $+x$:
+
+| Scheme | $\hat q$ |
+|---|---|
+| `Centred(2)` | $(q_i + q_{i+1}) / 2$ |
+| `Centred(4, data="point")` | $(-q_{i-1} + 9 q_i + 9 q_{i+1} - q_{i+2}) / 16$ |
+| `Centred(4, data="cell")` | $(-q_{i-1} + 7 q_i + 7 q_{i+1} - q_{i+2}) / 12$ |
+| `Upwind(1)` | $q_i$ |
+| `Upwind(2)` | $(3 q_i - q_{i-1}) / 2$ |
+| `Upwind(3)` | $(-q_{i-1} + 5 q_i + 2 q_{i+1}) / 6$ |
+| `TVD(limiter)` | $q_i + \frac12 \psi(r) (q_{i+1} - q_i)$ |
+| `WENO(5)` | $\sum_k \omega_k \hat q_k$ |
+
+In the TVD row $\psi$ is the limiter and $r = (q_i - q_{i-1}) / (q_{i+1} - q_i)$. In the WENO row $\hat q_k$ are the face values of the three third-order sub-stencils and $\omega_k$ their nonlinear weights.
+
+## What a scheme answers
+
+A scheme is a ladder of `Tier` s, widest first, and only `tiers()` and `order` are written per scheme. The rest is derived from the tiers and from [Layer 0](stencils.md), which solves the Taylor conditions exactly, so the weights are fractions.
+
+```python
+import gridax
+from gridax.schemes import WENO, Centred, Upwind
+
+grid = gridax.CartesianCGrid2D.from_interior(60, 40, 120.0e3, 40.0e3)  # one ghost ring
+
+Centred(4, data="point")  # Centred(order=4, data='point') # (-1, 9, 9, -1)/16
+
+# cells read around the face i + 1/2, and the ghost cells they need
+Centred(4).footprint(staggered=True)  # (-1, 2)
+Centred(4).halo(staggered=True)  # 2
+WENO(5).footprint(staggered=True)  # (-2, 3), both flow directions
+
+# ∑ₖ cₖ sₖᵐ = n! δₘₙ, s = (-3/2, -1/2, 1/2, 3/2), n = 1
+Centred(4).weights(derivative=1, staggered=True)  # (1, -27, 27, -1)/24, as Fractions
+
+# does the widest stencil fit next to the edges of the grid?
+Centred(4).degrades_on(grid)  # True: it needs two ghost cells
+
+Upwind(3).linear, Upwind(3).upwinded  # (True, True)
+```
+
+| Scheme | Footprint (lo, hi) | Halo |
+|---|---|---|
+| `Centred(2)` | (0, 1) | 1 |
+| `Centred(4)` | (-1, 2) | 2 |
+| `WENO(5)` | (-2, 3) | 3 |
+
+An upwinded scheme reads a stencil or its mirror, and its footprint holds both. Each `Tier` also has a `halo`, the cells it reads on either side of the upwind cell, and a `size`, the key of the adaptive mask that allows it: `size = 2 * halo + 2`.
+
+## Next to a wall
+
+Where the widest stencil does not fit, a face value takes the next narrower tier, down to the upwind cell (`Centred`: down to the two cells of the face). With a mask, a dry cell ends the stencil as the edge of the array does, so a face value never reads a dry cell. A difference or an average along a wall shifts its stencil inwards instead; see [the two wall rules](stencils.md).
