@@ -59,7 +59,8 @@ class TestDataclass:
     def test_arrays_are_numpy(self, grid):
         for field in dataclasses.fields(grid):
             value = getattr(grid, field.name)
-            assert isinstance(value, int | tuple | np.ndarray), field.name
+            # the origin of a Cartesian grid is optional
+            assert value is None or isinstance(value, int | tuple | np.ndarray), field
 
     def test_equal_when_built_the_same_way(self, grid):
         name = type(grid).__name__
