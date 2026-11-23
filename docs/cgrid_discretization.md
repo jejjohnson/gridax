@@ -261,7 +261,7 @@ from gridax import CartesianGrid2D
 grid = CartesianGrid2D.from_interior(nx_interior=64, ny_interior=64,
                                      Lx=1.0, Ly=1.0)
 # grid.Nx == 66, grid.Ny == 66
-# grid.dx == 1/64, grid.dy == 1/64
+# grid.spacing("x") == 1/64, grid.spacing("y") == 1/64
 ```
 
 All field arrays are then allocated as `jnp.zeros((grid.Ny, grid.Nx))`.

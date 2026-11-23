@@ -369,7 +369,7 @@ print(
 grid = CartesianGrid2D.from_interior(8, 8, Lx=8e4, Ly=8e4)
 masks = Mask2D.from_dimensions(ny=grid.Ny, nx=grid.Nx)
 print(f"Grid: {grid.Ny}x{grid.Nx} (8 interior + 2 ghost = 10 per side)")
-print(f"  dx = {grid.dx:.0f} m, dy = {grid.dy:.0f} m")
+print(f"  dx = {grid.spacing("x"):.0f} m, dy = {grid.spacing("y"):.0f} m")
 print(
     f"Masks: h={int(masks.h.sum())} wet, "
     f"u={int(masks.u.sum())} wet, "

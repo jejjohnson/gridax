@@ -340,7 +340,7 @@ def _biharmonic_cases():
         (
             "spherical",
             SphericalBiharmonicDiffusion2D(grid=sph, mask=mask),
-            np.asarray(sph.cos_lat_T),  # cell area ∝ cos(lat_T)
+            np.asarray(sph._cos_lat("T")),  # cell area ∝ cos(lat_T)
             m,
         ),
     ]
@@ -436,7 +436,7 @@ def test_masked_biharmonic_3d_constant_and_conservation():
         (BiharmonicDiffusion3D(grid=cart, mask=mask), np.ones(m2.shape)),
         (
             SphericalBiharmonicDiffusion3D(grid=sph, mask=mask),
-            np.asarray(sph.cos_lat_T),
+            np.asarray(sph._cos_lat("T")),
         ),
     ]:
         f = eqx.filter_jit(op)

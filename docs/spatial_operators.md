@@ -66,7 +66,7 @@ div_op = Divergence2D(grid=grid)
 delta = div_op(u, v)              # T-points
 
 # Without a grid object: the raw stencils and your own steps
-delta = interior(diff_x_bwd_2d(u) / grid.dx + diff_y_bwd_2d(v) / grid.dy, u)
+delta = interior(diff_x_bwd_2d(u) / grid.spacing("x") + diff_y_bwd_2d(v) / grid.spacing("y"), u)
 ```
 
 ---
@@ -248,7 +248,7 @@ biharm_op = BiharmonicDiffusion2D(grid=grid)
 dh_dt = biharm_op(h, kappa=1e9)
 
 # Functional API (no grid object, mask-free)
-dh_dt = diffusion_2d(h, kappa=100.0, dx=grid.dx, dy=grid.dy)
+dh_dt = diffusion_2d(h, kappa=100.0, dx=grid.spacing("x"), dy=grid.spacing("y"))
 ```
 
 ---
@@ -409,7 +409,7 @@ Jpsi_q = jac(psi, q)
 # Jpsi_q has shape [Ny, Nx]; ghost ring and dry cells are 0
 
 # Functional form: interior only, no mask
-Jpsi_q_int = arakawa_jacobian(psi, q, dx=grid.dx, dy=grid.dy)
+Jpsi_q_int = arakawa_jacobian(psi, q, dx=grid.spacing("x"), dy=grid.spacing("y"))
 # Jpsi_q_int has shape [Ny-2, Nx-2]
 ```
 

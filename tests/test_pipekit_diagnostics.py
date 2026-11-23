@@ -20,7 +20,6 @@ from pipekit_ops import Graph, Input
 from tests.fixtures.inputs import make_grid_2d
 
 GRID = make_grid_2d()
-SPEC = fp.as_grid_spec(GRID)
 V2 = fvx.Vorticity2D(grid=GRID)
 E2 = fvx.Energetics2D(grid=GRID)
 S2 = fvx.Strain2D(grid=GRID)
@@ -31,7 +30,7 @@ def _field(seed: int, lead: tuple[int, ...] = ()) -> jax.Array:
 
 
 def _y() -> jax.Array:
-    y = jnp.arange(GRID.Ny) * GRID.dy
+    y = jnp.arange(GRID.Ny) * GRID.spacing("y")
     return jnp.broadcast_to(y[:, None], (GRID.Ny, GRID.Nx))
 
 
@@ -41,47 +40,47 @@ def _positive(seed: int, lead: tuple[int, ...] = ()) -> jax.Array:
 
 # (id, operator, Tier-A reference, input makers)
 CASES = [
-    ("RelativeVorticity", fp.RelativeVorticity(grid=SPEC), V2.relative_vorticity, 2),
-    ("Enstrophy", fp.Enstrophy(grid=SPEC), V2.enstrophy, 2),
+    ("RelativeVorticity", fp.RelativeVorticity(grid=GRID), V2.relative_vorticity, 2),
+    ("Enstrophy", fp.Enstrophy(grid=GRID), V2.enstrophy, 2),
     (
         "PotentialVorticity",
-        fp.PotentialVorticity(grid=SPEC),
+        fp.PotentialVorticity(grid=GRID),
         V2.potential_vorticity,
         (_field, _field, _positive, _field),
     ),
     (
         "QGPotentialVorticity",
-        fp.QGPotentialVorticity(grid=SPEC, f0=1.5, beta=0.2),
+        fp.QGPotentialVorticity(grid=GRID, f0=1.5, beta=0.2),
         lambda psi: fvx.QGPotentialVorticity2D(grid=GRID)(
-            psi, 1.5, 0.2, _y(), (GRID.Ny - 1) * GRID.dy / 2
+            psi, 1.5, 0.2, _y(), (GRID.Ny - 1) * GRID.spacing("y") / 2
         ),
         1,
     ),
-    ("KineticEnergy", fp.KineticEnergy(grid=SPEC), E2.kinetic_energy, 2),
+    ("KineticEnergy", fp.KineticEnergy(grid=GRID), E2.kinetic_energy, 2),
     (
         "AvailablePE",
-        fp.AvailablePE(grid=SPEC, g_prime=0.7, H=1.2),
+        fp.AvailablePE(grid=GRID, g_prime=0.7, H=1.2),
         lambda h: E2.available_potential_energy(h, jnp.full_like(h, 1.2), 0.7),
         1,
     ),
     *[
-        (f"Strain-{c}", fp.Strain(grid=SPEC, component=c), getattr(S2, c), 2)
+        (f"Strain-{c}", fp.Strain(grid=GRID, component=c), getattr(S2, c), 2)
         for c in sorted(fp.STRAIN_COMPONENTS)
     ],
-    ("OkuboWeiss", fp.OkuboWeiss(grid=SPEC), S2.okubo_weiss, 2),
+    ("OkuboWeiss", fp.OkuboWeiss(grid=GRID), S2.okubo_weiss, 2),
     (
         "TotalEnergy",
-        fp.TotalEnergy(grid=SPEC),
-        lambda ke, ape: fvx.total_energy(ke, ape, GRID.dx, GRID.dy),
+        fp.TotalEnergy(grid=GRID),
+        lambda ke, ape: fvx.total_energy(ke, ape, GRID.spacing("x"), GRID.spacing("y")),
         2,
     ),
     (
         "DomainIntegral",
-        fp.DomainIntegral(grid=SPEC),
+        fp.DomainIntegral(grid=GRID),
         lambda x: fvx.area_sum(x, GRID),
         1,
     ),
-    ("DomainMean", fp.DomainMean(grid=SPEC), lambda x: fvx.area_mean(x, GRID), 1),
+    ("DomainMean", fp.DomainMean(grid=GRID), lambda x: fvx.area_mean(x, GRID), 1),
 ]
 IDS = [c[0] for c in CASES]
 
@@ -116,12 +115,12 @@ def test_keeps_leading_axes(name, op, ref, makers):
 
 def test_invalid_strain_component_lists_the_valid_set():
     with pytest.raises(ValueError, match="magnitude_squared"):
-        fp.Strain(grid=SPEC, component="normal")
+        fp.Strain(grid=GRID, component="normal")
 
 
 def test_explicit_step_rejects_unknown_schemes():
     with pytest.raises(ValueError, match="rk4"):
-        fp.ExplicitStep(rhs=fp.Laplacian(grid=SPEC), dt=0.1, scheme="leapfrog")
+        fp.ExplicitStep(rhs=fp.Laplacian(grid=GRID), dt=0.1, scheme="leapfrog")
 
 
 # ------------------------------------------------- energy of linear shallow water
@@ -156,7 +155,7 @@ def energy_graph() -> Graph:
 
 
 def _initial_state() -> dict[str, jax.Array]:
-    g = fp.build_grid(SW_SPEC)
+    g = fvx.CartesianGrid2D.from_interior(*SW_SPEC)
     y = (jnp.arange(g.Ny) - 0.5) / N
     x = (jnp.arange(g.Nx) - 0.5) / N
     Y, X = jnp.meshgrid(y, x, indexing="ij")
@@ -168,11 +167,11 @@ def _initial_state() -> dict[str, jax.Array]:
 def test_energy_graph_equals_tier_a_on_a_trajectory():
     traj = {k: _field(i, (4,)) for i, k in enumerate("huv")}
     got = energy_graph()(**traj)["E"]
-    g = fp.build_grid(SW_SPEC)
+    g = fvx.CartesianGrid2D.from_interior(*SW_SPEC)
     filled = {k: fvx.enforce_periodic(traj[k]) for k in "huv"}
     ke = fvx.Energetics2D(grid=g).kinetic_energy(filled["u"], filled["v"])
     ape = 0.5 * G * filled["h"] ** 2
-    want = fvx.total_energy(H * ke, ape, g.dx, g.dy)
+    want = fvx.total_energy(H * ke, ape, g.spacing("x"), g.spacing("y"))
     assert got.shape == (4,)
     np.testing.assert_allclose(got, want, rtol=1e-13)
 

@@ -109,7 +109,7 @@ nx, ny = 32, 32
 Lx, Ly = 5.12e6, 5.12e6  # 5120 km square basin
 
 grid = fvx.CartesianGrid2D.from_interior(nx, ny, Lx, Ly)
-dx, dy = grid.dx, grid.dy
+dx, dy = grid.spacing("x"), grid.spacing("y")
 Ny, Nx = ny + 2, nx + 2
 
 print(f"Interior: {nx} x {ny},  dx = {dx / 1e3:.0f} km,  dy = {dy / 1e3:.0f} km")

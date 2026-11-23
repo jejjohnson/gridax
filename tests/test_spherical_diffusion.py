@@ -495,7 +495,7 @@ def _sph_variable_kappa_error(n: int) -> float:
     g = SphericalGrid2D.from_interior(
         n, n, lon_range=(0.0, 60.0), lat_range=(-30.0, 30.0), R=1.0
     )
-    lam, phi = g.lon_T, g.lat_T  # radians, [Ny, Nx]
+    lam, phi = np.meshgrid(g.coords("x"), g.coords("y"))  # radians, [Ny, Nx]
     # closed walls: the faces half a cell outside the first / last interior T
     lw = float(lam[1, 1]) - 0.5 * g.dlon
     ps = float(phi[1, 1]) - 0.5 * g.dlat
@@ -541,6 +541,6 @@ class TestSphericalVariableKappa:
         wet = np.zeros(shape, dtype=bool)
         wet[1:-1, 1:-1] = True
         wv = wet.ravel()
-        S = np.asarray(g.cos_lat_T).ravel()[wv][:, None] * M[np.ix_(wv, wv)]
+        S = np.asarray(g._cos_lat("T")).ravel()[wv][:, None] * M[np.ix_(wv, wv)]
         np.testing.assert_allclose(S, S.T, atol=1e-12 * np.abs(S).max())
         np.testing.assert_allclose(S.sum(axis=0), 0.0, atol=1e-11 * np.abs(S).max())

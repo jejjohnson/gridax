@@ -250,13 +250,13 @@ def make_preprocessing_dataset(
         forcing["eta0"].plot()
     """
     x = xr.DataArray(
-        (np.arange(config.nx) + 0.5) * grid.dx,
+        (np.arange(config.nx) + 0.5) * grid.spacing("x"),
         dims=("x",),
         name="x",
         attrs={"long_name": "cell_center_x", "units": "m"},
     )
     y = xr.DataArray(
-        (np.arange(config.ny) + 0.5) * grid.dy,
+        (np.arange(config.ny) + 0.5) * grid.spacing("y"),
         dims=("y",),
         name="y",
         attrs={"long_name": "cell_center_y", "units": "m"},

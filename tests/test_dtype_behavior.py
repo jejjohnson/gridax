@@ -44,8 +44,8 @@ class TestFloat32Float64Agreement:
 
     def test_difference_laplacian_f32_f64_agree(self, grid2d):
         diff = Difference2D(grid=grid2d)
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         h64 = (x[None, :] ** 2 + y[:, None] ** 2).astype(jnp.float64)
         h32 = h64.astype(jnp.float32)
 
@@ -61,7 +61,7 @@ class TestFloat32Float64Agreement:
 
     def test_difference_diff_x_f32_f64_agree(self, grid2d):
         diff = Difference2D(grid=grid2d)
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
         h64 = jnp.broadcast_to(2.0 * x, (grid2d.Ny, grid2d.Nx)).astype(jnp.float64)
         h32 = h64.astype(jnp.float32)
 
@@ -124,8 +124,8 @@ class TestFloat32Float64Agreement:
 
     def test_vorticity_f32_f64_agree(self, grid2d):
         vort = Vorticity2D(grid=grid2d)
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         u64 = jnp.broadcast_to(-y[:, None], (grid2d.Ny, grid2d.Nx)).astype(jnp.float64)
         v64 = jnp.broadcast_to(x, (grid2d.Ny, grid2d.Nx)).astype(jnp.float64)
         u32 = u64.astype(jnp.float32)
@@ -141,8 +141,8 @@ class TestFloat32Float64Agreement:
         )
 
     def test_divergence_2d_f32_f64_agree(self, grid2d):
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         u64 = jnp.broadcast_to(x, (grid2d.Ny, grid2d.Nx)).astype(jnp.float64)
         v64 = jnp.broadcast_to(y[:, None], (grid2d.Ny, grid2d.Nx)).astype(jnp.float64)
         u32 = u64.astype(jnp.float32)
@@ -159,8 +159,8 @@ class TestFloat32Float64Agreement:
 
     def test_divergence2d_class_f32_f64_agree(self, grid2d):
         div_op = Divergence2D(grid=grid2d)
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         u64 = jnp.broadcast_to(x, (grid2d.Ny, grid2d.Nx)).astype(jnp.float64)
         v64 = jnp.broadcast_to(y[:, None], (grid2d.Ny, grid2d.Nx)).astype(jnp.float64)
         u32 = u64.astype(jnp.float32)
@@ -176,12 +176,16 @@ class TestFloat32Float64Agreement:
         )
 
     def test_diffusion_2d_functional_f32_f64_agree(self, grid2d):
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
         h64 = jnp.broadcast_to(x**2, (grid2d.Ny, grid2d.Nx)).astype(jnp.float64)
         h32 = h64.astype(jnp.float32)
 
-        res64 = diffusion_2d(h64, kappa=1.0, dx=grid2d.dx, dy=grid2d.dy)
-        res32 = diffusion_2d(h32, kappa=1.0, dx=grid2d.dx, dy=grid2d.dy)
+        res64 = diffusion_2d(
+            h64, kappa=1.0, dx=grid2d.spacing("x"), dy=grid2d.spacing("y")
+        )
+        res32 = diffusion_2d(
+            h32, kappa=1.0, dx=grid2d.spacing("x"), dy=grid2d.spacing("y")
+        )
 
         np.testing.assert_allclose(
             res32[1:-1, 1:-1].astype(float),
@@ -191,7 +195,7 @@ class TestFloat32Float64Agreement:
 
     def test_diffusion2d_class_f32_f64_agree(self, grid2d):
         diff_op = Diffusion2D(grid=grid2d)
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
         h64 = jnp.broadcast_to(x**2, (grid2d.Ny, grid2d.Nx)).astype(jnp.float64)
         h32 = h64.astype(jnp.float32)
 
@@ -215,15 +219,15 @@ class TestNoNanOnValidInputs:
 
     def test_difference_1d_no_nan(self, grid1d):
         diff = Difference1D(grid=grid1d)
-        x = jnp.arange(grid1d.Nx, dtype=float) * grid1d.dx
+        x = jnp.arange(grid1d.Nx, dtype=float) * grid1d.spacing("x")
         h = jnp.sin(x)
         for result in [diff.diff_x_T_to_U(h), diff.diff_x_U_to_T(h), diff.laplacian(h)]:
             assert jnp.all(jnp.isfinite(result)), "NaN or Inf in 1D difference output"
 
     def test_difference_2d_no_nan(self, grid2d):
         diff = Difference2D(grid=grid2d)
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         h = jnp.sin(x[None, :]) * jnp.cos(y[:, None])
         u = jnp.ones((grid2d.Ny, grid2d.Nx))
         v = jnp.ones((grid2d.Ny, grid2d.Nx))
@@ -239,8 +243,8 @@ class TestNoNanOnValidInputs:
 
     def test_interpolation_2d_no_nan(self, grid2d):
         interp = Interpolation2D(grid=grid2d)
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         h = jnp.sin(x[None, :]) + jnp.cos(y[:, None])
         for result in [interp.T_to_U(h), interp.T_to_V(h), interp.T_to_X(h)]:
             assert jnp.all(jnp.isfinite(result)), "NaN or Inf in interpolation output"
@@ -278,16 +282,16 @@ class TestNoNanOnValidInputs:
 
     def test_divergence2d_no_nan(self, grid2d):
         div_op = Divergence2D(grid=grid2d)
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         u = jnp.broadcast_to(jnp.sin(x), (grid2d.Ny, grid2d.Nx))
         v = jnp.broadcast_to(jnp.cos(y[:, None]), (grid2d.Ny, grid2d.Nx))
         for result in [div_op(u, v), div_op.noflux(u, v)]:
             assert jnp.all(jnp.isfinite(result)), "NaN or Inf in Divergence2D output"
 
     def test_difference2d_divergence_no_nan(self, grid2d):
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         u = jnp.broadcast_to(jnp.sin(x), (grid2d.Ny, grid2d.Nx))
         v = jnp.broadcast_to(jnp.cos(y[:, None]), (grid2d.Ny, grid2d.Nx))
         result = Difference2D(grid=grid2d).divergence(u, v)
@@ -295,17 +299,19 @@ class TestNoNanOnValidInputs:
 
     def test_diffusion2d_no_nan(self, grid2d):
         diff_op = Diffusion2D(grid=grid2d)
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         h = jnp.sin(x[None, :]) * jnp.cos(y[:, None])
         result = diff_op(h, kappa=1e-2)
         assert jnp.all(jnp.isfinite(result)), "NaN or Inf in Diffusion2D output"
 
     def test_diffusion_2d_functional_no_nan(self, grid2d):
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         h = jnp.sin(x[None, :]) * jnp.cos(y[:, None])
-        result = diffusion_2d(h, kappa=1e-2, dx=grid2d.dx, dy=grid2d.dy)
+        result = diffusion_2d(
+            h, kappa=1e-2, dx=grid2d.spacing("x"), dy=grid2d.spacing("y")
+        )
         assert jnp.all(jnp.isfinite(result)), "NaN or Inf in diffusion_2d output"
 
 
@@ -413,8 +419,8 @@ class TestSmallSpacingRobustness:
         dx = 1e-4
         grid = CartesianGrid2D.from_interior(8, 8, dx * 8, dx * 8)
         diff = Difference2D(grid=grid)
-        x = jnp.arange(grid.Nx, dtype=float) * grid.dx
-        y = jnp.arange(grid.Ny, dtype=float) * grid.dy
+        x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
+        y = jnp.arange(grid.Ny, dtype=float) * grid.spacing("y")
         h = jnp.sin(x[None, :]) * jnp.cos(y[:, None])
         result = diff.laplacian(h)
         assert jnp.all(jnp.isfinite(result)), "Laplacian has NaN/Inf on fine grid"

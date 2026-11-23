@@ -16,6 +16,7 @@ from gridax._src.backend import set_at, vmap
 from gridax._src.grid import CartesianGrid2D, CartesianGrid3D
 from gridax._src.mask import Mask2D, Mask3D
 from gridax._src.operators._ghost import interior, zero_z_ghosts
+from gridax._src.operators._utils import _spacing
 from gridax._src.operators.diagnostic_operators import _sanitize
 from gridax._src.operators.diagnostics import enstrophy, potential_enstrophy
 from gridax._src.operators.difference import Difference2D, _curl_2d
@@ -485,9 +486,9 @@ class Vorticity3D:
             Relative vorticity at X-points.  When ``self.mask`` is
             set, dry X-corners are zero via ``* mask.xy_corner_strict``.
         """
-        out = vmap(lambda u_k, v_k: _curl_2d(u_k, v_k, self.grid.dx, self.grid.dy))(
-            u, v
-        )
+        dx = _spacing(self.grid, "x", v, at="X")
+        dy = _spacing(self.grid, "y", u, at="X")
+        out = vmap(lambda u_k, v_k: _curl_2d(u_k, v_k, dx, dy))(u, v)
         # Zero z-ghost slices to match 3D ghost-ring convention.
         out = zero_z_ghosts(out)
         if self.mask is not None:

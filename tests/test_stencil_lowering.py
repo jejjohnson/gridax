@@ -145,21 +145,23 @@ class TestSameValues:
 
     def test_laplacian_1d(self):
         h = _field(NX)
-        ref = interior((diff_x_fwd_1d(h) - diff_x_bwd_1d(h)) / self.g1.dx**2, h)
+        ref = interior(
+            (diff_x_fwd_1d(h) - diff_x_bwd_1d(h)) / self.g1.spacing("x") ** 2, h
+        )
         np.testing.assert_array_equal(fvx.Difference1D(self.g1).laplacian(h), ref)
 
     def test_laplacian_2d(self):
         h = _field(NY, NX)
-        d2x = (diff_x_fwd_2d(h) - diff_x_bwd_2d(h)) / self.g2.dx**2
-        d2y = (diff_y_fwd_2d(h) - diff_y_bwd_2d(h)) / self.g2.dy**2
+        d2x = (diff_x_fwd_2d(h) - diff_x_bwd_2d(h)) / self.g2.spacing("x") ** 2
+        d2y = (diff_y_fwd_2d(h) - diff_y_bwd_2d(h)) / self.g2.spacing("y") ** 2
         ref = interior(d2x + d2y, h)
         np.testing.assert_array_equal(fvx.Difference2D(self.g2).laplacian(h), ref)
 
     @pytest.mark.slow
     def test_laplacian_3d(self):
         h = _field(5, NY, NX)
-        d2x = (diff_x_fwd_3d(h) - diff_x_bwd_3d(h)) / self.g3.dx**2
-        d2y = (diff_y_fwd_3d(h) - diff_y_bwd_3d(h)) / self.g3.dy**2
+        d2x = (diff_x_fwd_3d(h) - diff_x_bwd_3d(h)) / self.g3.spacing("x") ** 2
+        d2y = (diff_y_fwd_3d(h) - diff_y_bwd_3d(h)) / self.g3.spacing("y") ** 2
         ref = interior(d2x + d2y, h)
         np.testing.assert_array_equal(fvx.Difference3D(self.g3).laplacian(h), ref)
 
@@ -198,7 +200,7 @@ class TestSameValues:
         """The fused tendency equals the divergence of the public fluxes."""
         h = _field(NY, NX, seed=5)
         kappa = jnp.abs(_field(NY, NX, seed=6)) if kappa_field else 0.7
-        dx, dy = self.g2.dx, self.g2.dy
+        dx, dy = self.g2.spacing("x"), self.g2.spacing("y")
         fx, fy = _diffusion_2d_fluxes_impl(h, kappa, dx, dy, None, None, wall=wall)
         du = (fx[1:-1, 1:-1] - fx[1:-1, :-2]) / dx
         dv = (fy[1:-1, 1:-1] - fy[:-2, 1:-1]) / dy
@@ -216,7 +218,8 @@ class TestSameValues:
             kappa = jnp.abs(_field(NY, NX, seed=6))  # float64
         else:
             kappa = np.float64(0.7)
-        dx, dy = self.g2.dx, self.g2.dy
+        # the operators cast the metric to the field's dtype
+        dx, dy = (jnp.float32(self.g2.spacing(axis)) for axis in "xy")
         # the old path wrote float64 fluxes into float32 buffers; JAX warns
         # about that implicit scatter cast, which is the behaviour we pin
         with warnings.catch_warnings():
@@ -243,7 +246,7 @@ class TestSameValues:
         wet = np.ones((NY, NX), dtype=bool)
         wet[3:5, 4:7] = False
         mask = fvx.Mask2D.from_mask(wet)
-        dx, dy = self.g2.dx, self.g2.dy
+        dx, dy = self.g2.spacing("x"), self.g2.spacing("y")
         fx, fy = _diffusion_2d_fluxes_impl(h, 0.7, dx, dy, mask.u, mask.v)
         du = (fx[1:-1, 1:-1] - fx[1:-1, :-2]) / dx
         dv = (fy[1:-1, 1:-1] - fy[:-2, 1:-1]) / dy

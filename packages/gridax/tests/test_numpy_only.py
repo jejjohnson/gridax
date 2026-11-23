@@ -24,7 +24,7 @@ CHECKS = textwrap.dedent(
     gridax.CartesianGrid1D.from_interior(4, 1.0)
     gridax.CartesianGrid3D.from_interior(4, 4, 4, 1.0, 1.0, 1.0).horizontal_grid()
     s = gridax.SphericalGrid3D.from_interior(8, 6, 3, (0, 40), (-30, 30), 1.0)
-    float(s.min_cell_width), float(s.max_aspect), s.horizontal_grid().dx_V
+    float(s.min_cell_width), float(s.max_aspect), s.horizontal_grid().spacing("x", at="V")
 
     h = np.ones((8, 8), dtype=bool)
     h[3:5, 3:5] = False

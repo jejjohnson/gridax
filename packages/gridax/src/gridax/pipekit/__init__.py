@@ -6,8 +6,8 @@ Requires the ``pipekit`` extra (``pip install "gridax[pipekit]"``);
 Every operator here is a `pipekit_jax.JaxOperator`: a pipekit ``Operator``
 (JSON config, ``|`` composition, ``Sequential`` / ``Graph`` nodes) that is
 also an ``eqx.Module`` (runs under ``jit`` / ``grad`` / ``vmap``). Fields
-are C-grid arrays ``[*batch, Ny, Nx]``; the grid is a static
-``(nx_interior, ny_interior, Lx, Ly)`` tuple.
+are C-grid arrays ``[*batch, Ny, Nx]``; the grid is a
+`CartesianGrid2D`, or its ``(nx_interior, ny_interior, Lx, Ly)`` config.
 """
 
 from __future__ import annotations
@@ -22,9 +22,6 @@ except ImportError as err:  # pragma: no cover - exercised without the extra
 from gridax._src.pipekit.base import (
     FVXOperator,
     GridOperator,
-    GridSpec,
-    as_grid_spec,
-    build_grid,
     over_leading,
 )
 from gridax._src.pipekit.diagnostics import (
@@ -64,9 +61,6 @@ __all__ = [
     # base
     "FVXOperator",
     "GridOperator",
-    "GridSpec",
-    "as_grid_spec",
-    "build_grid",
     "over_leading",
     # stencils, interpolation, boundaries, masks
     "DIFFERENCES",

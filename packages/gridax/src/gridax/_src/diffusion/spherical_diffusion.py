@@ -90,9 +90,9 @@ else:
 def _spherical_diffusion_2d_impl(
     h: Float[Array, "Ny Nx"],
     kappa: float | Float[Array, "Ny Nx"],
-    dlon: float,
-    dlat: float,
-    R: float,
+    dlon: Float[Array, ""],
+    dlat: Float[Array, ""],
+    R: Float[Array, ""],
     cos_lat_T: Float[Array, "Ny Nx"],
     cos_lat_U: Float[Array, "Ny Nx"],
     cos_lat_V: Float[Array, "Ny Nx"],
@@ -105,6 +105,8 @@ def _spherical_diffusion_2d_impl(
     cos_lat_T = _metric_like(cos_lat_T, h)
     cos_lat_U = _metric_like(cos_lat_U, h)
     cos_lat_V = _metric_like(cos_lat_V, h)
+    R_dlon, R_dlat = _metric_like(R * dlon, h), _metric_like(R * dlat, h)
+    dlon, dlat, R = (_metric_like(m, h) for m in (dlon, dlat, R))
     # κ at the interior faces (arithmetic mean of the two T cells)
     kappa_x, kappa_y = _face_kappa(kappa)  # [Ny-2, Nx-3], [Ny-3, Nx-2]
 
@@ -114,13 +116,13 @@ def _spherical_diffusion_2d_impl(
     dh_dlon_raw = kappa_x * (h[1:-1, 2:-1] - h[1:-1, 1:-2])
     cos_U_face = cos_lat_U[1:-1, 1:-2]
     # cast as the h-typed `zeros_like(h).at[...].set(...)` buffer did
-    flux_x_interior = _safe_div_cos(dh_dlon_raw, cos_U_face, R * dlon).astype(h.dtype)
+    flux_x_interior = _safe_div_cos(dh_dlon_raw, cos_U_face, R_dlon).astype(h.dtype)
     if mu is not None:
         flux_x_interior = flux_x_interior * mu[1:-1, 1:-2]
 
     # Step 2 — north-face flux at V-points.
     # F_phi[j+1/2, i] = kappa[j+1/2, i] * (h[j+1, i] - h[j, i]) / (R * dlat)
-    flux_y_interior = (kappa_y * (h[2:-1, 1:-1] - h[1:-2, 1:-1]) / (R * dlat)).astype(
+    flux_y_interior = (kappa_y * (h[2:-1, 1:-1] - h[1:-2, 1:-1]) / R_dlat).astype(
         h.dtype
     )
     if mv is not None:
@@ -154,9 +156,9 @@ def _spherical_diffusion_2d_impl(
 def _spherical_diffusion_2d_fluxes_impl(
     h: Float[Array, "Ny Nx"],
     kappa: float | Float[Array, "Ny Nx"],
-    dlon: float,
-    dlat: float,
-    R: float,
+    dlon: Float[Array, ""],
+    dlat: Float[Array, ""],
+    R: Float[Array, ""],
     cos_lat_U: Float[Array, "Ny Nx"],
     mu: Bool[Array, "Ny Nx"] | Float[Array, "Ny Nx"] | None,
     mv: Bool[Array, "Ny Nx"] | Float[Array, "Ny Nx"] | None,
@@ -164,17 +166,18 @@ def _spherical_diffusion_2d_fluxes_impl(
     """Shared diagnostic-flux kernel for :class:`SphericalDiffusion2D`."""
     xp = array_namespace(h, kappa, cos_lat_U, mu, mv)
     cos_lat_U = _metric_like(cos_lat_U, h)
+    R_dlon, R_dlat = _metric_like(R * dlon, h), _metric_like(R * dlat, h)
     # κ at the interior faces (arithmetic mean of the two T cells)
     kappa_x, kappa_y = _face_kappa(kappa)  # [Ny-2, Nx-3], [Ny-3, Nx-2]
 
     dh_dlon_raw = kappa_x * (h[1:-1, 2:-1] - h[1:-1, 1:-2])
     cos_U_face = cos_lat_U[1:-1, 1:-2]
-    flux_x_interior = _safe_div_cos(dh_dlon_raw, cos_U_face, R * dlon)
+    flux_x_interior = _safe_div_cos(dh_dlon_raw, cos_U_face, R_dlon)
     flux_x = set_at(xp.zeros_like(h), np.s_[1:-1, 1:-2], flux_x_interior)
     if mu is not None:
         flux_x = flux_x * mu
 
-    flux_y_interior = kappa_y * (h[2:-1, 1:-1] - h[1:-2, 1:-1]) / (R * dlat)
+    flux_y_interior = kappa_y * (h[2:-1, 1:-1] - h[1:-2, 1:-1]) / R_dlat
     flux_y = set_at(xp.zeros_like(h), np.s_[1:-2, 1:-1], flux_y_interior)
     if mv is not None:
         flux_y = flux_y * mv
@@ -260,9 +263,9 @@ class SphericalDiffusion2D:
             self.grid.dlon,
             self.grid.dlat,
             self.grid.R,
-            self.grid.cos_lat_T,
-            self.grid.cos_lat_U,
-            self.grid.cos_lat_V,
+            self.grid._cos_lat("T"),
+            self.grid._cos_lat("U"),
+            self.grid._cos_lat("V"),
             mh=mh,
             mu=mu,
             mv=mv,
@@ -302,7 +305,7 @@ class SphericalDiffusion2D:
             self.grid.dlon,
             self.grid.dlat,
             self.grid.R,
-            self.grid.cos_lat_U,
+            self.grid._cos_lat("U"),
             mu=mu,
             mv=mv,
         )
@@ -336,9 +339,9 @@ class SphericalDiffusion3D:
         """Diffusion tendency at T-points over all z-levels."""
         xp = array_namespace(h, kappa)
         dlon, dlat, R = self.grid.dlon, self.grid.dlat, self.grid.R
-        cos_T = self.grid.cos_lat_T
-        cos_U = self.grid.cos_lat_U
-        cos_V = self.grid.cos_lat_V
+        cos_T = self.grid._cos_lat("T")
+        cos_U = self.grid._cos_lat("U")
+        cos_V = self.grid._cos_lat("V")
 
         kappa_arr = xp.asarray(kappa)
         kappa_ax = 0 if kappa_arr.ndim >= 3 else None
@@ -395,7 +398,7 @@ class SphericalDiffusion3D:
         """Diagnostic diffusive face fluxes at U- and V-points, all z."""
         xp = array_namespace(h, kappa)
         dlon, dlat, R = self.grid.dlon, self.grid.dlat, self.grid.R
-        cos_U = self.grid.cos_lat_U
+        cos_U = self.grid._cos_lat("U")
 
         kappa_arr = xp.asarray(kappa)
         kappa_ax = 0 if kappa_arr.ndim >= 3 else None

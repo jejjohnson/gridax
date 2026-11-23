@@ -6,10 +6,11 @@ grid type (Cartesian, spherical):
     ArakawaCGrid1D / 2D / 3D       — pure C-grid topology (Nx, Ny, Nz +
                                      ghost-cell convention).  No metric.
         ↓
-    CurvilinearGrid1D / 2D / 3D    — adds a uniform metric (Lx, Ly, Lz,
-                                     dx, dy, dz).  Coordinate-system
-                                     agnostic; serves as the parent for
-                                     all concrete grids.
+    CurvilinearGrid1D / 2D / 3D    — adds a uniform metric (Lx, Ly, Lz
+                                     and the accessor spacing, coords,
+                                     area).  Coordinate-system agnostic;
+                                     serves as the parent for all concrete
+                                     grids.
         ↓
     CartesianGrid* (cartesian.py)
     SphericalGrid* (spherical.py)
@@ -22,14 +23,44 @@ take the concrete subclass directly.
 
 Every class is a frozen dataclass built with NumPy, registered as a JAX
 pytree when JAX can be imported (:func:`pytree_dataclass`). The integer
-sizes ``Nx``, ``Ny``, ``Nz`` are static pytree metadata, so a grid can be
-passed to plain ``jax.jit`` and still give concrete shapes; every other
-field is a leaf.
+sizes ``Nx``, ``Ny``, ``Nz``, the ghost-ring width ``ghost`` and the axis
+names ``axes`` are static pytree metadata, so a grid can be passed to plain
+``jax.jit`` and still give concrete shapes. Every other field is an array
+leaf: a Python float given to a constructor is stored as a 0-d float64
+array, so ``jax.jit`` and ``eqx.filter_jit`` both trace it and one compiled
+function serves every grid of a shape. The operators cast a metric to the
+dtype of the field it scales.
+
+The metric is read through one accessor, at any point of the staggering:
+``grid.spacing(axis, at=P)``, ``grid.coords(axis, at=P)`` and
+``grid.area(at=P)``, with the axis names of ``grid.axes``.
 """
 
 from __future__ import annotations
 
-from gridax._src.pytree import pytree_dataclass, static_field
+import dataclasses
+from typing import TYPE_CHECKING, Any
+
+from jaxtyping import Float
+import numpy as np
+
+from gridax._src.grid.points import point_axes
+from gridax._src.pytree import array_namespace, pytree_dataclass, static_field
+
+# ``jaxtyping.Array`` imports JAX, so it names the type for the type checker
+# only.
+if TYPE_CHECKING:
+    from jaxtyping import Array
+else:
+    Array = np.ndarray
+
+
+def _as_leaf(value: Any) -> Any:
+    """A Python (or NumPy) number as a 0-d float64 array; anything else as is."""
+    if isinstance(value, int | float | np.integer | np.floating):
+        return np.asarray(value, dtype=np.float64)
+    return value
+
 
 # ----------------------------------------------------------------------
 # Layer 1 — pure C-grid topology (no metric)
@@ -47,7 +78,11 @@ class ArakawaCGrid1D:
     Parameters
     ----------
     Nx : int
-        Total number of cells in x (including 2 ghost cells).
+        Total number of cells in x (including the ghost ring).
+    axes : tuple of str
+        The names of the array axes, in array order (static).
+    ghost : int
+        Width of the ghost ring on each side (static).
 
     Notes
     -----
@@ -64,6 +99,13 @@ class ArakawaCGrid1D:
     """
 
     Nx: int = static_field()
+    axes: tuple[str, ...] = static_field(default=("x",), kw_only=True)
+    ghost: int = static_field(default=1, kw_only=True)
+
+    @property
+    def shape(self) -> tuple[int, ...]:
+        """The array shape of a field, ghost ring included: ``(Nx,)``."""
+        return (self.Nx,)
 
 
 @pytree_dataclass
@@ -79,7 +121,11 @@ class ArakawaCGrid2D:
     Nx : int
         Total number of cells in x (including 2 ghost cells).
     Ny : int
-        Total number of cells in y (including 2 ghost cells).
+        Total number of cells in y (including the ghost ring).
+    axes : tuple of str
+        The names of the array axes, in array order (static).
+    ghost : int
+        Width of the ghost ring on each side (static).
 
     Notes
     -----
@@ -103,6 +149,13 @@ class ArakawaCGrid2D:
 
     Nx: int = static_field()
     Ny: int = static_field()
+    axes: tuple[str, ...] = static_field(default=("y", "x"), kw_only=True)
+    ghost: int = static_field(default=1, kw_only=True)
+
+    @property
+    def shape(self) -> tuple[int, ...]:
+        """The array shape of a field, ghost ring included: ``(Ny, Nx)``."""
+        return (self.Ny, self.Nx)
 
 
 @pytree_dataclass
@@ -120,7 +173,11 @@ class ArakawaCGrid3D:
     Ny : int
         Total number of cells in y (including 2 ghost cells).
     Nz : int
-        Total number of cells in z (including 2 ghost cells).
+        Total number of cells in z (including the ghost ring).
+    axes : tuple of str
+        The names of the array axes, in array order (static).
+    ghost : int
+        Width of the ghost ring on each side (static).
 
     Notes
     -----
@@ -143,103 +200,228 @@ class ArakawaCGrid3D:
     Nx: int = static_field()
     Ny: int = static_field()
     Nz: int = static_field()
+    axes: tuple[str, ...] = static_field(default=("z", "y", "x"), kw_only=True)
+    ghost: int = static_field(default=1, kw_only=True)
+
+    @property
+    def shape(self) -> tuple[int, ...]:
+        """The array shape of a field, ghost ring included: ``(Nz, Ny, Nx)``."""
+        return (self.Nz, self.Ny, self.Nx)
 
 
 # ----------------------------------------------------------------------
-# Layer 2 — uniform curvilinear metric (Lx, dx, ...)
+# Layer 2 — uniform curvilinear metric (Lx, spacing, ...)
 # ----------------------------------------------------------------------
+
+
+class _UniformMetric:
+    """The metric accessor of a grid with one uniform length per axis.
+
+    Mixed into :class:`CurvilinearGrid1D` / ``2D`` / ``3D``. Each axis of
+    ``axes`` is called ``"x"``, ``"y"`` or ``"z"`` by its extent ``Lx``,
+    ``Ly``, ``Lz`` and its size ``Nx``, ``Ny``, ``Nz``.
+    """
+
+    # Fields and properties of the dataclasses this mixes into.
+    axes: tuple[str, ...]
+    ghost: int
+
+    if TYPE_CHECKING:
+
+        @property
+        def shape(self) -> tuple[int, ...]: ...
+
+    def __post_init__(self) -> None:
+        for field in dataclasses.fields(self):  # ty: ignore[invalid-argument-type]
+            if not field.metadata.get("static", False):
+                value = _as_leaf(getattr(self, field.name))
+                object.__setattr__(self, field.name, value)
+
+    def _size(self, axis: str) -> int:
+        """Number of points along ``axis``, ghost ring included."""
+        if axis not in self.axes:
+            raise ValueError(
+                f"{type(self).__name__} has the axes {self.axes}, not {axis!r}"
+            )
+        return self.shape[self.axes.index(axis)]
+
+    def _staggered(self, axis: str, at: str) -> bool:
+        """Whether the points ``at`` sit half a cell along ``axis``."""
+        self._size(axis)
+        return axis in point_axes(at, self.axes)
+
+    def _step(self, axis: str) -> Float[Array, ""]:
+        """The uniform step along ``axis``: L / (N − 2 ghost)."""
+        n_interior = self._size(axis) - 2 * self.ghost
+        return getattr(self, f"L{axis}") / n_interior
+
+    def spacing(self, axis: str, *, at: str = "T") -> Float[Array, "..."]:
+        """The grid spacing along ``axis`` at the points ``at``.
+
+        ``Δ = L / N_interior``, the same at every point of a uniform grid.
+
+        Parameters
+        ----------
+        axis : str
+            One of ``grid.axes``.
+        at : str
+            The point: ``"T"``, ``"U"``, ``"V"``, ``"X"`` or ``"W"``.
+
+        Returns
+        -------
+        Float[Array, ""]
+            The spacing, a 0-d array.
+
+        Examples
+        --------
+        >>> import gridax
+        >>> grid = gridax.CartesianGrid2D.from_interior(10, 5, 1.0, 1.0)
+        >>> float(grid.spacing("x")), float(grid.spacing("y", at="V"))
+        (0.1, 0.2)
+        """
+        self._staggered(axis, at)
+        return self._step(axis)
+
+    def coords(self, axis: str, *, at: str = "T") -> Float[Array, "N"]:
+        """The coordinate of the points ``at`` along ``axis``, ghost ring included.
+
+        ``x[i] = i Δx`` at the points centred along the axis and
+        ``(i + 1/2) Δx`` at the points staggered along it (the same-index
+        convention of ``docs/cgrid_discretization.md``).
+
+        Parameters
+        ----------
+        axis : str
+            One of ``grid.axes``.
+        at : str
+            The point: ``"T"``, ``"U"``, ``"V"``, ``"X"`` or ``"W"``.
+
+        Returns
+        -------
+        Float[Array, "N"]
+            One coordinate per index along the axis.
+
+        Examples
+        --------
+        >>> import gridax
+        >>> grid = gridax.CartesianGrid1D.from_interior(2, 1.0)
+        >>> grid.coords("x").tolist(), grid.coords("x", at="U").tolist()
+        ([0.0, 0.5, 1.0, 1.5], [0.25, 0.75, 1.25, 1.75])
+        """
+        shift = 0.5 if self._staggered(axis, at) else 0.0
+        step = self._step(axis)
+        xp = array_namespace(step)
+        # x[i] = (i + shift) Δx
+        return (xp.arange(self._size(axis)) + shift) * step
+
+    def area(self, *, at: str = "T") -> Float[Array, "..."]:
+        """The horizontal cell measure around the points ``at``.
+
+        ``Δx Δy``, broadcast to ``[Ny, Nx]`` (the cell length ``Δx``, ``[Nx]``,
+        on a 1-D grid).
+
+        Parameters
+        ----------
+        at : str
+            The point: ``"T"``, ``"U"``, ``"V"``, ``"X"`` or ``"W"``.
+
+        Returns
+        -------
+        Float[Array, "..."]
+            One area per horizontal cell, ghost ring included.
+
+        Examples
+        --------
+        >>> import gridax
+        >>> grid = gridax.CartesianGrid2D.from_interior(4, 2, 1.0, 1.0)
+        >>> grid.area().shape, float(grid.area()[0, 0])
+        ((4, 6), 0.125)
+        """
+        return self._area(at=at)
+
+    def _area(self, *, at: str = "T", xp: Any = None) -> Float[Array, "..."]:
+        """:meth:`area` in the namespace ``xp`` (the grid's own by default)."""
+        point_axes(at, self.axes)
+        horizontal = [axis for axis in self.axes if axis != "z"]
+        cell = self._step(horizontal[-1])
+        for axis in horizontal[:-1]:
+            cell = cell * self._step(axis)
+        xp = array_namespace(cell) if xp is None else xp
+        shape = tuple(self._size(axis) for axis in horizontal)
+        return xp.full(shape, cell)
 
 
 @pytree_dataclass
-class CurvilinearGrid1D(ArakawaCGrid1D):
+class CurvilinearGrid1D(_UniformMetric, ArakawaCGrid1D):
     """1-D curvilinear C-grid with a uniform metric.
 
-    Adds physical extent (``Lx``) and uniform grid spacing (``dx``) to
-    :class:`ArakawaCGrid1D`.  Concrete subclasses (``CartesianGrid1D``)
-    inherit from this layer and provide their
+    Adds the physical extent ``Lx`` to :class:`ArakawaCGrid1D`; the spacing
+    follows from it (:meth:`spacing`). Concrete subclasses
+    (``CartesianGrid1D``) inherit from this layer and provide their
     coordinate-system-specific construction logic.
 
     Parameters
     ----------
     Nx : int
-        Total number of cells in x (including 2 ghost cells).
+        Total number of cells in x (including the ghost ring).
     Lx : float
-        Physical domain length in x.
-    dx : float
-        Grid spacing in x.
+        Physical domain length in x, the ghost ring excluded.
     """
 
-    Lx: float
-    dx: float
+    Lx: Float[Array, ""]
 
 
 @pytree_dataclass
-class CurvilinearGrid2D(ArakawaCGrid2D):
+class CurvilinearGrid2D(_UniformMetric, ArakawaCGrid2D):
     """2-D curvilinear C-grid with a uniform metric.
 
-    Adds physical extents (``Lx``, ``Ly``) and uniform grid spacings
-    (``dx``, ``dy``) to :class:`ArakawaCGrid2D`.  Concrete subclasses
-    (``CartesianGrid2D``, ``SphericalGrid2D``)
-    inherit from this layer and provide their coordinate-system-specific
-    construction logic.
+    Adds the physical extents ``Lx`` and ``Ly`` to :class:`ArakawaCGrid2D`;
+    the spacings follow from them (:meth:`spacing`). Concrete subclasses
+    (``CartesianGrid2D``, ``SphericalGrid2D``) inherit from this layer and
+    provide their coordinate-system-specific construction logic.
 
     Parameters
     ----------
     Nx : int
-        Total number of cells in x (including 2 ghost cells).
+        Total number of cells in x (including the ghost ring).
     Ny : int
-        Total number of cells in y (including 2 ghost cells).
+        Total number of cells in y (including the ghost ring).
     Lx : float
-        Physical domain length in x.
+        Physical domain length in x, the ghost ring excluded.
     Ly : float
-        Physical domain length in y.
-    dx : float
-        Grid spacing in x.
-    dy : float
-        Grid spacing in y.
+        Physical domain length in y, the ghost ring excluded.
     """
 
-    Lx: float
-    Ly: float
-    dx: float
-    dy: float
+    Lx: Float[Array, ""]
+    Ly: Float[Array, ""]
 
 
 @pytree_dataclass
-class CurvilinearGrid3D(ArakawaCGrid3D):
+class CurvilinearGrid3D(_UniformMetric, ArakawaCGrid3D):
     """3-D curvilinear C-grid with a uniform metric.
 
-    Adds physical extents (``Lx``, ``Ly``, ``Lz``) and uniform grid
-    spacings (``dx``, ``dy``, ``dz``) to :class:`ArakawaCGrid3D`.
-    Concrete subclasses (``CartesianGrid3D``, ``SphericalGrid3D``)
-    inherit from this layer and provide their
+    Adds the physical extents ``Lx``, ``Ly`` and ``Lz`` to
+    :class:`ArakawaCGrid3D`; the spacings follow from them
+    (:meth:`spacing`). Concrete subclasses (``CartesianGrid3D``,
+    ``SphericalGrid3D``) inherit from this layer and provide their
     coordinate-system-specific construction logic.
 
     Parameters
     ----------
     Nx : int
-        Total number of cells in x (including 2 ghost cells).
+        Total number of cells in x (including the ghost ring).
     Ny : int
-        Total number of cells in y (including 2 ghost cells).
+        Total number of cells in y (including the ghost ring).
     Nz : int
-        Total number of cells in z (including 2 ghost cells).
+        Total number of cells in z (including the ghost ring).
     Lx : float
-        Physical domain length in x.
+        Physical domain length in x, the ghost ring excluded.
     Ly : float
-        Physical domain length in y.
+        Physical domain length in y, the ghost ring excluded.
     Lz : float
-        Physical domain length in z.
-    dx : float
-        Grid spacing in x.
-    dy : float
-        Grid spacing in y.
-    dz : float
-        Grid spacing in z.
+        Physical domain length in z, the ghost ring excluded.
     """
 
-    Lx: float
-    Ly: float
-    Lz: float
-    dx: float
-    dy: float
-    dz: float
+    Lx: Float[Array, ""]
+    Ly: Float[Array, ""]
+    Lz: Float[Array, ""]

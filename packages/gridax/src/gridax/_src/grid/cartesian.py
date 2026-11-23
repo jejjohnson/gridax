@@ -13,6 +13,7 @@ from gridax._src.grid.base import (
     CurvilinearGrid1D,
     CurvilinearGrid2D,
     CurvilinearGrid3D,
+    _as_leaf,
 )
 from gridax._src.pytree import pytree_dataclass
 
@@ -52,9 +53,7 @@ class CartesianGrid1D(CurvilinearGrid1D):
         -------
         CartesianGrid1D
         """
-        Nx = nx_interior + 2
-        dx = Lx / nx_interior
-        return cls(Nx=Nx, Lx=Lx, dx=dx)
+        return cls(Nx=nx_interior + 2, Lx=_as_leaf(Lx))
 
 
 @pytree_dataclass
@@ -105,11 +104,9 @@ class CartesianGrid2D(CurvilinearGrid2D):
         -------
         CartesianGrid2D
         """
-        Nx = nx_interior + 2
-        Ny = ny_interior + 2
-        dx = Lx / nx_interior
-        dy = Ly / ny_interior
-        return cls(Nx=Nx, Ny=Ny, Lx=Lx, Ly=Ly, dx=dx, dy=dy)
+        return cls(
+            Nx=nx_interior + 2, Ny=ny_interior + 2, Lx=_as_leaf(Lx), Ly=_as_leaf(Ly)
+        )
 
 
 @pytree_dataclass
@@ -174,13 +171,14 @@ class CartesianGrid3D(CurvilinearGrid3D):
         -------
         CartesianGrid3D
         """
-        Nx = nx_interior + 2
-        Ny = ny_interior + 2
-        Nz = nz_interior + 2
-        dx = Lx / nx_interior
-        dy = Ly / ny_interior
-        dz = Lz / nz_interior
-        return cls(Nx=Nx, Ny=Ny, Nz=Nz, Lx=Lx, Ly=Ly, Lz=Lz, dx=dx, dy=dy, dz=dz)
+        return cls(
+            Nx=nx_interior + 2,
+            Ny=ny_interior + 2,
+            Nz=nz_interior + 2,
+            Lx=_as_leaf(Lx),
+            Ly=_as_leaf(Ly),
+            Lz=_as_leaf(Lz),
+        )
 
     def horizontal_grid(self) -> CartesianGrid2D:
         """Extract the horizontal 2-D grid from this 3-D grid.
@@ -188,8 +186,8 @@ class CartesianGrid3D(CurvilinearGrid3D):
         Returns
         -------
         CartesianGrid2D
-            A 2-D grid with the same Nx, Ny, Lx, Ly, dx, dy.
+            A 2-D grid with the same Nx, Ny, Lx, Ly and ghost ring.
         """
         return CartesianGrid2D(
-            Nx=self.Nx, Ny=self.Ny, Lx=self.Lx, Ly=self.Ly, dx=self.dx, dy=self.dy
+            Nx=self.Nx, Ny=self.Ny, Lx=self.Lx, Ly=self.Ly, ghost=self.ghost
         )

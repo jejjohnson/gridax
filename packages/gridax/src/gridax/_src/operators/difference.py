@@ -25,6 +25,7 @@ import numpy as np
 from gridax._src.grid import CartesianGrid1D, CartesianGrid2D, CartesianGrid3D
 from gridax._src.mask import Mask1D, Mask2D, Mask3D
 from gridax._src.operators._ghost import interior
+from gridax._src.operators._utils import _spacing
 from gridax._src.operators.stencils import (
     _neighbours,
     diff_x_bwd_1d,
@@ -53,8 +54,8 @@ else:
 def _curl_2d(
     u: Float[Array, "*batch Ny Nx"],
     v: Float[Array, "*batch Ny Nx"],
-    dx: float,
-    dy: float,
+    dx: float | Float[Array, ""],
+    dy: float | Float[Array, ""],
 ) -> Float[Array, "*batch Ny Nx"]:
     """Curl (relative vorticity) at X-points.  Shared implementation.
 
@@ -68,8 +69,8 @@ def _curl_2d(
 def _divergence_2d(
     u: Float[Array, "*batch Ny Nx"],
     v: Float[Array, "*batch Ny Nx"],
-    dx: float,
-    dy: float,
+    dx: float | Float[Array, ""],
+    dy: float | Float[Array, ""],
 ) -> Float[Array, "*batch Ny Nx"]:
     """Divergence at T-points.  Shared implementation.
 
@@ -83,8 +84,8 @@ def _divergence_2d(
 
 def _laplacian_2d_interior(
     h: Float[Array, "*batch Ny Nx"],
-    dx: float,
-    dy: float,
+    dx: float | Float[Array, ""],
+    dy: float | Float[Array, ""],
 ) -> Float[Array, "*batch Ny-2 Nx-2"]:
     """Laplacian at the interior T-points.  Shared implementation.
 
@@ -141,7 +142,7 @@ class Difference1D:
             When ``self.mask`` is set, the output is zeroed at dry
             U-faces via ``* self.mask.u``.
         """
-        out = interior(diff_x_fwd_1d(h) / self.grid.dx, h)
+        out = interior(diff_x_fwd_1d(h) / _spacing(self.grid, "x", h, at="U"), h)
         if self.mask is not None:
             out = out * self.mask.u
         return out
@@ -163,7 +164,7 @@ class Difference1D:
             When ``self.mask`` is set, the output is zeroed at dry
             T-cells via ``* self.mask.h``.
         """
-        out = interior(diff_x_bwd_1d(u) / self.grid.dx, u)
+        out = interior(diff_x_bwd_1d(u) / _spacing(self.grid, "x", u, at="T"), u)
         if self.mask is not None:
             out = out * self.mask.h
         return out
@@ -189,7 +190,9 @@ class Difference1D:
         # arithmetic is unchanged:
         #   (h_e - h_c) - (h_c - h_w)  ≡  diff_x_fwd_1d(h) - diff_x_bwd_1d(h)
         h_c, h_e, h_w = h[1:-1], h[2:], h[:-2]  # h[i], h[i+1], h[i-1]  [Nx-2]
-        out = interior(((h_e - h_c) - (h_c - h_w)) / self.grid.dx**2, h)
+        out = interior(
+            ((h_e - h_c) - (h_c - h_w)) / _spacing(self.grid, "x", h) ** 2, h
+        )
         if self.mask is not None:
             out = out * self.mask.h
         return out
@@ -243,7 +246,7 @@ class Difference2D:
             Forward x-difference at U-points.  When ``self.mask`` is
             set, the output is zeroed at dry U-faces via ``* mask.u``.
         """
-        out = interior(diff_x_fwd_2d(h) / self.grid.dx, h)
+        out = interior(diff_x_fwd_2d(h) / _spacing(self.grid, "x", h, at="U"), h)
         if self.mask is not None:
             out = out * self.mask.u
         return out
@@ -266,7 +269,7 @@ class Difference2D:
             Forward y-difference at V-points.  When ``self.mask`` is
             set, the output is zeroed at dry V-faces via ``* mask.v``.
         """
-        out = interior(diff_y_fwd_2d(h) / self.grid.dy, h)
+        out = interior(diff_y_fwd_2d(h) / _spacing(self.grid, "y", h, at="V"), h)
         if self.mask is not None:
             out = out * self.mask.v
         return out
@@ -290,7 +293,7 @@ class Difference2D:
             set, the output is zeroed at dry X-corners via
             ``* mask.xy_corner_strict``.
         """
-        out = interior(diff_y_fwd_2d(u) / self.grid.dy, u)
+        out = interior(diff_y_fwd_2d(u) / _spacing(self.grid, "y", u, at="X"), u)
         if self.mask is not None:
             out = out * self.mask.xy_corner_strict
         return out
@@ -314,7 +317,7 @@ class Difference2D:
             set, the output is zeroed at dry X-corners via
             ``* mask.xy_corner_strict``.
         """
-        out = interior(diff_x_fwd_2d(v) / self.grid.dx, v)
+        out = interior(diff_x_fwd_2d(v) / _spacing(self.grid, "x", v, at="X"), v)
         if self.mask is not None:
             out = out * self.mask.xy_corner_strict
         return out
@@ -341,7 +344,7 @@ class Difference2D:
             Backward y-difference at U-points.  When ``self.mask`` is
             set, the output is zeroed at dry U-faces via ``* mask.u``.
         """
-        out = interior(diff_y_bwd_2d(q) / self.grid.dy, q)
+        out = interior(diff_y_bwd_2d(q) / _spacing(self.grid, "y", q, at="U"), q)
         if self.mask is not None:
             out = out * self.mask.u
         return out
@@ -364,7 +367,7 @@ class Difference2D:
             Backward x-difference at V-points.  When ``self.mask`` is
             set, the output is zeroed at dry V-faces via ``* mask.v``.
         """
-        out = interior(diff_x_bwd_2d(q) / self.grid.dx, q)
+        out = interior(diff_x_bwd_2d(q) / _spacing(self.grid, "x", q, at="V"), q)
         if self.mask is not None:
             out = out * self.mask.v
         return out
@@ -387,7 +390,7 @@ class Difference2D:
             Backward x-difference at T-points.  When ``self.mask`` is
             set, the output is zeroed at dry T-cells via ``* mask.h``.
         """
-        out = interior(diff_x_bwd_2d(u) / self.grid.dx, u)
+        out = interior(diff_x_bwd_2d(u) / _spacing(self.grid, "x", u, at="T"), u)
         if self.mask is not None:
             out = out * self.mask.h
         return out
@@ -410,7 +413,7 @@ class Difference2D:
             Backward y-difference at T-points.  When ``self.mask`` is
             set, the output is zeroed at dry T-cells via ``* mask.h``.
         """
-        out = interior(diff_y_bwd_2d(v) / self.grid.dy, v)
+        out = interior(diff_y_bwd_2d(v) / _spacing(self.grid, "y", v, at="T"), v)
         if self.mask is not None:
             out = out * self.mask.h
         return out
@@ -443,7 +446,9 @@ class Difference2D:
             Divergence at T-points.  When ``self.mask`` is set, the
             output is zeroed at dry T-cells via ``* mask.h``.
         """
-        out = _divergence_2d(u, v, self.grid.dx, self.grid.dy)
+        out = _divergence_2d(
+            u, v, _spacing(self.grid, "x", u), _spacing(self.grid, "y", v)
+        )
         if self.mask is not None:
             out = out * self.mask.h
         return out
@@ -473,7 +478,12 @@ class Difference2D:
             ``self.mask`` is set, the output is zeroed at dry X-corners
             via ``* mask.xy_corner_strict``.
         """
-        out = _curl_2d(u, v, self.grid.dx, self.grid.dy)
+        out = _curl_2d(
+            u,
+            v,
+            _spacing(self.grid, "x", v, at="X"),
+            _spacing(self.grid, "y", u, at="X"),
+        )
         if self.mask is not None:
             out = out * self.mask.xy_corner_strict
         return out
@@ -497,7 +507,12 @@ class Difference2D:
             Laplacian at T-points.  When ``self.mask`` is set, the
             output is zeroed at dry T-cells via ``* mask.h``.
         """
-        out = interior(_laplacian_2d_interior(h, self.grid.dx, self.grid.dy), h)
+        out = interior(
+            _laplacian_2d_interior(
+                h, _spacing(self.grid, "x", h), _spacing(self.grid, "y", h)
+            ),
+            h,
+        )
         if self.mask is not None:
             out = out * self.mask.h
         return out
@@ -557,7 +572,7 @@ class Difference2D:
                 - psi[..., :-2, 1:-1]
                 - psi[..., :-2, 2:]
             )
-            / (4.0 * self.grid.dy),
+            / (4.0 * _spacing(self.grid, "y", psi, at="U")),
             psi,
         )
 
@@ -569,7 +584,7 @@ class Difference2D:
                 - psi[..., 1:-1, :-2]
                 - psi[..., 2:, :-2]
             )
-            / (4.0 * self.grid.dx),
+            / (4.0 * _spacing(self.grid, "x", psi, at="V")),
             psi,
         )
 
@@ -617,7 +632,7 @@ class Difference3D:
             Forward x-difference at U-points.  When ``self.mask`` is
             set, the output is zeroed at dry U-faces via ``* mask.u``.
         """
-        out = interior(diff_x_fwd_3d(h) / self.grid.dx, h)
+        out = interior(diff_x_fwd_3d(h) / _spacing(self.grid, "x", h, at="U"), h)
         if self.mask is not None:
             out = out * self.mask.u
         return out
@@ -638,7 +653,7 @@ class Difference3D:
             Forward y-difference at V-points.  When ``self.mask`` is
             set, the output is zeroed at dry V-faces via ``* mask.v``.
         """
-        out = interior(diff_y_fwd_3d(h) / self.grid.dy, h)
+        out = interior(diff_y_fwd_3d(h) / _spacing(self.grid, "y", h, at="V"), h)
         if self.mask is not None:
             out = out * self.mask.v
         return out
@@ -659,7 +674,7 @@ class Difference3D:
             Backward x-difference at T-points.  When ``self.mask`` is
             set, the output is zeroed at dry T-cells via ``* mask.h``.
         """
-        out = interior(diff_x_bwd_3d(u) / self.grid.dx, u)
+        out = interior(diff_x_bwd_3d(u) / _spacing(self.grid, "x", u, at="T"), u)
         if self.mask is not None:
             out = out * self.mask.h
         return out
@@ -680,7 +695,7 @@ class Difference3D:
             Backward y-difference at T-points.  When ``self.mask`` is
             set, the output is zeroed at dry T-cells via ``* mask.h``.
         """
-        out = interior(diff_y_bwd_3d(v) / self.grid.dy, v)
+        out = interior(diff_y_bwd_3d(v) / _spacing(self.grid, "y", v, at="T"), v)
         if self.mask is not None:
             out = out * self.mask.h
         return out
@@ -718,7 +733,8 @@ class Difference3D:
         #             + (v[k, j+1/2, i] - v[k, j-1/2, i]) / dy   [Nz-2, Ny-2, Nx-2]
         # `interior` takes the dtype of u and the values, i.e. result_type(u, v).
         out = interior(
-            diff_x_bwd_3d(u) / self.grid.dx + diff_y_bwd_3d(v) / self.grid.dy,
+            diff_x_bwd_3d(u) / _spacing(self.grid, "x", u)
+            + diff_y_bwd_3d(v) / _spacing(self.grid, "y", v),
             u,
         )
         if self.mask is not None:
@@ -746,8 +762,8 @@ class Difference3D:
         #   d2x = (diff_x_fwd_3d(h) - diff_x_bwd_3d(h)) / dx**2
         #   d2y = (diff_y_fwd_3d(h) - diff_y_bwd_3d(h)) / dy**2
         nb = _neighbours(h[1:-1])  # z-interior levels, views [Nz-2, Ny-2, Nx-2]
-        d2x = ((nb.e - nb.c) - (nb.c - nb.w)) / self.grid.dx**2
-        d2y = ((nb.n - nb.c) - (nb.c - nb.s)) / self.grid.dy**2
+        d2x = ((nb.e - nb.c) - (nb.c - nb.w)) / _spacing(self.grid, "x", h) ** 2
+        d2y = ((nb.n - nb.c) - (nb.c - nb.s)) / _spacing(self.grid, "y", h) ** 2
         out = interior(d2x + d2y, h)
         if self.mask is not None:
             out = out * self.mask.h

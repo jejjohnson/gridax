@@ -459,9 +459,7 @@ class TestAdvection2DRotationStability:
         omega = 2 * jnp.pi
         dx = Lx / nx
         dy = Ly / ny
-        grid = CartesianGrid2D(
-            Nx=nx + 2 * ng, Ny=ny + 2 * ng, Lx=Lx, Ly=Ly, dx=dx, dy=dy
-        )
+        grid = CartesianGrid2D(Nx=nx + 2 * ng, Ny=ny + 2 * ng, Lx=Lx, Ly=Ly, ghost=ng)
         # Staggered coordinates
         x_t = (jnp.arange(grid.Nx) - ng + 0.5) * dx
         y_t = (jnp.arange(grid.Ny) - ng + 0.5) * dy
@@ -581,7 +579,7 @@ class TestNegativeFlowConvergence:
         ng = 4
         Lx = 1.0
         dx = Lx / n_interior
-        grid = CartesianGrid1D(Nx=n_interior + 2 * ng, Lx=Lx, dx=dx)
+        grid = CartesianGrid1D(Nx=n_interior + 2 * ng, Lx=Lx, ghost=ng)
 
         x = (jnp.arange(grid.Nx) - ng + 0.5) * dx
         q0 = jnp.sin(2 * jnp.pi * x)
@@ -655,7 +653,7 @@ class TestAdvectionConservation:
         n = 64
         Lx = 1.0
         dx = Lx / n
-        grid = CartesianGrid1D(Nx=n + 2 * ng, Lx=Lx, dx=dx)
+        grid = CartesianGrid1D(Nx=n + 2 * ng, Lx=Lx, ghost=ng)
 
         x = (jnp.arange(grid.Nx) - ng + 0.5) * dx
         r = jnp.abs(x - 0.5)

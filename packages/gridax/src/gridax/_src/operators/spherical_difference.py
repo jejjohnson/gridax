@@ -88,8 +88,10 @@ class SphericalDifference2D:
         dh/dx[j, i+½] = (h[j, i+1] − h[j, i]) / (R · cos(lat_U) · dlon)
         """
         raw = diff_x_fwd_2d(h)
-        cos_U = _metric_like(self.grid.cos_lat_U, h)[1:-1, 1:-1]
-        out = interior(_safe_div_cos(raw, cos_U, self.grid.R * self.grid.dlon), h)
+        cos_U = _metric_like(self.grid._cos_lat("U"), h)[1:-1, 1:-1]
+        out = interior(
+            _safe_div_cos(raw, cos_U, _metric_like(self.grid.R * self.grid.dlon, h)), h
+        )
         if self.mask is not None:
             out = out * self.mask.u
         return out
@@ -100,7 +102,7 @@ class SphericalDifference2D:
         dh/dy[j+½, i] = (h[j+1, i] − h[j, i]) / (R · dlat)
         """
         raw = diff_y_fwd_2d(h)
-        out = interior(raw / (self.grid.R * self.grid.dlat), h)
+        out = interior(raw / _metric_like(self.grid.R * self.grid.dlat, h), h)
         if self.mask is not None:
             out = out * self.mask.v
         return out
@@ -111,8 +113,10 @@ class SphericalDifference2D:
         dv/dx[j+½, i+½] = (v[j+½, i+1] − v[j+½, i]) / (R · cos(lat_X) · dlon)
         """
         raw = diff_x_fwd_2d(v)
-        cos_X = _metric_like(self.grid.cos_lat_X, v)[1:-1, 1:-1]
-        out = interior(_safe_div_cos(raw, cos_X, self.grid.R * self.grid.dlon), v)
+        cos_X = _metric_like(self.grid._cos_lat("X"), v)[1:-1, 1:-1]
+        out = interior(
+            _safe_div_cos(raw, cos_X, _metric_like(self.grid.R * self.grid.dlon, v)), v
+        )
         if self.mask is not None:
             out = out * self.mask.xy_corner_strict
         return out
@@ -123,7 +127,7 @@ class SphericalDifference2D:
         du/dy[j+½, i+½] = (u[j+1, i+½] − u[j, i+½]) / (R · dlat)
         """
         raw = diff_y_fwd_2d(u)
-        out = interior(raw / (self.grid.R * self.grid.dlat), u)
+        out = interior(raw / _metric_like(self.grid.R * self.grid.dlat, u), u)
         if self.mask is not None:
             out = out * self.mask.xy_corner_strict
         return out
@@ -138,8 +142,10 @@ class SphericalDifference2D:
         du/dx[j, i] = (u[j, i+½] − u[j, i−½]) / (R · cos(lat_T) · dlon)
         """
         raw = diff_x_bwd_2d(u)
-        cos_T = _metric_like(self.grid.cos_lat_T, u)[1:-1, 1:-1]
-        out = interior(_safe_div_cos(raw, cos_T, self.grid.R * self.grid.dlon), u)
+        cos_T = _metric_like(self.grid._cos_lat("T"), u)[1:-1, 1:-1]
+        out = interior(
+            _safe_div_cos(raw, cos_T, _metric_like(self.grid.R * self.grid.dlon, u)), u
+        )
         if self.mask is not None:
             out = out * self.mask.h
         return out
@@ -150,7 +156,7 @@ class SphericalDifference2D:
         dv/dy[j, i] = (v[j+½, i] − v[j−½, i]) / (R · dlat)
         """
         raw = diff_y_bwd_2d(v)
-        out = interior(raw / (self.grid.R * self.grid.dlat), v)
+        out = interior(raw / _metric_like(self.grid.R * self.grid.dlat, v), v)
         if self.mask is not None:
             out = out * self.mask.h
         return out
@@ -164,7 +170,7 @@ class SphericalDifference2D:
 
         d²h/dx² = 1/(R² cos²φ) · (h[j,i+1] − 2h[j,i] + h[j,i−1]) / dlon²
         """
-        cos_T = _metric_like(self.grid.cos_lat_T, h)[1:-1, 1:-1]
+        cos_T = _metric_like(self.grid._cos_lat("T"), h)[1:-1, 1:-1]
         # h_c sliced once (see `_Neighbours2D`)
         h_c, h_e, h_w = h[1:-1, 1:-1], h[1:-1, 2:], h[1:-1, :-2]
         d2h = _spherical_d2_lon(h_c, h_e, h_w, cos_T, self.grid.dlon, self.grid.R)
@@ -178,13 +184,13 @@ class SphericalDifference2D:
 
         1/(R² cosφ) · d/dφ(cosφ · dh/dφ)
         """
-        cos_T = _metric_like(self.grid.cos_lat_T, h)[1:-1, 1:-1]
+        cos_T = _metric_like(self.grid._cos_lat("T"), h)[1:-1, 1:-1]
         # h_c sliced once (see `_Neighbours2D`)
         h_c, h_n, h_s = h[1:-1, 1:-1], h[2:, 1:-1], h[:-2, 1:-1]
         # cos(lat) at the V-faces, read from the grid (not averaged from T):
-        #   cos_N = cos_lat_V[j]   (north face of cell j)
-        #   cos_S = cos_lat_V[j-1] (south face of cell j)
-        cos_V = _metric_like(self.grid.cos_lat_V, h)
+        #   cos_N = cos_V[j]   (north face of cell j)
+        #   cos_S = cos_V[j-1] (south face of cell j)
+        cos_V = _metric_like(self.grid._cos_lat("V"), h)
         cos_N = cos_V[1:-1, 1:-1]
         cos_S = cos_V[:-2, 1:-1]
         merid = _spherical_laplacian_merid(
@@ -217,7 +223,7 @@ class SphericalDifference2D:
         dh_dlat_U[j, i+1/2] = (h[j+1, i] + h[j+1, i+1]
                               - h[j-1, i] - h[j-1, i+1]) / (4 * dlat)
         f_on_V[j+1/2, i]    = 1/2 * (f[j, i] + f[j+1, i])
-        cos_V[j+1/2, i]     = cos_lat_V[j, i] = cos(lat_T[j] + dlat/2)
+        cos_V[j+1/2, i]     = cos(lat_T[j] + dlat/2)
         dh_dlon_V[j+1/2, i] = (h[j, i+1] + h[j+1, i+1]
                               - h[j, i-1] - h[j+1, i-1]) / (4 * dlon)
 

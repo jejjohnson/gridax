@@ -173,10 +173,10 @@ class TestMatchesFunctional:
         op = Strain2D(grid=grid)
         u, v = _args("shear")
         np.testing.assert_array_equal(
-            op.shear(u, v), shear_strain(u, v, grid.dx, grid.dy)
+            op.shear(u, v), shear_strain(u, v, grid.spacing("x"), grid.spacing("y"))
         )
         np.testing.assert_array_equal(
-            op.tensor(u, v), tensor_strain(u, v, grid.dx, grid.dy)
+            op.tensor(u, v), tensor_strain(u, v, grid.spacing("x"), grid.spacing("y"))
         )
 
     def test_vorticity(self):
@@ -199,12 +199,16 @@ class TestMatchesFunctional:
         h = make_h_field_2d()
         np.testing.assert_array_equal(
             op(h, f0, beta, y, y0),
-            qg_potential_vorticity(h, f0, beta, grid.dx, grid.dy, y, y0),
+            qg_potential_vorticity(
+                h, f0, beta, grid.spacing("x"), grid.spacing("y"), y, y0
+            ),
         )
         np.testing.assert_array_equal(op.stretching(A, psi), stretching_term(A, psi))
         np.testing.assert_array_equal(
             op.multilayer(psi, A, f0, beta, y, y0),
-            potential_vorticity_multilayer(psi, A, f0, beta, grid.dx, grid.dy, y, y0),
+            potential_vorticity_multilayer(
+                psi, A, f0, beta, grid.spacing("x"), grid.spacing("y"), y, y0
+            ),
         )
 
 
@@ -244,7 +248,7 @@ class TestStrainGhostCorners:
     def test_matches_loop_reference(self):
         grid = make_grid_2d()
         u, v = _args("shear")
-        sigma2, ow = _strain_reference(u, v, grid.dx, grid.dy)
+        sigma2, ow = _strain_reference(u, v, grid.spacing("x"), grid.spacing("y"))
         op = Strain2D(grid=grid)
         np.testing.assert_allclose(op.magnitude_squared(u, v), sigma2, rtol=1e-12)
         np.testing.assert_allclose(op.okubo_weiss(u, v), ow, rtol=1e-12, atol=1e-12)
@@ -396,7 +400,7 @@ class TestStrainBoundaryConditions:
         u = jnp.zeros((grid.Ny, grid.Nx), dtype=v.dtype)
         sigma2 = op.magnitude_squared(u, v)
         # sigma2[j, i] = (1 / dx)^2 for 1 <= j <= Ny-2, 1 <= i <= Nx-2
-        np.testing.assert_allclose(sigma2[1:-1, 1:-1], (1.0 / grid.dx) ** 2)
+        np.testing.assert_allclose(sigma2[1:-1, 1:-1], (1.0 / grid.spacing("x")) ** 2)
 
 
 class TestStrainPhysics:
@@ -409,8 +413,8 @@ class TestStrainPhysics:
             jnp.arange(grid.Nx, dtype=float),
             indexing="ij",
         )
-        u = -(j * grid.dy)
-        v = i * grid.dx
+        u = -(j * grid.spacing("y"))
+        v = i * grid.spacing("x")
         op = Strain2D(grid=grid)
         # ow[j, i] for 1 <= j <= Ny-2, 1 <= i <= Nx-2: the south / west ghost
         # corners are built from the (linear) ghost velocities, so the first

@@ -21,6 +21,7 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Float
 
+from gridax._src.operators._utils import _spacing
 from gridax._src.operators.diagnostic_operators import (
     Energetics2D,
     QGPotentialVorticity2D,
@@ -39,21 +40,21 @@ class RelativeVorticity(GridOperator):
     """ζ = δₓv / Δx − δᵧu / Δy at X-points.  ``(U, V) → X``."""
 
     def _apply(self, u: Field, v: Field) -> Field:
-        return Vorticity2D(grid=self.cartesian_grid).relative_vorticity(u, v)
+        return Vorticity2D(grid=self.grid).relative_vorticity(u, v)
 
 
 class PotentialVorticity(GridOperator):
     """Shallow-water PV q = (ζ + f) / h at X-points.  ``(U, V, T, T) → X``."""
 
     def _apply(self, u: Field, v: Field, h: Field, f: Field) -> Field:
-        return Vorticity2D(grid=self.cartesian_grid).potential_vorticity(u, v, h, f)
+        return Vorticity2D(grid=self.grid).potential_vorticity(u, v, h, f)
 
 
 class Enstrophy(GridOperator):
     """½ ζ² at X-points.  ``(U, V) → X``."""
 
     def _apply(self, u: Field, v: Field) -> Field:
-        return Vorticity2D(grid=self.cartesian_grid).enstrophy(u, v)
+        return Vorticity2D(grid=self.grid).enstrophy(u, v)
 
 
 class QGPotentialVorticity(GridOperator):
@@ -63,8 +64,8 @@ class QGPotentialVorticity(GridOperator):
 
     Attributes
     ----------
-    grid : GridSpec
-        ``(nx_interior, ny_interior, Lx, Ly)``.
+    grid : CartesianGrid2D
+        The grid, or ``(nx_interior, ny_interior, Lx, Ly)``.
     f0 : Array
         Reference Coriolis parameter (learnable).
     beta : Array
@@ -78,10 +79,10 @@ class QGPotentialVorticity(GridOperator):
     y0: float | None = eqx.field(static=True, default=None, kw_only=True)
 
     def _apply(self, psi: Field) -> Field:
-        g = self.cartesian_grid
-        y = jnp.arange(g.Ny, dtype=psi.dtype) * g.dy  # T[j] sits at y = j Δy
+        g = self.grid
+        y = jnp.asarray(g.coords("y"), dtype=psi.dtype)  # T[j] sits at y = j Δy
         Y = jnp.broadcast_to(y[:, None], (g.Ny, g.Nx))
-        y0 = (g.Ny - 1) * g.dy / 2 if self.y0 is None else self.y0
+        y0 = (y[0] + y[-1]) / 2 if self.y0 is None else self.y0
         qg = QGPotentialVorticity2D(grid=g)
         return qg(psi, self.f0, self.beta, Y, y0)
 
@@ -90,7 +91,7 @@ class KineticEnergy(GridOperator):
     """½ (ū² + v̄²) at T-points (velocities averaged to T).  ``(U, V) → T``."""
 
     def _apply(self, u: Field, v: Field) -> Field:
-        return Energetics2D(grid=self.cartesian_grid).kinetic_energy(u, v)
+        return Energetics2D(grid=self.grid).kinetic_energy(u, v)
 
 
 class AvailablePE(GridOperator):
@@ -98,8 +99,8 @@ class AvailablePE(GridOperator):
 
     Attributes
     ----------
-    grid : GridSpec
-        ``(nx_interior, ny_interior, Lx, Ly)``.
+    grid : CartesianGrid2D
+        The grid, or ``(nx_interior, ny_interior, Lx, Ly)``.
     g_prime : Array
         Reduced gravity (learnable).
     H : Array
@@ -111,7 +112,7 @@ class AvailablePE(GridOperator):
 
     def _apply(self, h: Field) -> Field:
         H = jnp.broadcast_to(self.H, h.shape)
-        energetics = Energetics2D(grid=self.cartesian_grid)
+        energetics = Energetics2D(grid=self.grid)
         return energetics.available_potential_energy(h, H, self.g_prime)
 
 
@@ -128,8 +129,8 @@ class Strain(GridOperator):
 
     Attributes
     ----------
-    grid : GridSpec
-        ``(nx_interior, ny_interior, Lx, Ly)``.
+    grid : CartesianGrid2D
+        The grid, or ``(nx_interior, ny_interior, Lx, Ly)``.
     component : {"shear", "tensor", "magnitude_squared"}
         Which component.
     """
@@ -144,7 +145,7 @@ class Strain(GridOperator):
             )
 
     def _apply(self, u: Field, v: Field) -> Field:
-        strain = Strain2D(grid=self.cartesian_grid)
+        strain = Strain2D(grid=self.grid)
         return getattr(strain, STRAIN_COMPONENTS[self.component])(u, v)
 
 
@@ -152,7 +153,7 @@ class OkuboWeiss(GridOperator):
     """W = σₙ² + σₛ² − ζ² at T-points (W < 0: vortex cores).  ``(U, V) → T``."""
 
     def _apply(self, u: Field, v: Field) -> Field:
-        return Strain2D(grid=self.cartesian_grid).okubo_weiss(u, v)
+        return Strain2D(grid=self.grid).okubo_weiss(u, v)
 
 
 class TotalEnergy(GridOperator):
@@ -162,19 +163,19 @@ class TotalEnergy(GridOperator):
     """
 
     def _apply(self, ke: Field, ape: Field) -> Scalar:
-        g = self.cartesian_grid
-        return total_energy(ke, ape, g.dx, g.dy)
+        g = self.grid
+        return total_energy(ke, ape, _spacing(g, "x", ke), _spacing(g, "y", ke))
 
 
 class DomainIntegral(GridOperator):
     """∑_interior x ΔA over the T-cells (`area_sum`).  ``T → [*batch]``."""
 
     def _apply(self, x: Field) -> Scalar:
-        return over_leading(lambda f: area_sum(f, self.cartesian_grid))(x)
+        return over_leading(lambda f: area_sum(f, self.grid))(x)
 
 
 class DomainMean(GridOperator):
     """Area-weighted interior mean ⟨x⟩ (`area_mean`).  ``T → [*batch]``."""
 
     def _apply(self, x: Field) -> Scalar:
-        return over_leading(lambda f: area_mean(f, self.cartesian_grid))(x)
+        return over_leading(lambda f: area_mean(f, self.grid))(x)

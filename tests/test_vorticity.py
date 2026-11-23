@@ -98,8 +98,8 @@ class TestVorticity2D:
         """
         vort = Vorticity2D(grid=grid2d)
         c = 1.5
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         u = jnp.broadcast_to(-c * y[:, None], (grid2d.Ny, grid2d.Nx))
         v = jnp.broadcast_to(c * x, (grid2d.Ny, grid2d.Nx))
         result = vort.relative_vorticity(u, v)
@@ -111,8 +111,8 @@ class TestVorticity2D:
         # pure counter-clockwise: u < 0 in upper half, v > 0 in right half
         # Use simple solid-body rotation with c > 0 → expect positive vorticity
         c = 1.0
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         u = jnp.broadcast_to(-c * y[:, None], (grid2d.Ny, grid2d.Nx))
         v = jnp.broadcast_to(c * x, (grid2d.Ny, grid2d.Nx))
         result = vort.relative_vorticity(u, v)
@@ -160,8 +160,8 @@ class TestVorticity3D:
         """
         vort = Vorticity3D(grid=grid3d)
         c = 2.0
-        x = jnp.arange(grid3d.Nx, dtype=float) * grid3d.dx
-        y = jnp.arange(grid3d.Ny, dtype=float) * grid3d.dy
+        x = jnp.arange(grid3d.Nx, dtype=float) * grid3d.spacing("x")
+        y = jnp.arange(grid3d.Ny, dtype=float) * grid3d.spacing("y")
         u2d = jnp.broadcast_to(-c * y[:, None], (grid3d.Ny, grid3d.Nx))
         v2d = jnp.broadcast_to(c * x, (grid3d.Ny, grid3d.Nx))
         u = jnp.broadcast_to(u2d[None, :, :], (grid3d.Nz, grid3d.Ny, grid3d.Nx))

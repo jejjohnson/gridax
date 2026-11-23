@@ -128,7 +128,9 @@ def test_advection_open_is_exactly_conservative_2d(grid2d):
         v = jnp.asarray(rng.normal(size=shape).astype(np.float64))
         tend = op(c, u, v, method=method, wall="open")
         total = float(jnp.sum(tend[1:-1, 1:-1]))
-        expected = float(_wall_imbalance_2d(c, u, v, grid2d.dx, grid2d.dy))
+        expected = float(
+            _wall_imbalance_2d(c, u, v, grid2d.spacing("x"), grid2d.spacing("y"))
+        )
         np.testing.assert_allclose(total, expected, rtol=1e-6, atol=1e-6)
 
 
@@ -197,7 +199,9 @@ def test_advection_1d_open_conservative(grid1d):
     total = float(jnp.sum(tend[1:-1]))
     west = float(jnp.where(u[0] >= 0.0, c[0], c[1]) * u[0])
     east = float(jnp.where(u[-2] >= 0.0, c[-2], c[-1]) * u[-2])
-    np.testing.assert_allclose(total, -(east - west) / grid1d.dx, rtol=1e-6, atol=1e-6)
+    np.testing.assert_allclose(
+        total, -(east - west) / grid1d.spacing("x"), rtol=1e-6, atol=1e-6
+    )
 
 
 # ── diffusion open mode ─────────────────────────────────────────────────────
@@ -205,7 +209,7 @@ def test_diffusion_open_is_exactly_conservative_2d(grid2d):
     op = Diffusion2D(grid=grid2d)
     rng = np.random.default_rng(6)
     h = jnp.asarray(rng.normal(size=(grid2d.Ny, grid2d.Nx)).astype(np.float64))
-    dx, dy = grid2d.dx, grid2d.dy
+    dx, dy = grid2d.spacing("x"), grid2d.spacing("y")
     tend = op(h, 0.7, wall="open")
     fx, fy = op.fluxes(h, 0.7, wall="open")
     # Σ tendency telescopes to the wall-face flux imbalance.

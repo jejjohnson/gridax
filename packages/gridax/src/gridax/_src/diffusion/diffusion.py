@@ -93,6 +93,7 @@ from gridax._src.backend import set_at, vmap
 from gridax._src.grid import CartesianGrid2D, CartesianGrid3D
 from gridax._src.mask import Mask2D, Mask3D
 from gridax._src.operators._ghost import interior, zero_z_ghosts
+from gridax._src.operators._utils import _spacing
 from gridax._src.operators.stencils import _materialize, avg_x_fwd_2d, avg_y_fwd_2d
 from gridax._src.pytree import array_namespace, pytree_dataclass
 
@@ -153,8 +154,8 @@ def _face_kappa(
 def diffusion_2d(
     h: Float[Array, "Ny Nx"],
     kappa: float | Float[Array, "Ny Nx"],
-    dx: float,
-    dy: float,
+    dx: float | Float[Array, ""],
+    dy: float | Float[Array, ""],
 ) -> Float[Array, "Ny Nx"]:
     """Horizontal tracer diffusion tendency at T-points (flux form).
 
@@ -204,8 +205,8 @@ def diffusion_2d(
 def _diffusion_2d_impl(
     h: Float[Array, "Ny Nx"],
     kappa: float | Float[Array, "Ny Nx"],
-    dx: float,
-    dy: float,
+    dx: float | Float[Array, ""],
+    dy: float | Float[Array, ""],
     mh: Bool[Array, "Ny Nx"] | Float[Array, "Ny Nx"] | None,
     mu: Bool[Array, "Ny Nx"] | Float[Array, "Ny Nx"] | None,
     mv: Bool[Array, "Ny Nx"] | Float[Array, "Ny Nx"] | None,
@@ -286,8 +287,8 @@ def _diffusion_2d_impl(
 def _diffusion_2d_fluxes_impl(
     h: Float[Array, "Ny Nx"],
     kappa: float | Float[Array, "Ny Nx"],
-    dx: float,
-    dy: float,
+    dx: float | Float[Array, ""],
+    dy: float | Float[Array, ""],
     mu: Bool[Array, "Ny Nx"] | Float[Array, "Ny Nx"] | None,
     mv: Bool[Array, "Ny Nx"] | Float[Array, "Ny Nx"] | None,
     wall: str = "closed",
@@ -437,8 +438,8 @@ class Diffusion2D:
             return _diffusion_2d_impl(
                 h,
                 kappa,
-                self.grid.dx,
-                self.grid.dy,
+                _spacing(self.grid, "x", h),
+                _spacing(self.grid, "y", h),
                 mh=None,
                 mu=None,
                 mv=None,
@@ -447,8 +448,8 @@ class Diffusion2D:
         return _diffusion_2d_impl(
             h,
             kappa,
-            self.grid.dx,
-            self.grid.dy,
+            _spacing(self.grid, "x", h),
+            _spacing(self.grid, "y", h),
             mh=self.mask.h,
             mu=self.mask.u,
             mv=self.mask.v,
@@ -494,13 +495,19 @@ class Diffusion2D:
         _check_diffusion_wall(wall, self.mask)
         if self.mask is None:
             return _diffusion_2d_fluxes_impl(
-                h, kappa, self.grid.dx, self.grid.dy, mu=None, mv=None, wall=wall
+                h,
+                kappa,
+                _spacing(self.grid, "x", h),
+                _spacing(self.grid, "y", h),
+                mu=None,
+                mv=None,
+                wall=wall,
             )
         return _diffusion_2d_fluxes_impl(
             h,
             kappa,
-            self.grid.dx,
-            self.grid.dy,
+            _spacing(self.grid, "x", h),
+            _spacing(self.grid, "y", h),
             mu=self.mask.u,
             mv=self.mask.v,
             wall=wall,
@@ -574,7 +581,7 @@ class Diffusion3D:
         """
         xp = array_namespace(h, kappa)
         _check_diffusion_wall(wall, self.mask)
-        dx, dy = self.grid.dx, self.grid.dy
+        dx, dy = _spacing(self.grid, "x", h), _spacing(self.grid, "y", h)
         kappa_arr = xp.asarray(kappa)
         kappa_ax = 0 if kappa_arr.ndim >= 3 else None
 
@@ -629,7 +636,7 @@ class Diffusion3D:
         """
         xp = array_namespace(h, kappa)
         _check_diffusion_wall(wall, self.mask)
-        dx, dy = self.grid.dx, self.grid.dy
+        dx, dy = _spacing(self.grid, "x", h), _spacing(self.grid, "y", h)
         kappa_arr = xp.asarray(kappa)
         kappa_ax = 0 if kappa_arr.ndim >= 3 else None
 

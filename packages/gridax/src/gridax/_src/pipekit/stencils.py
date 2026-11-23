@@ -78,8 +78,8 @@ class Difference(GridOperator):
 
     Attributes
     ----------
-    grid : GridSpec
-        ``(nx_interior, ny_interior, Lx, Ly)``.
+    grid : CartesianGrid2D
+        The grid, or ``(nx_interior, ny_interior, Lx, Ly)``.
     axis : {"x", "y"}
         Difference direction.
     src, dst : {"T", "U", "V", "X"}
@@ -96,35 +96,35 @@ class Difference(GridOperator):
 
     def _apply(self, x: Field) -> Field:
         method = DIFFERENCES[(self.axis, self.src, self.dst)]
-        return getattr(Difference2D(grid=self.cartesian_grid), method)(x)
+        return getattr(Difference2D(grid=self.grid), method)(x)
 
 
 class Divergence(GridOperator):
     """∇·(u, v) at T-points: δₓu / Δx + δᵧv / Δy.  ``(U, V) → T``."""
 
     def _apply(self, u: Field, v: Field) -> Field:
-        return Difference2D(grid=self.cartesian_grid).divergence(u, v)
+        return Difference2D(grid=self.grid).divergence(u, v)
 
 
 class Curl(GridOperator):
     """Relative vorticity ζ = δₓv / Δx − δᵧu / Δy at X-points.  ``(U, V) → X``."""
 
     def _apply(self, u: Field, v: Field) -> Field:
-        return Difference2D(grid=self.cartesian_grid).curl(u, v)
+        return Difference2D(grid=self.grid).curl(u, v)
 
 
 class Laplacian(GridOperator):
     """Five-point Laplacian ∇²h at T-points.  ``T → T``."""
 
     def _apply(self, h: Field) -> Field:
-        return Difference2D(grid=self.cartesian_grid).laplacian(h)
+        return Difference2D(grid=self.grid).laplacian(h)
 
 
 class GradPerp(GridOperator):
     """Rotated gradient (u, v) = (−∂ᵧψ, ∂ₓψ) of a streamfunction.  ``X → (U, V)``."""
 
     def _apply(self, psi: Field) -> tuple[Field, Field]:
-        return Difference2D(grid=self.cartesian_grid).grad_perp(psi)
+        return Difference2D(grid=self.grid).grad_perp(psi)
 
 
 class Interp(GridOperator):
@@ -132,8 +132,8 @@ class Interp(GridOperator):
 
     Attributes
     ----------
-    grid : GridSpec
-        ``(nx_interior, ny_interior, Lx, Ly)``.
+    grid : CartesianGrid2D
+        The grid, or ``(nx_interior, ny_interior, Lx, Ly)``.
     src, dst : {"T", "U", "V", "X"}
         Source and destination stagger; see `INTERPOLATIONS`.
     """
@@ -146,7 +146,7 @@ class Interp(GridOperator):
 
     def _apply(self, x: Field) -> Field:
         method = INTERPOLATIONS[(self.src, self.dst)]
-        return getattr(Interpolation2D(grid=self.cartesian_grid), method)(x)
+        return getattr(Interpolation2D(grid=self.grid), method)(x)
 
 
 class Coriolis(GridOperator):
@@ -158,8 +158,8 @@ class Coriolis(GridOperator):
 
     Attributes
     ----------
-    grid : GridSpec
-        ``(nx_interior, ny_interior, Lx, Ly)``.
+    grid : CartesianGrid2D
+        The grid, or ``(nx_interior, ny_interior, Lx, Ly)``.
     f0 : Array
         Reference Coriolis parameter.
     beta : Array
@@ -175,8 +175,8 @@ class Coriolis(GridOperator):
 
     def coriolis_parameter(self, dtype: Any = None) -> Float[Array, "Ny Nx"]:
         """f at the T-points of the grid, ghost ring included."""
-        g = self.cartesian_grid
-        y = jnp.arange(g.Ny, dtype=dtype) * g.dy  # T[j] sits at y = j Δy
+        g = self.grid
+        y = jnp.asarray(g.coords("y"), dtype=dtype)  # T[j] sits at y = j Δy
         Y = jnp.broadcast_to(y[:, None], (g.Ny, g.Nx))
         # f = f0 + beta (y - y0), with y0 the mean T-point y when unset
         y0 = jnp.mean(Y) if self.y0 is None else self.y0
@@ -184,7 +184,7 @@ class Coriolis(GridOperator):
 
     def _apply(self, u: Field, v: Field) -> tuple[Field, Field]:
         f = self.coriolis_parameter(jnp.result_type(u, v))
-        return Coriolis2D(grid=self.cartesian_grid)(u, v, f)
+        return Coriolis2D(grid=self.grid)(u, v, f)
 
 
 #: ``kind -> ghost-ring filler`` for `FillGhosts`.

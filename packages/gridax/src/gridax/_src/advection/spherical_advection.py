@@ -162,14 +162,16 @@ def _spherical_flux_divergence(
     """
     c = slice(ghost, -ghost)  # the written cells
     s = slice(ghost - 1, -ghost - 1)  # one step west / south
-    cos_T = _metric_like(grid.cos_lat_T, fe)
-    cos_V = _metric_like(grid.cos_lat_V, fn)
+    cos_T = _metric_like(grid._cos_lat("T"), fe)
+    cos_V = _metric_like(grid._cos_lat("V"), fn)
     cos_T_c = cos_T[c, c]  # [Ny-2g, Nx-2g]
     cos_V_N = cos_V[c, c]  # north face j+1/2
     cos_V_S = cos_V[s, c]  # south face j-1/2
-    du = (fe[..., c, c] - fe[..., c, s]) / grid.dlon
-    dv = (cos_V_N * fn[..., c, c] - cos_V_S * fn[..., s, c]) / grid.dlat
-    return -_safe_div_cos(du + dv, cos_T_c, grid.R)
+    du = (fe[..., c, c] - fe[..., c, s]) / _metric_like(grid.dlon, fe)
+    dv = (cos_V_N * fn[..., c, c] - cos_V_S * fn[..., s, c]) / _metric_like(
+        grid.dlat, fn
+    )
+    return -_safe_div_cos(du + dv, cos_T_c, _metric_like(grid.R, fe))
 
 
 def _reconstruct_faces_2d(

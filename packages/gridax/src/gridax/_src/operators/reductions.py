@@ -76,8 +76,7 @@ def cartesian_area_weights(
     Float[Array, "Ny Nx"]
         Per-cell area, constant everywhere.
     """
-    xp = array_namespace(grid.dx, grid.dy) if xp is None else xp
-    return xp.full((grid.Ny, grid.Nx), grid.dx * grid.dy)
+    return grid._area(xp=xp)
 
 
 def spherical_area_weights(
@@ -88,8 +87,7 @@ def spherical_area_weights(
     ``A[j, i] = R² · dlon · (sin lat_{j+1/2} − sin lat_{j−1/2})
     = 2 R² · dlon · sin(dlat / 2) · cos(lat_T[j, i])``.
 
-    The two forms are the same identity; the second needs only
-    ``cos_lat_T``. Summed over the interior of a grid that spans
+    The two forms are the same identity; the second needs only cos(lat_T). Summed over the interior of a grid that spans
     ``[lat_min, lat_max]`` it gives ``R² · Lλ · (sin lat_max − sin lat_min)``
     exactly (``4πR²`` for the whole sphere), where the midpoint rule
     ``R² cos(lat_T) dlon dlat`` overestimates by ``dlat / (2 sin(dlat/2))``.
@@ -112,11 +110,7 @@ def spherical_area_weights(
     Float[Array, "Ny Nx"]
         Per-T-cell area.
     """
-    xp = array_namespace(grid.cos_lat_T) if xp is None else xp
-    cos_T = xp.asarray(grid.cos_lat_T)
-    base = 2.0 * grid.R**2 * grid.dlon * xp.sin(xp.asarray(0.5 * grid.dlat))
-    degenerate = cos_T <= 8.0 * xp.finfo(cos_T.dtype).eps
-    return xp.where(degenerate, 0.0, base * cos_T)
+    return grid._area(xp=xp)
 
 
 def area_weights(grid: ArakawaCGrid2D, *, xp: Any = None) -> Float[Array, "Ny Nx"]:
@@ -156,8 +150,9 @@ def cartesian_volume_weights(
     grid: CartesianGrid3D, *, xp: Any = None
 ) -> Float[Array, "Nz Ny Nx"]:
     """T-cell volumes on a Cartesian 3-D grid: ``dx · dy · dz`` (``xp`` as in :func:`area_weights`)."""
-    xp = array_namespace(grid.dx, grid.dy, grid.dz) if xp is None else xp
-    return xp.full((grid.Nz, grid.Ny, grid.Nx), grid.dx * grid.dy * grid.dz)
+    cell = grid.spacing("x") * grid.spacing("y") * grid.spacing("z")
+    xp = array_namespace(cell) if xp is None else xp
+    return xp.full((grid.Nz, grid.Ny, grid.Nx), cell)
 
 
 def spherical_volume_weights(
@@ -169,9 +164,9 @@ def spherical_volume_weights(
     horizontal area broadcast over z, times the uniform vertical
     thickness. ``xp`` as in :func:`area_weights`.
     """
-    xp = array_namespace(grid.cos_lat_T) if xp is None else xp
-    area_2d = spherical_area_weights(grid.horizontal_grid(), xp=xp)
-    return xp.broadcast_to(area_2d * grid.dz, (grid.Nz, grid.Ny, grid.Nx))
+    area_2d = grid._area(xp=xp)
+    xp = array_namespace(area_2d) if xp is None else xp
+    return xp.broadcast_to(area_2d * grid.spacing("z"), (grid.Nz, grid.Ny, grid.Nx))
 
 
 def volume_weights(grid: ArakawaCGrid3D, *, xp: Any = None) -> Float[Array, "Nz Ny Nx"]:

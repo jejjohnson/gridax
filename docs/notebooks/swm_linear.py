@@ -107,7 +107,7 @@ Lx = 5.12e6  # Domain length in x [m] (~5120 km)
 Ly = 5.12e6  # Domain length in y [m] (~5120 km)
 
 grid = fvx.CartesianGrid2D.from_interior(nx, ny, Lx, Ly)
-dx, dy = grid.dx, grid.dy
+dx, dy = grid.spacing("x"), grid.spacing("y")
 Ny, Nx = ny + 2, nx + 2
 
 print(f"Interior cells: {nx} x {ny}")

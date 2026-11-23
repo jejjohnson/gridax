@@ -11,10 +11,10 @@ Two tiers, as in geotoolz::
             JSON config, eqx.Module      composes in pipekit Sequential / Graph,
             leaves, `|` composition      runs under jit / grad / vmap
 
-A Tier-B operator stores its grid as a static JSON tuple (`GridSpec`) and
-rebuilds the Tier-A grid from it at trace time, so the grid never crosses
-``jit`` as a pytree of Python scalars (finitevolX #321) and the config
-round-trips through ``op.state`` / ``Operator.from_state``.
+A Tier-B operator holds its `CartesianGrid2D` as a pytree field: the grid's
+sizes are static and its extents are array leaves, so it crosses ``jit`` with
+the operator. In the JSON config (``op.state`` / ``Operator.from_state``) it
+is the argument list of `CartesianGrid2D.from_interior`.
 
 Fields are ``[*batch, Ny, Nx]``: the 2-D Tier-A operators broadcast over
 leading axes themselves (finitevolX #386), so Tier B calls them directly.
@@ -34,24 +34,19 @@ from pipekit_jax import JaxOperator
 
 from gridax import CartesianGrid2D
 
-#: ``(nx_interior, ny_interior, Lx, Ly)``: the arguments of
-#: `CartesianGrid2D.from_interior`, as JSON primitives.
-GridSpec = tuple[int, int, float, float]
 
-
-def as_grid_spec(spec: Sequence[Any] | CartesianGrid2D) -> GridSpec:
-    """Normalise a grid description to a `GridSpec` tuple.
+def _as_grid(spec: Sequence[Any] | CartesianGrid2D) -> CartesianGrid2D:
+    """The grid of an operator, from a grid or from its JSON config.
 
     Parameters
     ----------
-    spec : sequence of 4 numbers or CartesianGrid2D
-        ``(nx_interior, ny_interior, Lx, Ly)`` (a list after a JSON round
-        trip), or a grid to describe.
+    spec : CartesianGrid2D or sequence of 4 numbers
+        A grid, or ``(nx_interior, ny_interior, Lx, Ly)``, the arguments of
+        `CartesianGrid2D.from_interior` (a list after a JSON round trip).
 
     Returns
     -------
-    GridSpec
-        ``(int, int, float, float)``, hashable, so it can be a static field.
+    CartesianGrid2D
 
     Raises
     ------
@@ -59,33 +54,16 @@ def as_grid_spec(spec: Sequence[Any] | CartesianGrid2D) -> GridSpec:
         If ``spec`` does not have four entries or a count is not positive.
     """
     if isinstance(spec, CartesianGrid2D):
-        spec = (spec.Nx - 2, spec.Ny - 2, spec.Lx, spec.Ly)
+        return spec
     if len(spec) != 4:
         raise ValueError(
-            f"grid spec must be (nx_interior, ny_interior, Lx, Ly), got {spec!r}"
+            f"grid must be a CartesianGrid2D or (nx_interior, ny_interior, Lx, Ly),"
+            f" got {spec!r}"
         )
     nx, ny, lx, ly = spec
     if int(nx) < 1 or int(ny) < 1:
-        raise ValueError(f"grid spec needs positive cell counts, got {spec!r}")
-    return (int(nx), int(ny), float(lx), float(ly))
-
-
-@functools.lru_cache(maxsize=64)
-def build_grid(spec: GridSpec) -> CartesianGrid2D:
-    """The `CartesianGrid2D` a `GridSpec` describes (cached per spec).
-
-    Parameters
-    ----------
-    spec : GridSpec
-        ``(nx_interior, ny_interior, Lx, Ly)``.
-
-    Returns
-    -------
-    CartesianGrid2D
-        ``CartesianGrid2D.from_interior(*spec)``.
-    """
-    nx, ny, lx, ly = as_grid_spec(spec)
-    return CartesianGrid2D.from_interior(nx, ny, lx, ly)
+        raise ValueError(f"grid needs positive cell counts, got {spec!r}")
+    return CartesianGrid2D.from_interior(int(nx), int(ny), lx, ly)
 
 
 def over_leading(fn: Callable[..., Any], core_ndim: int = 2) -> Callable[..., Any]:
@@ -149,15 +127,16 @@ class GridOperator(FVXOperator):
 
     Attributes
     ----------
-    grid : GridSpec
-        ``(nx_interior, ny_interior, Lx, Ly)``, static; a list (after a
-        JSON round trip) or a `CartesianGrid2D` is converted on
-        construction.
+    grid : CartesianGrid2D
+        The grid; ``(nx_interior, ny_interior, Lx, Ly)`` (a list after a JSON
+        round trip) is converted on construction.
     """
 
-    grid: GridSpec = eqx.field(static=True, converter=as_grid_spec)
+    grid: CartesianGrid2D = eqx.field(converter=_as_grid)
 
-    @property
-    def cartesian_grid(self) -> CartesianGrid2D:
-        """The Tier-A grid, rebuilt from `grid` (cached per spec)."""
-        return build_grid(self.grid)
+    def get_config(self) -> dict[str, Any]:
+        """The constructor config, with the grid as ``from_interior``'s arguments."""
+        grid = self.grid
+        ring = 2 * grid.ghost
+        spec = (grid.Nx - ring, grid.Ny - ring, float(grid.Lx), float(grid.Ly))
+        return {**super().get_config(), "grid": spec}

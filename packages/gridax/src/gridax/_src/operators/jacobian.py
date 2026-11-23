@@ -24,6 +24,7 @@ import numpy as np
 from gridax._src.backend import set_at
 from gridax._src.grid import CartesianGrid2D
 from gridax._src.mask import Mask2D
+from gridax._src.operators._utils import _spacing
 from gridax._src.operators.diagnostic_operators import _sanitize
 from gridax._src.operators.stencils import _neighbours
 from gridax._src.pytree import array_namespace, pytree_dataclass
@@ -37,8 +38,8 @@ else:
 def arakawa_jacobian(
     f: Float[Array, "... Ny Nx"],
     g: Float[Array, "... Ny Nx"],
-    dx: float,
-    dy: float,
+    dx: float | Float[Array, ""],
+    dy: float | Float[Array, ""],
 ) -> Float[Array, "... Ny_i Nx_i"]:
     """Arakawa (1966) discretization of J(f, g).
 
@@ -225,7 +226,9 @@ class ArakawaJacobian2D:
             # f[..., j, i] = 0 on dry interior T-cells (same for g)
             f = _sanitize(self.mask.h, f)
             g = _sanitize(self.mask.h, g)
-        J = arakawa_jacobian(f, g, self.grid.dx, self.grid.dy)
+        J = arakawa_jacobian(
+            f, g, _spacing(self.grid, "x", f), _spacing(self.grid, "y", f)
+        )
         shape = xp.broadcast_shapes(f.shape, g.shape)
         # J_full[..., j, i] = J[..., j-1, i-1]  for 1 <= j <= Ny-2, 1 <= i <= Nx-2
         out = xp.zeros_like(f, dtype=J.dtype, shape=shape)

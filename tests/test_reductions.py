@@ -46,7 +46,7 @@ class TestWeights:
             nx_interior=10, ny_interior=8, Lx=20.0, Ly=16.0
         )
         w = area_weights(grid)
-        np.testing.assert_allclose(w, grid.dx * grid.dy)
+        np.testing.assert_allclose(w, grid.spacing("x") * grid.spacing("y"))
 
     def test_spherical_area_weights_cos_weighted(self):
         grid = SphericalGrid2D.from_interior(
@@ -58,7 +58,9 @@ class TestWeights:
         )
         w = area_weights(grid)
         # exact cell area R² dlon (sin lat_N - sin lat_S) = 2 R² dlon sin(dlat/2) cos(lat_T)
-        expected = 2.0 * grid.R**2 * grid.dlon * np.sin(grid.dlat / 2) * grid.cos_lat_T
+        expected = (
+            2.0 * grid.R**2 * grid.dlon * np.sin(grid.dlat / 2) * grid._cos_lat("T")
+        )
         np.testing.assert_allclose(w[1:-1], expected[1:-1], rtol=1e-12)
         # dlat = 20° puts the ghost rows' centres on the poles: zero weight
         np.testing.assert_array_equal(np.asarray(w)[[0, -1]], 0.0)
@@ -99,7 +101,9 @@ class TestWeights:
             Lz=1.0,
         )
         w = volume_weights(grid)
-        np.testing.assert_allclose(w, grid.dx * grid.dy * grid.dz)
+        np.testing.assert_allclose(
+            w, grid.spacing("x") * grid.spacing("y") * grid.spacing("z")
+        )
 
     def test_volume_weights_spherical(self):
         grid = SphericalGrid3D.from_interior(
@@ -112,7 +116,7 @@ class TestWeights:
             R=R,
         )
         w = volume_weights(grid)
-        expected_2d = spherical_area_weights(grid.horizontal_grid()) * grid.dz
+        expected_2d = spherical_area_weights(grid.horizontal_grid()) * grid.spacing("z")
         for k in range(grid.Nz):
             np.testing.assert_allclose(w[k], expected_2d, rtol=1e-12)
 
@@ -141,7 +145,7 @@ class TestCartesianArea:
         h = 3.0 * jnp.ones((grid.Ny, grid.Nx))
         # Total wet area = interior_cells · dx · dy
         interior_cells = (grid.Ny - 2) * (grid.Nx - 2)
-        expected = 3.0 * interior_cells * grid.dx * grid.dy
+        expected = 3.0 * interior_cells * grid.spacing("x") * grid.spacing("y")
         np.testing.assert_allclose(area_sum(h, grid), expected, rtol=1e-12)
 
     def test_area_mean_constant_is_field_value(self, grid):
@@ -180,7 +184,9 @@ class TestCartesianArea:
         area_mask = Mask2D.from_mask(m)
         s = area_sum(h, grid, mask=area_mask)
         # Total wet interior area is (Nx-2)(Ny-2) - 1 cells.
-        expected = ((grid.Nx - 2) * (grid.Ny - 2) - 1) * grid.dx * grid.dy
+        expected = (
+            ((grid.Nx - 2) * (grid.Ny - 2) - 1) * grid.spacing("x") * grid.spacing("y")
+        )
         np.testing.assert_allclose(s, expected, rtol=1e-12)
 
 
@@ -362,7 +368,13 @@ class TestVolume:
     def test_cartesian_constant_volume_sum(self, cart_grid):
         h = 2.0 * jnp.ones((cart_grid.Nz, cart_grid.Ny, cart_grid.Nx))
         interior = (cart_grid.Nz - 2) * (cart_grid.Ny - 2) * (cart_grid.Nx - 2)
-        expected = 2.0 * interior * cart_grid.dx * cart_grid.dy * cart_grid.dz
+        expected = (
+            2.0
+            * interior
+            * cart_grid.spacing("x")
+            * cart_grid.spacing("y")
+            * cart_grid.spacing("z")
+        )
         np.testing.assert_allclose(volume_sum(h, cart_grid), expected, rtol=1e-12)
 
     def test_cartesian_volume_mean_constant(self, cart_grid):
@@ -381,7 +393,7 @@ class TestVolume:
         area = area_sum(
             jnp.ones((sph_grid.Ny, sph_grid.Nx)), sph_grid.horizontal_grid()
         )
-        expected = area * sph_grid.dz * (sph_grid.Nz - 2)
+        expected = area * sph_grid.spacing("z") * (sph_grid.Nz - 2)
         np.testing.assert_allclose(float(v), float(expected), rtol=1e-12)
 
     def test_aliases(self, cart_grid, sph_grid):
@@ -409,7 +421,9 @@ class TestVolume:
         m = np.ones((cart_grid.Nz, cart_grid.Ny, cart_grid.Nx), dtype=bool)
         m[1, 2, 3] = False
         vmask = Mask3D.from_mask(m)
-        cell_vol = cart_grid.dx * cart_grid.dy * cart_grid.dz
+        cell_vol = (
+            cart_grid.spacing("x") * cart_grid.spacing("y") * cart_grid.spacing("z")
+        )
         total_interior = (cart_grid.Nz - 2) * (cart_grid.Ny - 2) * (cart_grid.Nx - 2)
         expected = (total_interior - 1) * cell_vol
         np.testing.assert_allclose(
@@ -448,7 +462,9 @@ class TestDryCellNaNSafety:
         s = area_sum(field, grid, mask=m)
         assert jnp.isfinite(s)
         # Expected sum: (Nx-2)(Ny-2) - 1 wet cells, each unit value times cell area.
-        expected = ((grid.Nx - 2) * (grid.Ny - 2) - 1) * grid.dx * grid.dy
+        expected = (
+            ((grid.Nx - 2) * (grid.Ny - 2) - 1) * grid.spacing("x") * grid.spacing("y")
+        )
         np.testing.assert_allclose(float(s), expected, rtol=1e-12)
 
     def test_area_mean_dry_nan_does_not_contaminate(self):
@@ -490,7 +506,7 @@ class TestDryCellNaNSafety:
 
         s = volume_sum(field, grid, mask=m)
         assert jnp.isfinite(s)
-        cell_vol = grid.dx * grid.dy * grid.dz
+        cell_vol = grid.spacing("x") * grid.spacing("y") * grid.spacing("z")
         interior_cells = (grid.Nz - 2) * (grid.Ny - 2) * (grid.Nx - 2)
         expected = (interior_cells - 1) * cell_vol
         np.testing.assert_allclose(float(s), expected, rtol=1e-12)

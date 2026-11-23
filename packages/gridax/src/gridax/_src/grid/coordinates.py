@@ -41,7 +41,8 @@ def t_point_coordinates(
     ------
     TypeError
         If ``grid`` is not a 1-D or 2-D Cartesian grid. A spherical grid's
-        T points are its ``lat_T`` and ``lon_T`` arrays, in radians.
+        T points are its latitudes ``grid.coords("y")`` and longitudes
+        ``grid.coords("x")``, in radians.
 
     Examples
     --------
@@ -53,19 +54,13 @@ def t_point_coordinates(
     >>> points[:5].tolist()
     [[0.0, 0.0], [0.0, 1.0], [0.0, 2.0], [0.0, 3.0], [0.5, 0.0]]
     """
-    if isinstance(grid, CartesianGrid2D):
-        # y_j = j dy, x_i = i dx
-        y = np.arange(grid.Ny, dtype=np.float64) * grid.dy
-        x = np.arange(grid.Nx, dtype=np.float64) * grid.dx
-        rows, cols = np.meshgrid(y, x, indexing="ij")
-        # [Ny * Nx, 2], row-major like field.ravel()
-        return np.column_stack([rows.ravel(), cols.ravel()])
-    if isinstance(grid, CartesianGrid1D):
-        # x_i = i dx, [Nx, 1]
-        x = np.arange(grid.Nx, dtype=np.float64) * grid.dx
-        return np.column_stack([x])
-    raise TypeError(
-        "t_point_coordinates takes a CartesianGrid1D or CartesianGrid2D, got"
-        f" {type(grid).__name__}; a spherical grid's T points are its lat_T"
-        " and lon_T arrays."
-    )
+    if not isinstance(grid, CartesianGrid1D | CartesianGrid2D):
+        raise TypeError(
+            "t_point_coordinates takes a CartesianGrid1D or CartesianGrid2D, got"
+            f" {type(grid).__name__}; a spherical grid's T points are its"
+            ' latitudes grid.coords("y") and longitudes grid.coords("x").'
+        )
+    # y_j = j Δy, x_i = i Δx
+    points = np.meshgrid(*(grid.coords(axis) for axis in grid.axes), indexing="ij")
+    # [N, D], row-major like field.ravel()
+    return np.column_stack([axis.ravel() for axis in points])

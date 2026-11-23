@@ -20,7 +20,7 @@ N = 34
 
 def _grid():
     g = fvx.CartesianGrid2D.from_interior(N - 2, N - 2, Lx=1.0, Ly=1.3)
-    return g.dx, g.dy
+    return g.spacing("x"), g.spacing("y")
 
 
 def _rect_mask():
@@ -88,7 +88,9 @@ class TestNeumannOperator:
         mask = _island_basin()
         g = fvx.CartesianGrid2D.from_interior(N - 2, N - 2, Lx=1.0, Ly=1.3)
         p = _rhs(9) * mask.h
-        lap = gs.masked_neumann_laplacian(p, mask.h.astype(p.dtype), g.dx, g.dy)
+        lap = gs.masked_neumann_laplacian(
+            p, mask.h.astype(p.dtype), g.spacing("x"), g.spacing("y")
+        )
         diff = fvx.Diffusion2D(g, mask=mask)(p, 1.0)
         wet = np.asarray(mask.h) > 0.5
         np.testing.assert_allclose(

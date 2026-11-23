@@ -1,8 +1,8 @@
-"""Shared utilities for spherical operators."""
+"""Shared utilities for the operators: the grid metric in a field's dtype, pole guards."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from jaxtyping import Float
 import numpy as np
@@ -20,9 +20,9 @@ _COS_EPS = 1e-12  # guard against division by cos(lat) ≈ 0 near poles
 def _metric_like(
     metric: Float[Array, "..."], like: Float[Array, "..."]
 ) -> Float[Array, "..."]:
-    """A grid metric array in the floating dtype of the field it acts on.
+    """A grid metric in the floating dtype of the field it acts on.
 
-    Grid coordinate arrays are float64 NumPy arrays: multiplying one into a
+    Grid metrics are float64 NumPy arrays (0-d ones included): multiplying one into a
     float32 field would promote the result to float64 (under x64 on JAX).
     The metric is a property of the grid, not a precision request, so it
     takes the field's dtype and namespace instead. A non-floating ``like``
@@ -31,7 +31,7 @@ def _metric_like(
     Parameters
     ----------
     metric : array
-        A grid metric, e.g. ``grid.cos_lat_T``.
+        A grid metric, e.g. ``grid.spacing("x")``.
     like : array
         The field the metric scales.
 
@@ -45,6 +45,13 @@ def _metric_like(
     if not xp.isdtype(dtype, "real floating"):
         return xp.asarray(metric)
     return xp.asarray(metric, dtype=dtype)
+
+
+def _spacing(
+    grid: Any, axis: str, like: Float[Array, "..."], *, at: str = "T"
+) -> Float[Array, "..."]:
+    """``grid.spacing(axis, at=at)`` in the dtype and namespace of ``like``."""
+    return _metric_like(grid.spacing(axis, at=at), like)
 
 
 def _safe_div_cos(
@@ -82,8 +89,8 @@ def _spherical_d2_lon(
     e: Float[Array, "Ny-2 Nx-2"],
     w: Float[Array, "Ny-2 Nx-2"],
     cos_T: Float[Array, "Ny-2 Nx-2"],
-    dlon: float,
-    R: float,
+    dlon: Float[Array, ""],
+    R: Float[Array, ""],
 ) -> Float[Array, "Ny-2 Nx-2"]:
     """Zonal second-derivative term of the spherical Laplacian, interior only.
 
@@ -93,8 +100,8 @@ def _spherical_d2_lon(
     `_Neighbours2D`); the arithmetic is that of
     ``(diff_x_fwd_2d(h) - diff_x_bwd_2d(h)) / dlon**2``.
     """
-    d2h = ((e - c) - (c - w)) / dlon**2
-    return _safe_div_cos(d2h, cos_T, R**2 * cos_T)
+    d2h = ((e - c) - (c - w)) / _metric_like(dlon**2, c)
+    return _safe_div_cos(d2h, cos_T, _metric_like(R**2, cos_T) * cos_T)
 
 
 def _spherical_laplacian_merid(
@@ -104,8 +111,8 @@ def _spherical_laplacian_merid(
     cos_N: Float[Array, "Ny-2 Nx-2"],
     cos_S: Float[Array, "Ny-2 Nx-2"],
     cos_T: Float[Array, "Ny-2 Nx-2"],
-    dlat: float,
-    R: float,
+    dlat: Float[Array, ""],
+    R: Float[Array, ""],
 ) -> Float[Array, "Ny-2 Nx-2"]:
     """Meridional term of the spherical Laplacian, interior only.
 
@@ -116,9 +123,10 @@ def _spherical_laplacian_merid(
 
     ``c``, ``n`` and ``s`` are the centre, north and south views of ``h``;
     ``cos_N`` and ``cos_S`` are cos(lat) at the north and south V-faces,
-    read from the grid (``cos_lat_V[j]`` and ``cos_lat_V[j-1]``).
+    read from the grid (rows ``j`` and ``j-1``).
     """
+    dlat = _metric_like(dlat, c)
     dh_N = (n - c) / dlat
     dh_S = (c - s) / dlat
     d_cos_dh = (cos_N * dh_N - cos_S * dh_S) / dlat
-    return _safe_div_cos(d_cos_dh, cos_T, R**2)
+    return _safe_div_cos(d_cos_dh, cos_T, _metric_like(R**2, cos_T))

@@ -329,7 +329,9 @@ def _cases():
         ),
         Case(
             "arakawa_jacobian",
-            lambda g, m, f: arakawa_jacobian(f[0], f[1], g.dx, g.dy),
+            lambda g, m, f: arakawa_jacobian(
+                f[0], f[1], g.spacing("x"), g.spacing("y")
+            ),
             ("A", "B"),
             2,
             masked=False,
@@ -350,14 +352,14 @@ def _cases():
         # --- order -2: elliptic solves multiply by length squared ----
         Case(
             "poisson_dst",
-            lambda g, m, f: solve_poisson_dst(f[0], g.dx, g.dy),
+            lambda g, m, f: solve_poisson_dst(f[0], g.spacing("x"), g.spacing("y")),
             ("A",),
             -2,
             masked=False,
         ),
         Case(
             "poisson_fft",
-            lambda g, m, f: solve_poisson_fft(f[0], g.dx, g.dy),
+            lambda g, m, f: solve_poisson_fft(f[0], g.spacing("x"), g.spacing("y")),
             ("A",),
             -2,
             masked=False,
@@ -1056,8 +1058,8 @@ class TestMultilayerQGStretching:
     def _setup(self):
         n, length = 18, 1.0e6
         grid = CartesianGrid2D.from_interior(n, n, Lx=length, Ly=length)
-        x = (jnp.arange(grid.Nx) - 0.5) * grid.dx
-        y1 = (jnp.arange(grid.Ny) - 0.5) * grid.dy
+        x = (jnp.arange(grid.Nx) - 0.5) * grid.spacing("x")
+        y1 = (jnp.arange(grid.Ny) - 0.5) * grid.spacing("y")
         yy = jnp.broadcast_to(y1[:, None], (grid.Ny, grid.Nx))
         wave = jnp.sin(2 * jnp.pi * x[None, :] / length) * jnp.sin(
             2 * jnp.pi * y1[:, None] / length
@@ -1080,7 +1082,7 @@ class TestMultilayerQGStretching:
         grid, yy, psi, A = self._setup()
         y0 = 0.5 * grid.Ly
         got = potential_vorticity_multilayer(
-            psi, A, self.F0, self.BETA, grid.dx, grid.dy, yy, y0
+            psi, A, self.F0, self.BETA, grid.spacing("x"), grid.spacing("y"), yy, y0
         )
         lap = jnp.stack([Difference2D(grid).laplacian(p) for p in psi])
         mqg = lap - self.F0**2 * stretching_term(A, psi)
@@ -1096,7 +1098,7 @@ class TestMultilayerQGStretching:
             psi, A, self.F0, self.BETA, yy, y0
         )
         ref = potential_vorticity_multilayer(
-            psi, A, self.F0, self.BETA, grid.dx, grid.dy, yy, y0
+            psi, A, self.F0, self.BETA, grid.spacing("x"), grid.spacing("y"), yy, y0
         )
         np.testing.assert_allclose(got, ref, rtol=1e-12)
 
@@ -1107,7 +1109,7 @@ class TestMultilayerQGStretching:
         def stretching_part(f0):
             # beta = 0 and the Laplacian share f0 only as 1/f0, so remove it
             q = potential_vorticity_multilayer(
-                psi, A, f0, 0.0, grid.dx, grid.dy, yy, 0.0
+                psi, A, f0, 0.0, grid.spacing("x"), grid.spacing("y"), yy, 0.0
             )
             lap = jnp.stack([Difference2D(grid).laplacian(p) for p in psi]) / f0
             return lap - q

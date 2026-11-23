@@ -38,10 +38,6 @@ call on `[*batch, Ny, Nx]` fields. Requires the `pipekit` extra:
 
 ::: gridax.pipekit.GridOperator
 
-::: gridax.pipekit.as_grid_spec
-
-::: gridax.pipekit.build_grid
-
 ::: gridax.pipekit.over_leading
 
 ::: gridax.pipekit.testing.check_operator

@@ -118,7 +118,7 @@ import numpy as np
 grid = gridax.CartesianGrid2D.from_interior(32, 32, Lx=1.0, Ly=1.0)
 # (x_i, y_j), the T-point coordinates
 x, y = np.meshgrid(
-    (np.arange(grid.Nx) - 0.5) * grid.dx, (np.arange(grid.Ny) - 0.5) * grid.dy
+    (np.arange(grid.Nx) - 0.5) * grid.spacing("x"), (np.arange(grid.Ny) - 0.5) * grid.spacing("y")
 )  # → (N_y, N_x), (N_y, N_x)
 # a closed basin with a round island in the middle
 wet = (x - 0.5) ** 2 + (y - 0.5) ** 2 > 0.15**2  # → (N_y, N_x)
@@ -140,7 +140,7 @@ advection = gridax.Advection2D(grid=grid, mask=mask)
 # today (gridax)
 # ∑ A_ji q̄_ji over the wet cells
 total = gridax.area_sum(q, grid, mask)  # → ()
-dt = 0.2 * grid.dx
+dt = 0.2 * grid.spacing("x")
 for _ in range(200):
     # Heun's method on dq̄/dt, with WENO-5 face values
     q1 = q + dt * advection(q, u, v, method="weno5")  # (N_y, N_x) → (N_y, N_x)

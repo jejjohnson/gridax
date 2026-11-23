@@ -44,7 +44,7 @@ class TestConvergence1D:
         for n in [16, 32]:
             grid = CartesianGrid1D.from_interior(n, 1.0)
             diff = Difference1D(grid=grid)
-            x = jnp.arange(grid.Nx, dtype=float) * grid.dx
+            x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
             h = c * x
             result = diff.diff_x_T_to_U(h)
             np.testing.assert_allclose(result[1:-1], c, atol=1e-10)
@@ -54,7 +54,7 @@ class TestConvergence1D:
         for n in [16, 32, 64]:
             grid = CartesianGrid1D.from_interior(n, 1.0)
             diff = Difference1D(grid=grid)
-            x = jnp.arange(grid.Nx, dtype=float) * grid.dx
+            x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
             h = x**2
             result = diff.laplacian(h)
             np.testing.assert_allclose(result[1:-1], 2.0, atol=1e-8)
@@ -71,7 +71,7 @@ class TestConvergence1D:
         for n in [16, 32]:
             grid = CartesianGrid1D.from_interior(n, L)
             diff = Difference1D(grid=grid)
-            x = (jnp.arange(grid.Nx, dtype=float) + 0.5) * grid.dx
+            x = (jnp.arange(grid.Nx, dtype=float) + 0.5) * grid.spacing("x")
             h = jnp.sin(k * x)
             result = diff.laplacian(h)
             exact = -(k**2) * jnp.sin(k * x)
@@ -98,7 +98,7 @@ class TestConvergence2D:
         for n in [8, 16]:
             grid = CartesianGrid2D.from_interior(n, n, 1.0, 1.0)
             diff = Difference2D(grid=grid)
-            x = jnp.arange(grid.Nx, dtype=float) * grid.dx
+            x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
             h = jnp.broadcast_to(c * x, (grid.Ny, grid.Nx))
             result = diff.diff_x_T_to_U(h)
             np.testing.assert_allclose(result[1:-1, 1:-1], c, atol=1e-10)
@@ -108,7 +108,7 @@ class TestConvergence2D:
         for n in [8, 16]:
             grid = CartesianGrid2D.from_interior(n, n, 1.0, 1.0)
             diff = Difference2D(grid=grid)
-            y = jnp.arange(grid.Ny, dtype=float) * grid.dy
+            y = jnp.arange(grid.Ny, dtype=float) * grid.spacing("y")
             h = jnp.broadcast_to(c * y[:, None], (grid.Ny, grid.Nx))
             result = diff.diff_y_T_to_V(h)
             np.testing.assert_allclose(result[1:-1, 1:-1], c, atol=1e-10)
@@ -118,8 +118,8 @@ class TestConvergence2D:
         for n in [8, 16, 32]:
             grid = CartesianGrid2D.from_interior(n, n, 1.0, 1.0)
             diff = Difference2D(grid=grid)
-            x = jnp.arange(grid.Nx, dtype=float) * grid.dx
-            y = jnp.arange(grid.Ny, dtype=float) * grid.dy
+            x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
+            y = jnp.arange(grid.Ny, dtype=float) * grid.spacing("y")
             h = x[None, :] ** 2 + y[:, None] ** 2
             result = diff.laplacian(h)
             np.testing.assert_allclose(result[1:-1, 1:-1], 4.0, atol=1e-8)
@@ -137,8 +137,8 @@ class TestConvergence2D:
         for n in [16, 32]:
             grid = CartesianGrid2D.from_interior(n, n, L, L)
             diff = Difference2D(grid=grid)
-            x = (jnp.arange(grid.Nx, dtype=float) + 0.5) * grid.dx
-            y = (jnp.arange(grid.Ny, dtype=float) + 0.5) * grid.dy
+            x = (jnp.arange(grid.Nx, dtype=float) + 0.5) * grid.spacing("x")
+            y = (jnp.arange(grid.Ny, dtype=float) + 0.5) * grid.spacing("y")
             h = jnp.sin(k * x[None, :]) * jnp.sin(k * y[:, None])
             result = diff.laplacian(h)
             exact = -2.0 * k**2 * h
@@ -156,8 +156,8 @@ class TestConvergence2D:
         for n in [8, 16]:
             grid = CartesianGrid2D.from_interior(n, n, 1.0, 1.0)
             diff = Difference2D(grid=grid)
-            x = jnp.arange(grid.Nx, dtype=float) * grid.dx
-            y = jnp.arange(grid.Ny, dtype=float) * grid.dy
+            x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
+            y = jnp.arange(grid.Ny, dtype=float) * grid.spacing("y")
             u = jnp.broadcast_to(c * x, (grid.Ny, grid.Nx))
             v = jnp.broadcast_to(c * y[:, None], (grid.Ny, grid.Nx))
             result = diff.divergence(u, v)
@@ -169,8 +169,8 @@ class TestConvergence2D:
         for n in [8, 16]:
             grid = CartesianGrid2D.from_interior(n, n, 1.0, 1.0)
             diff = Difference2D(grid=grid)
-            x = jnp.arange(grid.Nx, dtype=float) * grid.dx
-            y = jnp.arange(grid.Ny, dtype=float) * grid.dy
+            x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
+            y = jnp.arange(grid.Ny, dtype=float) * grid.spacing("y")
             u = jnp.broadcast_to(-c * y[:, None], (grid.Ny, grid.Nx))
             v = jnp.broadcast_to(c * x, (grid.Ny, grid.Nx))
             result = diff.curl(u, v)
@@ -193,8 +193,8 @@ class TestConvergence2D:
         for n in [16, 32]:
             grid = CartesianGrid2D.from_interior(n, n, L, L)
             diff = Difference2D(grid=grid)
-            x = (jnp.arange(grid.Nx, dtype=float) + 0.5) * grid.dx  # T-points
-            x_u = x + 0.5 * grid.dx  # U-points: east faces
+            x = (jnp.arange(grid.Nx, dtype=float) + 0.5) * grid.spacing("x")  # T-points
+            x_u = x + 0.5 * grid.spacing("x")  # U-points: east faces
             h = jnp.broadcast_to(jnp.sin(k * x), (grid.Ny, grid.Nx))
             result = diff.diff_x_T_to_U(h)
             exact = jnp.broadcast_to(k * jnp.cos(k * x_u), (grid.Ny, grid.Nx))
