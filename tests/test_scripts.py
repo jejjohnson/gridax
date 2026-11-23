@@ -44,7 +44,13 @@ def load_script_module(module_name: str, script_name: str):
 
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
-    spec.loader.exec_module(module)
+    # ``python scripts/x.py`` puts scripts/ on the path; do the same here, so the
+    # script finds the helpers in scripts/_common.py.
+    sys.path.insert(0, str(SCRIPTS_DIR))
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.path.remove(str(SCRIPTS_DIR))
     return module
 
 

@@ -70,12 +70,12 @@ import argparse
 from dataclasses import dataclass
 from pathlib import Path
 
-import jax
-from jax import Array
-import jax.numpy as jnp
-import matplotlib
-
-matplotlib.use("Agg")
+from _common import (
+    FieldBuilder,
+    make_preprocessing_dataset,
+    save_animation_gif,
+    to_wall_field,
+)
 from gridax import (
     CartesianCGrid2D,
     GridOps,
@@ -85,29 +85,13 @@ from gridax import (
 from gridax.schemes import Upwind
 from gridax.solvers import solve_helmholtz_dst
 from integrix.march import heun_step
-import matplotlib.pyplot as plt
+import jax
+from jax import Array
+import jax.numpy as jnp
 import numpy as np
 import xarray as xr
 
 jax.config.update("jax_enable_x64", True)
-
-
-def to_wall_field(field: xr.DataArray) -> Array:
-    """Pad an interior ``xarray`` field with zero (no-normal-flow wall) ghost cells.
-
-    Parameters
-    ----------
-    field : xr.DataArray
-        Interior field with shape ``[Ny, Nx]``.
-
-    Returns
-    -------
-    Array
-        Full field of shape ``[Ny+2, Nx+2]`` with interior values preserved and
-        ghost cells set to zero (homogeneous Dirichlet wall boundary condition).
-    """
-    interior = jnp.asarray(field.to_numpy())
-    return jnp.pad(interior, pad_width=1, mode="constant")
 
 
 def geostrophic_velocity_from_streamfunction(
@@ -138,98 +122,6 @@ def geostrophic_velocity_from_streamfunction(
     u_field = -ops.difference(psi_on_x, axis="y", src="X", dst="U")
     v_field = ops.difference(psi_on_x, axis="x", src="X", dst="V")
     return u_field, v_field
-
-
-def save_animation_gif(
-    dataset: xr.Dataset,
-    gif_path: Path,
-    variable_name: str,
-    title: str,
-    cmap: str = "RdBu_r",
-    scale_factor: float = 1.0,
-    colorbar_label: str | None = None,
-    fps: int = 3,
-) -> None:
-    """Save an animated GIF showing the time evolution of a sampled field.
-
-    Parameters
-    ----------
-    dataset : xr.Dataset
-        Sampled simulation output with ``time``, ``y``, and ``x`` dimensions.
-    gif_path : Path
-        Output path for the animated GIF.
-    variable_name : str
-        Name of the field to animate.
-    title : str
-        Figure title prefix; the simulation time in days is appended per frame.
-    cmap : str, optional
-        Matplotlib colour map.
-    scale_factor : float, optional
-        Multiplicative scale applied to the field values before display.
-    colorbar_label : str | None, optional
-        Colour-bar label.
-    fps : int, optional
-        Frames per second for the output GIF.
-
-    Examples
-    --------
-    Save an animated GIF of relative vorticity with a scale factor::
-
-        save_animation_gif(
-            dataset,
-            Path("zeta.gif"),
-            "relative_vorticity",
-            "QG vorticity",
-            scale_factor=1e5,
-            colorbar_label=r"[$10^{-5}\\ \\mathrm{s}^{-1}$]",
-        )
-
-    Save a streamfunction animation with a slower frame rate::
-
-        save_animation_gif(dataset, Path("psi.gif"), "psi", "QG", fps=2, cmap="viridis")
-    """
-    from matplotlib.animation import FuncAnimation, PillowWriter
-
-    if fps < 1:
-        msg = f"fps must be >= 1, got {fps}"
-        raise ValueError(msg)
-
-    gif_path.parent.mkdir(parents=True, exist_ok=True)
-
-    data = dataset[variable_name] * scale_factor
-    vmax = float(np.nanmax(np.abs(data.to_numpy())))
-    if vmax == 0.0:
-        vmax = 1.0
-
-    fig, ax = plt.subplots(figsize=(6, 5), constrained_layout=True)
-    frame0 = data.isel(time=0).to_numpy()
-    image = ax.pcolormesh(
-        dataset["x"].to_numpy(),
-        dataset["y"].to_numpy(),
-        frame0,
-        shading="auto",
-        cmap=cmap,
-        vmin=-vmax,
-        vmax=vmax,
-    )
-    ax.set_xlabel("x [m]")
-    ax.set_ylabel("y [m]")
-    colorbar = fig.colorbar(image, ax=ax, shrink=0.9)
-    if colorbar_label is not None:
-        colorbar.set_label(colorbar_label)
-    t_days = float(data["time"].isel(time=0)) / 86400.0
-    title_text = ax.set_title(f"{title} | t = {t_days:.1f} d")
-
-    def update(frame: int) -> None:
-        field = data.isel(time=frame).to_numpy()
-        image.set_array(field.ravel())
-        t = float(data["time"].isel(time=frame)) / 86400.0
-        title_text.set_text(f"{title} | t = {t:.1f} d")
-
-    n_frames = data.sizes["time"]
-    anim = FuncAnimation(fig, update, frames=n_frames, interval=1000 // fps)
-    anim.save(gif_path, writer=PillowWriter(fps=fps))
-    plt.close(fig)
 
 
 @dataclass(frozen=True)
@@ -303,73 +195,38 @@ class QuasiGeostrophicConfig:
     figure_path: Path = Path("outputs/qg_1p5_layer_double_gyre.gif")
 
 
-def make_preprocessing_dataset(
-    config: QuasiGeostrophicConfig, grid: CartesianCGrid2D
-) -> xr.Dataset:
-    """Build the coordinate-aware fields for the QG example.
+def quasi_geostrophic_fields(config: QuasiGeostrophicConfig) -> FieldBuilder:
+    """Return the fields of the QG double gyre.
 
     Parameters
     ----------
     config : QuasiGeostrophicConfig
         Example configuration.
-    grid : CartesianCGrid2D
-        Underlying Arakawa C-grid.
 
     Returns
     -------
-    xr.Dataset
-        Interior-grid ``xarray`` dataset with the initial PV anomaly, beta-plane
-        term, and double-gyre wind-curl forcing.
-
-    Examples
-    --------
-    Prepare the forcing and inversion data for a QG run::
-
-        forcing = make_preprocessing_dataset(config, grid)
-
-    Inspect the wind-curl forcing with xarray-aware plotting::
-
-        forcing["wind_curl"].plot()
+    Callable
+        Builder of the initial PV anomaly ``q0``, the beta-plane term
+        ``beta_term`` and the forcing ``wind_curl``, for
+        :func:`make_preprocessing_dataset`.
     """
-    x = xr.DataArray(
-        (np.arange(config.nx) + 0.5) * grid.spacing("x"),
-        dims=("x",),
-        name="x",
-        attrs={"long_name": "cell_center_x", "units": "m"},
-    )
-    y = xr.DataArray(
-        (np.arange(config.ny) + 0.5) * grid.spacing("y"),
-        dims=("y",),
-        name="y",
-        attrs={"long_name": "cell_center_y", "units": "m"},
-    )
-    x2d, y2d = xr.broadcast(x, y)
-    x2d = x2d.transpose("y", "x")
-    y2d = y2d.transpose("y", "x")
 
-    q0 = (
-        5.0e-9 * np.sin(2.0 * np.pi * x2d / config.Lx) * np.sin(np.pi * y2d / config.Ly)
-    )
-    beta_term = config.beta * (y2d - 0.5 * config.Ly)
-    # Double-gyre wind-curl forcing pattern (antisymmetric about basin midline):
-    #   F(y) = -(tau0/(rho0*H)) * (2*pi/Ly) * sin(2*pi*y/Ly)
-    # Negative in the southern half (anticyclonic, subtropical gyre) and
-    # positive in the northern half (cyclonic, subpolar gyre).
-    wind_curl = -config.wind_curl_forcing * np.sin(2.0 * np.pi * y2d / config.Ly)
+    def fields(x: xr.DataArray, y: xr.DataArray) -> dict[str, xr.DataArray]:
+        q0 = (
+            5.0e-9 * np.sin(2.0 * np.pi * x / config.Lx) * np.sin(np.pi * y / config.Ly)
+        )
+        # Double-gyre wind-curl forcing pattern (antisymmetric about basin midline):
+        #   F(y) = -(tau0/(rho0*H)) * (2*pi/Ly) * sin(2*pi*y/Ly)
+        # Negative in the southern half (anticyclonic, subtropical gyre) and
+        # positive in the northern half (cyclonic, subpolar gyre).
+        return {
+            "q0": q0,
+            "beta_term": config.beta * (y - 0.5 * config.Ly),
+            "wind_curl": -config.wind_curl_forcing
+            * np.sin(2.0 * np.pi * y / config.Ly),
+        }
 
-    return xr.Dataset(
-        data_vars={
-            "q0": q0.rename("q0"),
-            "beta_term": beta_term.rename("beta_term"),
-            "wind_curl": wind_curl.rename("wind_curl"),
-        },
-        coords={"x": x, "y": y},
-        attrs={
-            "model": "1.5-layer quasi-geostrophic",
-            "configuration": "double gyre",
-            "boundary_conditions": "closed basin (no-normal-flow solid walls)",
-        },
-    )
+    return fields
 
 
 def run_simulation(config: QuasiGeostrophicConfig | None = None) -> xr.Dataset:
@@ -398,7 +255,9 @@ def run_simulation(config: QuasiGeostrophicConfig | None = None) -> xr.Dataset:
     config = config or QuasiGeostrophicConfig()
     grid = CartesianCGrid2D.from_interior(config.nx, config.ny, config.Lx, config.Ly)
     ops = GridOps(grid)
-    forcing = make_preprocessing_dataset(config, grid)
+    forcing = make_preprocessing_dataset(
+        grid, quasi_geostrophic_fields(config), model="1.5-layer quasi-geostrophic"
+    )
 
     q = to_wall_field(forcing["q0"])
     wind_curl = to_wall_field(forcing["wind_curl"])
