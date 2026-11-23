@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from jaxtyping import Float
 import numpy as np
+from pipekit_array.functions import namespace_of
 
 from gridax._src.advection.flux import upwind_flux
 from gridax._src.api import grid_dispatch
@@ -38,7 +39,6 @@ from gridax._src.grid import (
 from gridax._src.grid.points import point_stagger
 from gridax._src.mask.base import tiers_of
 from gridax._src.operators._ghost import interior
-from gridax._src.pytree import array_namespace
 from gridax._src.schemes.adaptive import policies
 from gridax._src.schemes.base import Ladder, Scheme, Tier
 from gridax._src.stencils.staggered import along, along_wet, crop, wet_windows
@@ -227,7 +227,7 @@ def axis_flux(
         on_faces = mask.wet(at=_FACES[axis])
         if around is not None:
             on_faces = extend_wet(on_faces, grid, around, [axis], extra)
-        flux = array_namespace(flux).where(on_faces, flux, 0.0)
+        flux = namespace_of(flux).where(on_faces, flux, 0.0)
     if around is None:
         return flux
 
@@ -236,7 +236,7 @@ def axis_flux(
 
     # the last index has no face of the grid
     kept = flux[faces(extra, extra + size - 1)]
-    xp = array_namespace(flux)
+    xp = namespace_of(flux)
     return xp.concat([kept, xp.zeros_like(flux[faces(0, 1)])], axis=position)
 
 
@@ -325,7 +325,7 @@ def face_flux(
         return _masked_upwind(q, u, position, scheme, rank, hierarchy)
     if not scheme.upwinded and wet is not None:
         return _masked_fixed(q, u, position, scheme, rank, wet)
-    xp = array_namespace(q, u)
+    xp = namespace_of(q, u)
     last = xp.moveaxis(q, position, -1)
     velocity = xp.moveaxis(u, position, -1)
     # the other spatial axes keep their interior; the faces along `axis` are 1 .. N-2
@@ -406,7 +406,7 @@ def _masked_fixed(
     tier fits a face if every cell it reads is wet, and a face with a dry cell
     on either side has no flux.
     """
-    xp = array_namespace(q, u)
+    xp = namespace_of(q, u)
     tiers = scheme.tiers()
     along = position - q.ndim
     last = xp.moveaxis(xp.asarray(wet, dtype=bool), along, -1)

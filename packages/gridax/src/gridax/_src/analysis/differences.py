@@ -21,8 +21,8 @@ from typing import Any, cast
 
 from jaxtyping import Bool, Float
 import numpy as np
+from pipekit_array.functions import namespace_of
 
-from gridax._src.pytree import array_namespace
 from gridax._src.stencils.coefficients import (
     METHODS,
     Method,
@@ -115,7 +115,7 @@ def difference(
             "input points; a staggered stencil writes half a cell away, so apply "
             "it with the C-grid stencils of gridax.stencils"
         )
-    xp = array_namespace(f)
+    xp = namespace_of(f)
     axis = axis % f.ndim
     if coords is not None:
         if periodic:
@@ -198,7 +198,7 @@ def adaptive_difference(
     >>> adaptive_difference(f)
     array([ 1.,  1.,  1., nan,  1.,  1.,  1.])
     """
-    xp = array_namespace(f)
+    xp = namespace_of(f)
     dropped = ~xp.isfinite(f)
     if mask is not None:
         dropped = dropped | mask
@@ -316,7 +316,7 @@ def _apply_stencil(
     if coords is None:
         coeffs: Any = difference_coeffs(offsets, derivative)
     else:
-        xp = array_namespace(coords)
+        xp = namespace_of(coords)
         centres = coords[start:stop]
         dz = xp.stack(
             [coords[start + o : stop + o] - centres for o in offsets], axis=-1

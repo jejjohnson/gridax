@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from jaxtyping import Float
 import numpy as np
+from pipekit_array.functions import namespace_of
 
 from gridax._src.api import grid_dispatch
 from gridax._src.backend import set_at
@@ -42,7 +43,6 @@ from gridax._src.operators._utils import (
 from gridax._src.operators.calculus import _levels, curl
 from gridax._src.operators.diagnostics import kinetic_energy
 from gridax._src.operators.moves import difference, interpolate
-from gridax._src.pytree import array_namespace
 
 if TYPE_CHECKING:
     from jaxtyping import Array
@@ -285,7 +285,7 @@ def _corner_product(q: Any, u: Any, v: Any, mask: Any) -> tuple[Any, Any]:
     The products are formed on the full arrays, so the first interior row and
     column average with the south and west ghost corners of the caller.
     """
-    xp = array_namespace(q, u, v)
+    xp = namespace_of(q, u, v)
     # pu[j+1/2, i+1/2] = q 1/2 (u[j, i+1/2] + u[j+1, i+1/2]),   [Ny-1, Nx]
     pu = q[..., :-1, :] * (0.5 * (u[..., :-1, :] + u[..., 1:, :]))
     # pv[j+1/2, i+1/2] = q 1/2 (v[j+1/2, i] + v[j+1/2, i+1]),   [Ny, Nx-1]
@@ -312,7 +312,7 @@ def _corner_product(q: Any, u: Any, v: Any, mask: Any) -> tuple[Any, Any]:
 def _vortex_force(
     grid: Any, q: Any, u: Any, v: Any, *, form: str, mask: Any
 ) -> tuple[Any, Any]:
-    xp = array_namespace(q, u, v)
+    xp = namespace_of(q, u, v)
     rank = len(grid.axes)
     q, u, v = (
         without_dry(x, mask, at, rank) for x, at in ((q, "X"), (u, "U"), (v, "V"))

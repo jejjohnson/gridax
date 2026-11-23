@@ -6,9 +6,9 @@ from typing import TYPE_CHECKING, Any
 
 from jaxtyping import Float
 import numpy as np
+from pipekit_array.functions import namespace_of
 
 from gridax._src.backend import set_at
-from gridax._src.pytree import array_namespace
 
 if TYPE_CHECKING:
     from jaxtyping import Array
@@ -39,7 +39,7 @@ def _metric_like(metric: Any, like: Any) -> Float[Array, "..."]:
     array
         ``metric`` as an array of ``like``'s namespace and floating dtype.
     """
-    xp = array_namespace(like)
+    xp = namespace_of(like)
     dtype = xp.asarray(like).dtype
     if not xp.isdtype(dtype, "real floating"):
         return xp.asarray(metric)
@@ -76,7 +76,7 @@ def _safe_div_cos(
     array
         Result with NaN at pole-adjacent points.
     """
-    xp = array_namespace(numerator, cos_val)
+    xp = namespace_of(numerator, cos_val)
     denom = scale * cos_val
     safe_denom = xp.where(xp.abs(cos_val) < _COS_EPS, 1.0, denom)
     result = numerator / safe_denom
@@ -139,13 +139,13 @@ def without_dry(f: Any, mask: Any, at: str, rank: int) -> Any:
     """
     if mask is None:
         return f
-    xp = array_namespace(f, mask.wet())
+    xp = namespace_of(f, mask.wet())
     return xp.where(readable(mask.wet(at=at), rank), f, 0.0)
 
 
 def readable(wet: Any, rank: int) -> Any:
     """The wet points and the ghost ring, on the last ``rank`` axes."""
-    xp = array_namespace(wet)
+    xp = namespace_of(wet)
     wet = xp.asarray(wet, dtype=bool)
     inner = (..., *(slice(1, -1),) * rank)
     return set_at(xp.ones_like(wet), inner, wet[inner])
@@ -158,7 +158,7 @@ def _where(
 
     field[..., j, i] = field[..., j, i] if wet[j, i] else 0
     """
-    xp = array_namespace(wet, field)
+    xp = namespace_of(wet, field)
     if wet is None:
         return field
     return xp.where(wet, field, 0.0)
@@ -173,7 +173,7 @@ def _sanitize(
     field[..., j, i] = field[..., j, i] if wet[j, i] else 0
                                          for 1 <= j <= Ny-2, 1 <= i <= Nx-2
     """
-    xp = array_namespace(wet, field)
+    xp = namespace_of(wet, field)
     if wet is None:
         return field
     wet = xp.asarray(wet, dtype=bool)

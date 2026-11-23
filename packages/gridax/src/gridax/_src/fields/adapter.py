@@ -1,9 +1,8 @@
 """`CFieldAdapter`: pipekit's dim functions on located fields.
 
 Carrier-agnostic code (``pipekit_array``'s dim functions and ``KernelOp``,
-``Sequential.summary``) reaches a `CField` through this adapter. It is the
-one module of ``gridax._src.fields`` that imports pipekit, and it is loaded
-only when something else has imported ``pipekit_ops`` (``_hook.py``).
+``Sequential.summary``) reaches a `CField` through this adapter, which
+``import gridax`` registers.
 
 A field stays a field while any grid axis remains, with its stagger trimmed
 to the axes left: a V field averaged over ``x`` keeps ``y: "right"``. It
@@ -16,12 +15,12 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from typing import Any, cast
 
+from pipekit_array.functions import namespace_of
 from pipekit_ops import Signature, get_adapter, register_adapter
 
 from gridax._src.fields.cfield import CField, StaggerMismatchError
 from gridax._src.fields.combine import combine
 from gridax._src.grid.points import GRID_AXES
-from gridax._src.pytree import array_namespace
 
 
 def _dimarray(x: CField) -> Any:
@@ -129,7 +128,7 @@ class CFieldAdapter:
         """
         if dim not in x.dims:
             raise ValueError(f"map_over: {dim!r} is not a dim of {x.dims}")
-        xp = array_namespace(x.data)
+        xp = namespace_of(x.data)
         first = xp.moveaxis(x.data, x.dims.index(dim), 0)
         # what one item is: x's metadata without `dim`
         item = self.isel(x, {dim: 0})

@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 from geophysix.constants import STANDARD
 from jaxtyping import Float
 import numpy as np
+from pipekit_array.functions import namespace_of
 
 from gridax._src.api import grid_dispatch
 from gridax._src.backend import set_at
@@ -48,7 +49,6 @@ from gridax._src.operators.stencils import (
     diff_y_bwd_3d,
     diff_y_fwd_2d,
 )
-from gridax._src.pytree import array_namespace
 
 if TYPE_CHECKING:
     from jaxtyping import Array
@@ -488,7 +488,7 @@ def _kinetic_energy_staggered(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
 def _kinetic_energy_collocated(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
     # 1/2 (u² + v²)
     out = 0.5 * (u**2 + v**2)
-    return out if mask is None else array_namespace(out).where(mask.wet(), out, np.nan)
+    return out if mask is None else namespace_of(out).where(mask.wet(), out, np.nan)
 
 
 @shear_strain.register(CartesianCGrid2D)
@@ -522,7 +522,7 @@ def _tensor_strain_cartesian(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
 def _bernoulli_staggered(
     grid: Any, h: Any, u: Any, v: Any, *, gravity: float, mask: Any
 ) -> Any:
-    xp = array_namespace(h, u, v)
+    xp = namespace_of(h, u, v)
     wet = None if mask is None else mask.wet()
     u, v = _velocities(mask, u, v)
     h = _sanitize(wet, xp.asarray(h, dtype=xp.result_type(h, u, v, 0.0)))
@@ -538,7 +538,7 @@ def _corners(grid: Any, u: Any, v: Any, sign: float, mask: Any) -> Any:
     The shear strain (+1) or the vorticity (-1). Under a mask the dry interior
     corners are zero; the ghost corners are the caller's, dry or not.
     """
-    xp = array_namespace(u, v)
+    xp = namespace_of(u, v)
     dv_dx = (v[..., :-1, 1:] - v[..., :-1, :-1]) / _spacing(grid, "x", v, at="X")
     du_dy = (u[..., 1:, :-1] - u[..., :-1, :-1]) / _spacing(grid, "y", u, at="X")
     x = dv_dx + sign * du_dy
@@ -575,7 +575,7 @@ def _okubo_weiss_parameter(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
 def _sw_potential_vorticity(
     grid: Any, u: Any, v: Any, h: Any, f: Any, *, mask: Any
 ) -> Any:
-    xp = array_namespace(u, v, h, f)
+    xp = namespace_of(u, v, h, f)
     inner = (..., slice(1, -1), slice(1, -1))
     zeta = curl(u, v, grid, mask=mask)
     f_on_x = interpolate(f, grid, src="T", dst="X", mask=mask)
@@ -627,7 +627,7 @@ def _laplacian_interior(f: Any, dx: Any, dy: Any) -> Any:
 def _geostrophic_velocity(
     grid: Any, h: Any, *, f: Any, gravity: float, mask: Any
 ) -> tuple[Any, Any]:
-    xp = array_namespace(h, f)
+    xp = namespace_of(h, f)
     R, dlon, dlat = (_metric_like(m, h) for m in (grid.R, grid.dlon, grid.dlat))
     c = slice(1, -1)
     f_on_u = 0.5 * (f[..., c, 1:-1] + f[..., c, 2:])
@@ -656,7 +656,7 @@ def _wet_slopes(h: Any, mask: Any, dlat_h: Any, dlon_h: Any) -> tuple[Any, Any]:
 
     ``dlat_h`` and ``dlon_h``, the sums of all four, where they are all wet.
     """
-    xp = array_namespace(h)
+    xp = namespace_of(h)
     wet = readable(mask.wet(), 2)
 
     def mean(axis: int, plain: Any) -> Any:
@@ -682,7 +682,7 @@ def _wet_slopes(h: Any, mask: Any, dlat_h: Any, dlon_h: Any) -> tuple[Any, Any]:
 
 @vertical_velocity.register(CartesianCGrid3D)
 def _vertical_velocity(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
-    xp = array_namespace(u, v)
+    xp = namespace_of(u, v)
     inner = (..., slice(1, -1), slice(1, -1), slice(1, -1))
     if mask is not None:
         # zero dry faces before the stencil reads them (NaN-filled land)
@@ -711,7 +711,7 @@ def _kinetic_energy_interior(u: Any, v: Any) -> Any:
     u²_T[j, i] = 1/2 (u[j, i+1/2]² + u[j, i-1/2]²)
     v²_T[j, i] = 1/2 (v[j+1/2, i]² + v[j-1/2, i]²)
     """
-    xp = array_namespace(u, v)
+    xp = namespace_of(u, v)
     dtype = xp.result_type(u, v, 0.0)
     u, v = xp.asarray(u, dtype=dtype), xp.asarray(v, dtype=dtype)
     return 0.5 * (avg_x_bwd_2d(u**2) + avg_y_bwd_2d(v**2))
@@ -748,7 +748,7 @@ def potential_vorticity(
     Float[Array, "*batch Ny Nx"]
         Potential vorticity.  Where ``h == 0`` the result is NaN.
     """
-    xp = array_namespace(omega, f, h)
+    xp = namespace_of(omega, f, h)
     return xp.where(h == 0, xp.nan, (omega + f) / h)
 
 
@@ -930,7 +930,7 @@ def stretching_term(
         Stretching contribution, same shape as ``psi``.
         Ghost ring is zero; interior is ``[:, 1:-1, 1:-1]``.
     """
-    xp = array_namespace(A, psi)
+    xp = namespace_of(A, psi)
     # (A . psi)_k = sum_j A[k,j] * psi_j  for each spatial point
     # Flatten spatial dims, matmul along layer axis, reshape back.
     nl = A.shape[0]

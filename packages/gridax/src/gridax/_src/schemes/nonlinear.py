@@ -14,10 +14,10 @@ import functools
 from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
+from pipekit_array.functions import namespace_of
 
 from gridax._src.advection import weno
 from gridax._src.advection.limiters import mc, minmod, superbee, van_leer
-from gridax._src.pytree import array_namespace
 from gridax._src.schemes.base import Scheme, Tier
 from gridax._src.schemes.linear import UPWIND1
 
@@ -41,7 +41,7 @@ _TVD_EPS_REL: float = 1e-6
 
 def _slope_ratio(num: Array, den: Array) -> Array:
     """TVD slope ratio ``num / (den + copysign(eps_rel |num| + tiny, den))``."""
-    xp = array_namespace(num, den)
+    xp = namespace_of(num, den)
     # sqrt(tiny): its square (in the gradient's 1 / (den + eps)²) stays normal,
     # so a flat stencil has a finite (zero) gradient, float32 included
     floor = float(np.sqrt(xp.finfo(xp.result_type(den)).tiny))

@@ -6,10 +6,10 @@ from typing import TYPE_CHECKING
 
 from jaxtyping import Float
 import numpy as np
+from pipekit_array.functions import namespace_of
 
 from gridax._src.operators._ghost import interior
 from gridax._src.operators.stencils import avg_xbwd_yfwd_2d, avg_xfwd_ybwd_2d
-from gridax._src.pytree import array_namespace
 
 if TYPE_CHECKING:
     from jaxtyping import Array
@@ -43,7 +43,7 @@ def _upwind_face_bwd_last(
     to a lower-order stencil on the outer face(s) where the wide stencil does
     not fit.
     """
-    xp = array_namespace(omega, vel)
+    xp = namespace_of(omega, vel)
     v = vel[..., 1:-1]  # advecting velocity at interior faces i = 1 .. N-2
 
     # Order 1: pure upwind neighbour.
@@ -145,7 +145,7 @@ def vorticity_flux_upwind(
     ValueError
         If ``order`` is not ``1``, ``3``, or ``5``.
     """
-    xp = array_namespace(omega, U, V)
+    xp = namespace_of(omega, U, V)
     if order not in (1, 3, 5):
         raise ValueError(f"order must be 1, 3, or 5, got {order!r}")
 

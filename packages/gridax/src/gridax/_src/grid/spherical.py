@@ -23,10 +23,11 @@ from typing import TYPE_CHECKING, Any, cast
 from geophysix.earth import SPHERE
 from jaxtyping import Float
 import numpy as np
+from pipekit_array.functions import namespace_of
 
 from gridax._src.grid.base import CurvilinearGrid2D, CurvilinearGrid3D, _as_leaf
 from gridax._src.grid.points import point_axes
-from gridax._src.pytree import array_namespace, pytree_dataclass
+from gridax._src.pytree import pytree_dataclass
 
 # The coordinate arrays are NumPy when a grid is built and JAX arrays (or
 # tracers) once a transform has flattened it. ``jaxtyping.Array`` imports JAX,
@@ -165,7 +166,7 @@ class _SphericalMetric:
         point_axes(at, self.axes)
         cos = self._cos_lat(at)
         if xp is None:
-            xp = array_namespace(cos, self.R, self.dlon, self.dlat)
+            xp = namespace_of(cos, self.R, self.dlon, self.dlat)
         cos = xp.asarray(cos)
         base = 2.0 * self.R**2 * self.dlon * xp.sin(xp.asarray(0.5 * self.dlat))
         degenerate = cos <= 8.0 * xp.finfo(cos.dtype).eps
@@ -207,7 +208,7 @@ class _SphericalMetric:
             reaches a pole, where the zonal width degenerates.
         """
         dx_i = self.spacing("x")[1:-1, 1:-1]
-        xp = array_namespace(dx_i)
+        xp = namespace_of(dx_i)
         dx_i = xp.where(_degenerate_width(dx_i, self.R * self.dlon), 0.0, dx_i)
         return xp.minimum(xp.min(dx_i), xp.asarray(self.spacing("y")))
 
@@ -238,7 +239,7 @@ class _SphericalMetric:
             degenerate zonal width (interior reaching a pole).
         """
         dx_i = self.spacing("x")[1:-1, 1:-1]
-        xp = array_namespace(dx_i)
+        xp = namespace_of(dx_i)
         degenerate = _degenerate_width(dx_i, self.R * self.dlon)
         safe_dx = xp.where(degenerate, 1.0, dx_i)
         aspect = xp.where(degenerate, np.inf, self.spacing("y") / safe_dx)

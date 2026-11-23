@@ -20,7 +20,7 @@ scheme.
 
 ## 2. Where each piece goes (`packages/gridax/src/gridax/_src/advection/`)
 
-Everything here runs on any array backend: `xp = array_namespace(...)` and the hooks in `gridax/_src/backend.py`, never `jnp` or `.at[]`.
+Everything here runs on any array backend: `xp = namespace_of(...)` and the hooks in `gridax/_src/backend.py`, never `jnp` or `.at[]`.
 
 | Piece | File | Wire it into |
 |---|---|---|

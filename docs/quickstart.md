@@ -19,7 +19,7 @@ gridax = { git = "https://github.com/jejjohnson/gridax", tag = "gridax-v0.2.0", 
 geophysix = { git = "https://github.com/jejjohnson/geophysix", tag = "v0.0.3" }
 ```
 
-That install brings in NumPy, SciPy, jaxtyping and geophysix, and nothing else. gridax has no extras: with JAX installed beside it, every grid, mask and operator is also a JAX pytree, and the same calls take JAX arrays.
+That install brings in NumPy, SciPy, jaxtyping, geophysix and pipekit-array (with array-api-compat), and nothing else. gridax has no extras: with JAX installed beside it, every grid, mask and operator is also a JAX pytree, and the same calls take JAX arrays.
 
 ## A tracer round an island
 

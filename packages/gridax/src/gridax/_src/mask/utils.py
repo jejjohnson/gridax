@@ -37,8 +37,7 @@ import itertools
 from typing import Any
 
 import numpy as np
-
-from gridax._src.pytree import array_namespace
+from pipekit_array.functions import namespace_of
 
 
 def pool_bool(
@@ -361,7 +360,7 @@ def dilate_mask(mask: Any) -> Any:
            [0, 0, 0, 0],
            [0, 0, 0, 0]])
     """
-    mask = array_namespace(mask).asarray(mask, dtype=bool)
+    mask = namespace_of(mask).asarray(mask, dtype=bool)
     out = mask
     for axis in range(-mask.ndim, 0):
         out = out | shifted(mask, axis, 1) | shifted(mask, axis, -1)
@@ -396,7 +395,7 @@ def shifted(mask: Any, axis: int, offset: int) -> Any:
     """
     if offset == 0:
         return mask
-    xp = array_namespace(mask)
+    xp = namespace_of(mask)
     n = mask.shape[axis]
     reach = min(abs(offset), n)
     kept: list[slice] = [slice(None)] * mask.ndim

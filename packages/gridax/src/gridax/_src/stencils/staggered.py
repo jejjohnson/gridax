@@ -33,10 +33,10 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from jaxtyping import Float
 import numpy as np
+from pipekit_array.functions import namespace_of
 
 from gridax._src.mask.utils import shifted
 from gridax._src.operators import stencils as _named
-from gridax._src.pytree import array_namespace
 from gridax._src.schemes.adaptive import Adaptive, policies
 from gridax._src.schemes.base import Scheme
 from gridax._src.schemes.linear import Centred
@@ -240,7 +240,7 @@ def along(
     along an irregular axis: the weights are then solved for the distances,
     and a difference is per unit length.
     """
-    xp = array_namespace(h)
+    xp = namespace_of(h)
     size = h.shape[position]
     pieces = []
     for rung, shift, start, stop in _runs(size, side, scheme, derivative, edges):
@@ -279,7 +279,7 @@ def _uneven(
     derivative: int,
 ) -> list[Array]:
     """The weights of one run of outputs of an irregular axis, one array per cell."""
-    xp = array_namespace(h, *lines)
+    xp = namespace_of(h, *lines)
     source, output = lines
     distances = (
         xp.stack([source[start + k + shift : stop + k + shift] for k in cells], axis=-1)
@@ -322,7 +322,7 @@ def along_wet(
     its ladder; and at last the two points, wet or dry. ``wet`` holds the
     points of the last axes of ``h``.
     """
-    xp = array_namespace(h, wet)
+    xp = namespace_of(h, wet)
     core = (0, 1) if side == "fwd" else (-1, 0)
     delta = 0.5 if side == "fwd" else -0.5
 

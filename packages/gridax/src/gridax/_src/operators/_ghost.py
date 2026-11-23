@@ -5,9 +5,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import numpy as np
+from pipekit_array.functions import namespace_of
 
 from gridax._src.backend import pad, set_at
-from gridax._src.pytree import array_namespace
 
 if TYPE_CHECKING:
     from jaxtyping import Array
@@ -60,7 +60,7 @@ def interior(values: Array, like: Array, ghost: int = 1) -> Array:
                 f"interior: values {values.shape} does not fit like {like.shape} "
                 f"with ghost={ghost} (each axis must match or be 2*ghost shorter)"
             )
-    xp = array_namespace(values, like)
+    xp = namespace_of(values, like)
     out = xp.zeros(like.shape, dtype=xp.result_type(like, values))
     return set_at(out, tuple(slices), values)
 
@@ -83,5 +83,5 @@ def zero_z_ghosts(arr: Array) -> Array:
     # one fusible pad, and XLA can skip computing the discarded ghost slabs
     # of ``arr`` (``coriolis`` in 3-D: forward ~1.6x faster on CPU).
     if arr.shape[0] <= 2:
-        return array_namespace(arr).zeros_like(arr)
+        return namespace_of(arr).zeros_like(arr)
     return pad(arr[1:-1], ((1, 1),) + ((0, 0),) * (arr.ndim - 1))

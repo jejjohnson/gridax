@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from jaxtyping import Float
 import numpy as np
+from pipekit_array.functions import namespace_of
 
 from gridax._src.advection.advect import Wall, check_wall
 from gridax._src.api import grid_dispatch
@@ -26,7 +27,6 @@ from gridax._src.operators._ghost import interior
 from gridax._src.operators._utils import _metric_like, _safe_div_cos, _spacing
 from gridax._src.operators.calculus import _levels
 from gridax._src.operators.stencils import _materialize, avg_x_fwd_2d, avg_y_fwd_2d
-from gridax._src.pytree import array_namespace
 
 if TYPE_CHECKING:
     from jaxtyping import Array
@@ -195,7 +195,7 @@ def _face_kappa(kappa: Any, wall: str = "closed") -> tuple[Any, Any]:
     ``[Ny-3, Nx-2]``, and reads no ghost cell; ``"open"`` gives every face,
     ``[Ny-2, Nx-1]`` and ``[Ny-1, Nx-2]``. A scalar is returned as it is.
     """
-    xp = array_namespace(kappa)
+    xp = namespace_of(kappa)
     kappa = xp.asarray(kappa)
     if kappa.ndim < 2:
         return kappa, kappa
@@ -231,7 +231,7 @@ def _fluxes(
     if mu is not None:
         # nothing through a dry face, whatever land holds: the differences are
         # linear, so a zero here keeps a NaN out of the gradient too
-        xp = array_namespace(dx)
+        xp = namespace_of(dx)
         wet_x, wet_y = mu[..., c, before], mv[..., before, c]
         dx, dy = xp.where(wet_x, dx, 0.0), xp.where(wet_y, dy, 0.0)
         if np.ndim(kx):
@@ -252,7 +252,7 @@ def _sides(fx: Any, fy: Any, wall: str) -> tuple[Any, Any, Any, Any]:
     """The flux on the east, west, north and south face of every interior cell."""
     if wall == "open":
         return fx[..., 1:], fx[..., :-1], fy[..., 1:, :], fy[..., :-1, :]
-    xp = array_namespace(fx)
+    xp = namespace_of(fx)
     lead = ((0, 0),) * (fx.ndim - 2)
 
     # the faces of a closed wall are zero, and enter as a pad, so that the
@@ -282,7 +282,7 @@ def _wet(mask: Any, grid: Any) -> tuple[Any, Any, Any]:
 
 def _kappa_levels(grid: Any, kappa: Any) -> Any:
     """A 3-D diffusivity on the interior levels; any other as it is."""
-    xp = array_namespace(kappa)
+    xp = namespace_of(kappa)
     kappa = xp.asarray(kappa)
     return _levels(grid, kappa) if kappa.ndim >= 3 else kappa
 
@@ -318,7 +318,7 @@ def _diffusive_fluxes(
 ) -> tuple[Any, Any]:
     if isinstance(grid, SphericalCGrid2D | SphericalCGrid3D):
         _closed(wall)
-    xp = array_namespace(f, kappa)
+    xp = namespace_of(f, kappa)
     _, mu, mv = _wet(mask, grid)
     h = _levels(grid, f)
     fx, fy = _fluxes(h, _kappa_levels(grid, kappa), grid, mu, mv, wall)

@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from jaxtyping import Bool, Float
 import numpy as np
+from pipekit_array.functions import namespace_of
 
 from gridax._src.api import grid_dispatch
 from gridax._src.fields.located import located
@@ -51,7 +52,6 @@ from gridax._src.grid import (
 from gridax._src.grid.points import Stagger
 from gridax._src.mask import Mask2D, Mask3D
 from gridax._src.operators._utils import _metric_like
-from gridax._src.pytree import array_namespace
 
 if TYPE_CHECKING:
     from jaxtyping import Array
@@ -102,12 +102,12 @@ def volume_weights(
     """The T-cell volumes of a 3-D grid, area times ``dz`` (``xp`` as in :func:`area_weights`)."""
     if isinstance(grid, CartesianCGrid3D):
         cell = grid.spacing("x") * grid.spacing("y") * grid.spacing("z")
-        xp = array_namespace(cell) if xp is None else xp
+        xp = namespace_of(cell) if xp is None else xp
         return xp.full(grid.shape, cell)
     if isinstance(grid, CurvilinearGrid3D | CollocatedGrid3D | StretchedCGrid3D):
         levels = cast(Any, grid)
         area = levels._area(xp=xp)
-        xp = array_namespace(area) if xp is None else xp
+        xp = namespace_of(area) if xp is None else xp
         return xp.broadcast_to(area * abs(levels.spacing("z")), levels.shape)
     raise TypeError(
         f"volume_weights: unsupported grid type {type(grid).__name__}. Use a 3-D grid."
@@ -129,7 +129,7 @@ def _weighted(
     cells in realistic data, cannot contaminate the wet-cell totals. The 0.0
     is weakly typed, so the dtype stays that of the field.
     """
-    xp = array_namespace(x)
+    xp = namespace_of(x)
     weights = _metric_like(weights, x)
     if mask is None:
         return x, weights
@@ -153,7 +153,7 @@ def _interior_axes(
 
 def _sum(x: Any, weights: Any, mask: Any, ghost: int) -> Any:
     """∑ w x over the interior."""
-    xp = array_namespace(x)
+    xp = namespace_of(x)
     x, weights = _weighted(x, weights, mask)
     inner, axes = _interior_axes(x, weights, ghost)
     return xp.sum((weights * x)[inner], axis=axes)
@@ -161,7 +161,7 @@ def _sum(x: Any, weights: Any, mask: Any, ghost: int) -> Any:
 
 def _mean(x: Any, weights: Any, mask: Any, ghost: int) -> Any:
     """∑ w x / ∑ w over the interior, NaN where there is no wet cell."""
-    xp = array_namespace(x)
+    xp = namespace_of(x)
     x, weights = _weighted(x, weights, mask)
     inner, axes = _interior_axes(x, weights, ghost)
     num = xp.sum(weights[inner] * x[inner], axis=axes)
@@ -295,7 +295,7 @@ def volume_mean(
 @area_sum.register(SphericalCGrid2D)
 @area_sum.register(StretchedCGrid2D)
 def _area_sum(grid: Any, x: Any, *, mask: Mask2D | None) -> Any:
-    return _sum(x, area_weights(grid, xp=array_namespace(x)), mask, grid.ghost)
+    return _sum(x, area_weights(grid, xp=namespace_of(x)), mask, grid.ghost)
 
 
 @area_mean.register(CartesianAGrid2D)
@@ -304,7 +304,7 @@ def _area_sum(grid: Any, x: Any, *, mask: Mask2D | None) -> Any:
 @area_mean.register(SphericalCGrid2D)
 @area_mean.register(StretchedCGrid2D)
 def _area_mean(grid: Any, x: Any, *, mask: Mask2D | None) -> Any:
-    return _mean(x, area_weights(grid, xp=array_namespace(x)), mask, grid.ghost)
+    return _mean(x, area_weights(grid, xp=namespace_of(x)), mask, grid.ghost)
 
 
 @volume_sum.register(CartesianAGrid3D)
@@ -312,7 +312,7 @@ def _area_mean(grid: Any, x: Any, *, mask: Mask2D | None) -> Any:
 @volume_sum.register(SphericalCGrid3D)
 @volume_sum.register(StretchedCGrid3D)
 def _volume_sum(grid: Any, x: Any, *, mask: Mask3D | None) -> Any:
-    return _sum(x, volume_weights(grid, xp=array_namespace(x)), mask, grid.ghost)
+    return _sum(x, volume_weights(grid, xp=namespace_of(x)), mask, grid.ghost)
 
 
 @volume_mean.register(CartesianAGrid3D)
@@ -320,7 +320,7 @@ def _volume_sum(grid: Any, x: Any, *, mask: Mask3D | None) -> Any:
 @volume_mean.register(SphericalCGrid3D)
 @volume_mean.register(StretchedCGrid3D)
 def _volume_mean(grid: Any, x: Any, *, mask: Mask3D | None) -> Any:
-    return _mean(x, volume_weights(grid, xp=array_namespace(x)), mask, grid.ghost)
+    return _mean(x, volume_weights(grid, xp=namespace_of(x)), mask, grid.ghost)
 
 
 # ----------------------------------------------------------------------
@@ -342,7 +342,7 @@ def _sample_counts(
     entries per output element, and ``wet`` is the broadcast boolean
     mask (``None`` when no mask was supplied).
     """
-    xp = array_namespace(samples)
+    xp = namespace_of(samples)
     dtype = _accumulation_dtype(samples)
     if mask is None:
         # The count is the same everywhere, so take it from the shape
@@ -377,7 +377,7 @@ def _accumulation_dtype(samples: Float[Array, "N ..."]) -> Any:
     there is no half-precision value that could carry the guarantee.
     ``float32`` and ``float64`` inputs are returned unchanged.
     """
-    xp = array_namespace(samples)
+    xp = namespace_of(samples)
     return xp.promote_types(xp.asarray(samples).dtype, xp.float32)
 
 
@@ -423,7 +423,7 @@ def masked_mean(
         ``(x - loc) / scale`` leaves a dry cell at zero and the inverse
         map stays well defined.
     """
-    xp = array_namespace(samples)
+    xp = namespace_of(samples)
     safe, count, _ = _sample_counts(samples, mask, at, axis)
     total = xp.sum(safe, axis=axis)
     empty = count == 0
@@ -475,7 +475,7 @@ def masked_std(
         form the estimate.  In the input dtype or ``float32``,
         whichever is wider — see :func:`_accumulation_dtype`.
     """
-    xp = array_namespace(samples)
+    xp = namespace_of(samples)
     safe, count, wet = _sample_counts(samples, mask, at, axis)
     empty = count == 0
 

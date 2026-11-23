@@ -24,6 +24,9 @@ dependencies = [
     "scipy>=1.14.0",
     "jaxtyping>=0.3.0",
     "geophysix>=0.0.3",
+    # The array backend (pipekit_array.functions) and the adapter of CField.
+    "pipekit-ops>=0.2.2",
+    "pipekit-array[numpy,compat]>=0.1.3",
 ]
 
 [project.optional-dependencies]
@@ -41,9 +44,6 @@ jax = [
 # `ExplicitStep` steps with integrix.march.
 pipekit = [
     "gridax[jax]",
-    "pipekit-ops",
-    # The named-dim functions on a CField, and the DimArray it demotes to.
-    "pipekit-array",
     "pipekit-jax",
     "integrix>=0.0.9",
 ]
@@ -69,7 +69,7 @@ geophysix = { git = "https://github.com/jejjohnson/geophysix", tag = "v0.0.3" }
 spectraldiffx = { git = "https://github.com/jejjohnson/spectraldiffx.git", tag = "0.1.2" }
 gaussx = { git = "https://github.com/jejjohnson/gaussx", tag = "v0.8.1" }
 integrix = { git = "https://github.com/jejjohnson/integrix", tag = "v0.0.9" }
-pipekit-ops = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-ops", tag = "pipekit-ops-v0.2.1" }
-pipekit-array = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-array", tag = "pipekit-ops-v0.2.1" }
-pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-cycle", tag = "pipekit-ops-v0.2.1" }
-pipekit-jax = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-jax", tag = "pipekit-ops-v0.2.1" }
+pipekit-ops = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-ops", tag = "pipekit-array-v0.1.3" }
+pipekit-array = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-array", tag = "pipekit-array-v0.1.3" }
+pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-cycle", tag = "pipekit-array-v0.1.3" }
+pipekit-jax = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-jax", tag = "pipekit-array-v0.1.3" }

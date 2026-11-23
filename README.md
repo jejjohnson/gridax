@@ -83,7 +83,7 @@ for $`m = 0, 1, \dots, K - 1`$, where $`\delta_{mn}`$ is 1 when $`m = n`$ and 0 
 
 ## 📥 Install
 
-gridax needs Python 3.12 or 3.13. The base install brings in NumPy, SciPy, jaxtyping and geophysix and never imports JAX itself: install JAX beside it, and the same calls take JAX arrays. Two extras add the parts that are built on JAX, and `import gridax` imports neither of them:
+gridax needs Python 3.12 or 3.13. The base install brings in NumPy, SciPy, jaxtyping, geophysix and pipekit-array (with array-api-compat) and never imports JAX itself: install JAX beside it, and the same calls take JAX arrays. Two extras add the parts that are built on JAX, and `import gridax` imports neither of them:
 
 ```bash
 pip install gridax              # grids, masks, stencils, operators, analysis, advection
@@ -208,6 +208,7 @@ gridax owns the C-grid, its masks and the operators on it, and composes the rest
 |---|---|
 | Arrays and the array API | [`numpy`](https://numpy.org), or any backend that follows the [array API](https://data-apis.org/array-api/) |
 | Dilations and other mask morphology, at construction | [`scipy`](https://scipy.org) (`scipy.ndimage`) |
+| The array namespace of a call | [`pipekit-array`](https://github.com/jejjohnson/pipekit/tree/main/packages/pipekit-array) (`pipekit_array.functions`) |
 | Physical constants, used as parameter defaults | [`geophysix`](https://github.com/jejjohnson/geophysix) |
 | Shape annotations | [`jaxtyping`](https://github.com/patrick-kidger/jaxtyping) |
 | Pytrees, `jit`, `vmap` and `grad`, when it is installed | [`jax`](https://github.com/jax-ml/jax) |

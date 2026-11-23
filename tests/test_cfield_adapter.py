@@ -143,14 +143,13 @@ def test_registered_whichever_is_imported_first(imports):
     assert res.returncode == 0, res.stderr
 
 
-def test_import_gridax_does_not_import_pipekit():
+def test_import_gridax_imports_only_the_light_half_of_pipekit():
     res = _run(
         """
         import sys, gridax
 
         heads = {m.split(".")[0] for m in sys.modules}
-        assert not heads & {"pipekit_ops", "pipekit_array", "pipekit_jax"}
-        assert "gridax._src.fields.adapter" not in sys.modules
+        assert not heads & {"pipekit_jax", "pipekit_cycle", "xarray", "sklearn", "einx"}
         """
     )
     assert res.returncode == 0, res.stderr

@@ -26,8 +26,7 @@ from typing import TYPE_CHECKING
 
 from jaxtyping import Float
 import numpy as np
-
-from gridax._src.pytree import array_namespace
+from pipekit_array.functions import namespace_of
 
 if TYPE_CHECKING:
     from jaxtyping import Array
@@ -64,7 +63,7 @@ def smooth_abs(
     Float[Array, "..."]
         ``sqrt(x**2 + eps**2)``, same shape as ``x``.
     """
-    return array_namespace(x).sqrt(x * x + eps * eps)
+    return namespace_of(x).sqrt(x * x + eps * eps)
 
 
 def smooth_clamp(
@@ -97,7 +96,7 @@ def smooth_clamp(
     Float[Array, "..."]
         Smoothly lower-clamped ``x``.
     """
-    xp = array_namespace(x, x_min)
+    xp = namespace_of(x, x_min)
     return x_min + _softplus(xp, (x - x_min) * sharpness) / sharpness
 
 
@@ -125,5 +124,5 @@ def smooth_max(
     Float[Array, "..."]
         Smooth elementwise maximum of ``x`` and ``y``.
     """
-    xp = array_namespace(x, y)
+    xp = namespace_of(x, y)
     return y + _softplus(xp, (x - y) * sharpness) / sharpness

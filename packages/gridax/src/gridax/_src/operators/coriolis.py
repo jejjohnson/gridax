@@ -32,13 +32,13 @@ from typing import TYPE_CHECKING, Any
 
 from jaxtyping import Float
 import numpy as np
+from pipekit_array.functions import namespace_of
 
 from gridax._src.api import grid_dispatch
 from gridax._src.fields.located import located
 from gridax._src.grid import CartesianCGrid2D, CartesianCGrid3D
 from gridax._src.operators._ghost import interior
 from gridax._src.operators.calculus import _levels
-from gridax._src.pytree import array_namespace
 
 if TYPE_CHECKING:
     from jaxtyping import Array
@@ -103,7 +103,7 @@ def coriolis(
 @coriolis.register(CartesianCGrid2D)
 @coriolis.register(CartesianCGrid3D)
 def _coriolis_cartesian(grid: Any, u: Any, v: Any, *, f: Any, mask: Any) -> Any:
-    xp = array_namespace(u, v, f)
+    xp = namespace_of(u, v, f)
     if mask is not None:
         # zero dry faces before any stencil reads them (NaN-filled land)
         u = xp.where(mask.wet(at="U"), u, 0.0)

@@ -31,8 +31,7 @@ from typing import TYPE_CHECKING
 
 from jaxtyping import Float
 import numpy as np
-
-from gridax._src.pytree import array_namespace
+from pipekit_array.functions import namespace_of
 
 if TYPE_CHECKING:
     from jaxtyping import Array
@@ -58,7 +57,7 @@ def minmod(r: Float[Array, "..."]) -> Float[Array, "..."]:
     array
         Limiter values φ(r) ∈ [0, 1].
     """
-    xp = array_namespace(r)
+    xp = namespace_of(r)
     return xp.maximum(0.0, xp.minimum(1.0, r))
 
 
@@ -80,7 +79,7 @@ def van_leer(r: Float[Array, "..."]) -> Float[Array, "..."]:
     array
         Limiter values φ(r) ∈ [0, 2).
     """
-    xp = array_namespace(r)
+    xp = namespace_of(r)
     # (r + |r|) / (1 + |r|) = 2a / (1 + a) with a = max(r, 0); a is capped at
     # 1e20 (phi = 2 to all digits) so phi(inf) = 2, not inf / inf.
     a = xp.clip(r, 0.0, 1e20)
@@ -105,7 +104,7 @@ def superbee(r: Float[Array, "..."]) -> Float[Array, "..."]:
     array
         Limiter values φ(r) ∈ [0, 2].
     """
-    xp = array_namespace(r)
+    xp = namespace_of(r)
     return xp.maximum(
         0.0,
         xp.maximum(xp.minimum(2.0 * r, 1.0), xp.minimum(r, 2.0)),
@@ -131,7 +130,7 @@ def mc(r: Float[Array, "..."]) -> Float[Array, "..."]:
     array
         Limiter values φ(r) ∈ [0, 2].
     """
-    xp = array_namespace(r)
+    xp = namespace_of(r)
     return xp.maximum(
         0.0,
         xp.minimum(xp.minimum((1.0 + r) / 2.0, 2.0 * r), 2.0),

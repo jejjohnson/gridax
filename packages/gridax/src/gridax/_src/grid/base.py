@@ -43,9 +43,10 @@ from typing import TYPE_CHECKING, Any
 
 from jaxtyping import Float
 import numpy as np
+from pipekit_array.functions import namespace_of
 
 from gridax._src.grid.points import point_axes
-from gridax._src.pytree import array_namespace, pytree_dataclass, static_field
+from gridax._src.pytree import pytree_dataclass, static_field
 
 # ``jaxtyping.Array`` imports JAX, so it names the type for the type checker
 # only.
@@ -326,7 +327,7 @@ class _UniformMetric:
         shift = 0.5 if self._staggered(axis, at) else 0.0
         step = self._step(axis)
         origin = getattr(self, f"{axis}0", None)
-        xp = array_namespace(step, origin)
+        xp = namespace_of(step, origin)
         index = xp.arange(self._size(axis))
         if origin is None:
             # x[i] = (i + shift) Δx
@@ -366,7 +367,7 @@ class _UniformMetric:
         cell = self._step(horizontal[-1])
         for axis in horizontal[:-1]:
             cell = cell * self._step(axis)
-        xp = array_namespace(cell) if xp is None else xp
+        xp = namespace_of(cell) if xp is None else xp
         shape = tuple(self._size(axis) for axis in horizontal)
         return xp.full(shape, cell)
 

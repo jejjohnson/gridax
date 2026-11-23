@@ -143,7 +143,7 @@ order); review what they cannot see.
 
 - Type hints on every public function; `X | None`; specific exceptions with
   `raise ... from ...`; guard clauses over deep nesting.
-- A `pytree_dataclass` in gridax's operators, an `eqx.Module` in `gridax.solvers` and `gridax.pipekit` (never a plain dataclass) for anything holding arrays; gridax code uses `xp = array_namespace(...)` and the backend hooks, never `jnp` or `.at[]`.
+- A `pytree_dataclass` in gridax's operators, an `eqx.Module` in `gridax.solvers` and `gridax.pipekit` (never a plain dataclass) for anything holding arrays; gridax code uses `xp = namespace_of(...)` and the backend hooks, never `jnp` or `.at[]`.
 - No new runtime dependency without discussion; `uv.lock` updated.
 
 ---

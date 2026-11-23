@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from jaxtyping import Float
 import numpy as np
+from pipekit_array.functions import namespace_of
 
 from gridax._src.analysis.differences import (
     adaptive_difference,
@@ -54,7 +55,6 @@ from gridax._src.operators.stencils import (
     diff_y_fwd_2d,
 )
 from gridax._src.operators.triples import point_name
-from gridax._src.pytree import array_namespace
 
 if TYPE_CHECKING:
     from jaxtyping import Array
@@ -283,7 +283,7 @@ def _velocity(grid: Any, u: Any, v: Any, mask: Any) -> tuple[Any, Any]:
 @divergence.register(CartesianCGrid2D)
 @divergence.register(CartesianCGrid3D)
 def _divergence_cartesian(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
-    xp = array_namespace(u, v)
+    xp = namespace_of(u, v)
     dx, dy = _spacing(grid, "x", u), _spacing(grid, "y", v)
     u, v = _velocity(grid, u, v, mask)
     like = xp.zeros(u.shape, dtype=xp.result_type(u, v))
@@ -316,7 +316,7 @@ def _scalar(grid: Any, f: Any, at: str, mask: Any) -> Any:
     nb = _neighbours(_levels(grid, without_dry(f, mask, at, len(grid.axes))))
     if mask is None or at != "T":
         return nb
-    xp = array_namespace(f)
+    xp = namespace_of(f)
     wet = _neighbours(_levels(grid, readable(mask.wet(), len(grid.axes))))
     beside = {k: getattr(nb, k) for k in "ewns"}
     return nb._replace(
@@ -332,7 +332,7 @@ def _laplacian_cartesian_1d(grid: Any, f: Any, *, at: Any, mask: Any) -> Any:
     c, e, w = f[..., 1:-1], f[..., 2:], f[..., :-2]  # f[i], f[i+1], f[i-1]
     if mask is not None and at == "T":
         # no gradient across a coast
-        xp, wet = array_namespace(f), readable(mask.wet(), 1)
+        xp, wet = namespace_of(f), readable(mask.wet(), 1)
         e, w = xp.where(wet[2:], e, c), xp.where(wet[:-2], w, c)
     # ∇²f[i] = (f[i+1] - 2 f[i] + f[i-1]) / dx²
     out = interior(((e - c) - (c - w)) / _spacing(grid, "x", f, at=at) ** 2, f)
@@ -408,7 +408,7 @@ def _near_coasts(grid: Any, p: Any, plain: Any, dst: str, mask: Any) -> Any:
     """
     if mask is None:
         return plain
-    xp = array_namespace(p)
+    xp = namespace_of(p)
     wet = _levels(grid, readable(mask.wet(), len(grid.axes)))
 
     def corners(x: Any) -> Any:
@@ -451,7 +451,7 @@ def _laplacian_stretched(grid: Any, f: Any, *, at: Any, mask: Any) -> Any:
     at = "T" if at is None else point_name(at)
     if at != "T":
         raise NotImplementedError(f"laplacian at {at} of a stretched grid")
-    xp = array_namespace(f)
+    xp = namespace_of(f)
     f = without_dry(f, mask, "T", len(grid.axes))
     terms = []
     for axis in grid.axes:
@@ -631,7 +631,7 @@ def _curl_collocated_sphere(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
 def _laplacian_collocated_sphere(grid: Any, f: Any, *, at: Any, mask: Any) -> Any:
     _only_t("laplacian", at)
     cos, R = _sphere(grid, f)
-    xp = array_namespace(f)
+    xp = namespace_of(f)
     # cos φ where f is valid, so the three differences take one stencil
     weight = xp.where(xp.isfinite(f), cos, xp.nan)
 
