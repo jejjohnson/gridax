@@ -155,7 +155,10 @@ def test_kept_fields_match_the_equinox_masks():
         elif name.startswith("stencil_capability."):
             value = getattr(m.stencil_capability, name.split(".")[1])
         else:
-            value = m.wet(**WET[name]) if name in WET else getattr(m, name)
+            inverse = name.startswith("not_")
+            point = name.removeprefix("not_")
+            value = m.wet(**WET[point]) if point in WET else getattr(m, name)
+            value = ~value if inverse else value
         np.testing.assert_array_equal(np.asarray(value), ref[key], err_msg=key)
 
 
