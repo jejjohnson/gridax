@@ -1,28 +1,15 @@
-# Vorticity Operators
+# Vorticity and the Jacobian
 
-Relative vorticity and Jacobian operators on Arakawa C-grids.
+The relative vorticity is [`curl`](divergence.md), and the potential vorticity is [`sw_potential_vorticity`](diagnostics.md).
 
-::: gridax.Vorticity2D
+## PV flux
 
-::: gridax.Vorticity3D
+::: gridax.pv_flux
 
-## PV flux (functional)
-
-`pv_flux_blend` is the grid-free form of `Vorticity2D.pv_flux_blend`.
-`pv_flux_arakawa_lamb` is its deprecated alias: the blend is not the
-Arakawa–Lamb (1981) scheme.
-
-::: gridax.pv_flux_blend
+::: gridax.vorticity_flux_upwind
 
 ## Jacobian
 
-`ArakawaJacobian2D` is the mask-aware class form: it returns the full
-`[..., Ny, Nx]` T-point array with a zero ghost ring.  Under a mask, `f`
-and `g` are treated as zero on dry T-cells (so land `NaN`s cannot reach the
-stencil) and dry output cells are exactly zero.  The functional
-`arakawa_jacobian` returns only the interior `[..., Ny-2, Nx-2]`, takes no
-mask, and reads land values as given.
-
-::: gridax.ArakawaJacobian2D
+`arakawa_jacobian` returns the full `[..., Ny, Nx]` T-point array with a zero ghost ring.  Under a mask the fields are treated as zero on dry T-cells (so land `NaN`s cannot reach the stencil) and dry output cells are exactly zero.
 
 ::: gridax.arakawa_jacobian

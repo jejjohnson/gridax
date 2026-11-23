@@ -20,13 +20,13 @@ call on `[*batch, Ny, Nx]` fields. Requires the `pipekit` extra:
 | `FillGhosts(kind, stagger)` | `fill_ghosts` with `BC.periodic()`, `BC.no_flux()`, … | 1 → 1 |
 | `ApplyMask(mask, stagger)` | `jnp.where(mask.{h,u,v,xy_corner_strict}, x, 0)` | 1 → 1 |
 | `RelativeVorticity` | `curl` | (U, V) → X |
-| `PotentialVorticity` | `Vorticity2D.potential_vorticity` | (U, V, T, T) → X |
-| `Enstrophy` | `Vorticity2D.enstrophy` | (U, V) → X |
-| `QGPotentialVorticity(f0, beta, y0)` | `QGPotentialVorticity2D` | T → T |
+| `PotentialVorticity` | `sw_potential_vorticity` | (U, V, T, T) → X |
+| `Enstrophy` | `enstrophy` of `curl` | (U, V) → X |
+| `QGPotentialVorticity(f0, beta, y0)` | `qg_potential_vorticity` | T → T |
 | `KineticEnergy` | `kinetic_energy` | (U, V) → T |
-| `AvailablePE(g_prime, H)` | `Energetics2D.available_potential_energy` | T → T |
-| `Strain(component)` | `Strain2D.shear` / `.tensor` / `.magnitude_squared` | (U, V) → X / T |
-| `OkuboWeiss` | `Strain2D.okubo_weiss` | (U, V) → T |
+| `AvailablePE(g_prime, H)` | `available_potential_energy` | T → T |
+| `Strain(component)` | `shear_strain` / `tensor_strain` / `strain_rate_squared` | (U, V) → X / T |
+| `OkuboWeiss` | `okubo_weiss_parameter` | (U, V) → T |
 | `TotalEnergy` | `area_sum` of KE + APE | (T, T) → `[*batch]` |
 | `DomainIntegral` / `DomainMean` | `area_sum` / `area_mean` | T → `[*batch]` |
 | `ExplicitStep(rhs, dt, scheme)` | `integrix.march.euler_step` / `heun_step` / `rk3_ssp_step` / `rk4_step` | state → state |

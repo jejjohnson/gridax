@@ -1,13 +1,5 @@
-# Advection Operators
+# Advection
 
-Flux-form advection operators for scalar transport on staggered C-grids.
+The flux-form tendency of a tracer on a staggered C-grid.
 
 ::: gridax.advect
-
-## The class forms
-
-::: gridax.Advection1D
-
-::: gridax.Advection2D
-
-::: gridax.Advection3D
