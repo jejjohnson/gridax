@@ -1,7 +1,7 @@
 """Generate, or check, the capability index: every public name in gridax.
 
 ``docs/capabilities.md`` lists the ``__all__`` of each public gridax module
-(``gridax``, its ``stencils`` / ``advection`` / ``analysis`` namespaces,
+(``gridax``, its ``stencils`` / ``advection`` / ``analysis`` / ``fields`` namespaces,
 ``gridax.solvers`` and ``gridax.pipekit``), grouped by the private module
 that defines each name, with the first sentence of its docstring; names
 gridax re-exports from spectraldiffx, gaussx or integrix are grouped by the
@@ -45,6 +45,7 @@ PACKAGES: dict[str, list[str]] = {
         "gridax.stencils",
         "gridax.advection",
         "gridax.analysis",
+        "gridax.fields",
         "gridax.solvers",
         "gridax.pipekit",
     ],
@@ -89,6 +90,10 @@ ALLOWED_SHARED_NAMES: dict[str, str] = {
     "SphericalCGrid2D": (
         "gridax's is a lat-lon Arakawa C-grid container with a ghost ring;"
         " spectraldiffx's is the spectral (spherical-harmonic) grid"
+    ),
+    "sqrt": (
+        "gridax.fields.sqrt is the element-wise square root of a CField;"
+        " gaussx.sqrt is the matrix square root"
     ),
     "build_capacitance_solver": (
         "gridax's solves every wet cell with psi = 0 on the coast (the"
