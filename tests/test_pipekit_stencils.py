@@ -39,14 +39,19 @@ CASES = [
         (
             f"Difference-{a}-{s}{d}",
             fp.Difference(grid=GRID, axis=a, src=s, dst=d),
-            getattr(D, m),
+            getattr(D, f"diff_{a}_{s}_to_{d}"),
             1,
         )
-        for (a, s, d), m in sorted(fp.DIFFERENCES.items())
+        for a, s, d in fp.DIFFERENCES
     ],
     *[
-        (f"Interp-{s}{d}", fp.Interp(grid=GRID, src=s, dst=d), getattr(I, m), 1)
-        for (s, d), m in sorted(fp.INTERPOLATIONS.items())
+        (
+            f"Interp-{s}{d}",
+            fp.Interp(grid=GRID, src=s, dst=d),
+            getattr(I, f"{s}_to_{d}"),
+            1,
+        )
+        for s, d in fp.INTERPOLATIONS
     ],
     ("Divergence", fp.Divergence(grid=GRID), D.divergence, 2),
     ("Curl", fp.Curl(grid=GRID), D.curl, 2),
@@ -106,8 +111,18 @@ def test_equals_tier_a(name, op, ref, n):
 
 
 def test_tables_cover_every_tier_a_method():
-    assert len(fp.DIFFERENCES) == 8
-    assert len(fp.INTERPOLATIONS) == 12
+    methods = {
+        tuple(name.removeprefix("diff_").replace("_to_", "_").split("_"))
+        for name in dir(fvx.Difference2D)
+        if name.startswith("diff_")
+    }
+    assert methods == set(fp.DIFFERENCES)
+    pairs = {
+        tuple(name.split("_to_"))
+        for name in dir(fvx.Interpolation2D)
+        if "_to_" in name and not name.startswith("_")
+    }
+    assert pairs == set(fp.INTERPOLATIONS)
 
 
 @pytest.mark.parametrize(

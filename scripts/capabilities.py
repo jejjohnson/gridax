@@ -87,6 +87,11 @@ ALLOWED_SHARED_NAMES: dict[str, str] = {
         " gaussx through as_preconditioner(); gaussx's is CG preconditioned by"
         " one V-cycle over caller-built levels (#474)"
     ),
+    "difference": (
+        "gridax.difference moves a field between the points of a grid;"
+        " gridax.analysis.difference differentiates a bare array along an axis,"
+        " until the collocated grids take it over"
+    ),
     "sqrt": (
         "gridax.fields.sqrt is the element-wise square root of a CField;"
         " gaussx.sqrt is the matrix square root"

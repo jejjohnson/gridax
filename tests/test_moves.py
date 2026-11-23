@@ -129,7 +129,8 @@ class TestDifference:
             f = field(grid, lead=(2, 3))
             out = g.difference(f, grid, axis="x", src="T", dst="U")
             one = g.difference(f[1, 2], grid, axis="x", src="T", dst="U")
-            np.testing.assert_array_equal(out[1, 2], one, err_msg=name)
+            # XLA vectorises the division of a batch differently: an ulp
+            np.testing.assert_allclose(out[1, 2], one, rtol=4e-16, err_msg=name)
 
     def test_next_to_a_pole_a_zonal_difference_is_nan(self):
         grid = g.SphericalCGrid2D.from_interior(8, 6, (0.0, 360.0), (-90.0, 90.0))

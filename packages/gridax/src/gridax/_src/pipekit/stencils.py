@@ -48,9 +48,9 @@ STAGGERS = ("T", "U", "V", "X")
 
 
 #: ``(axis, src, dst)`` of the 2-D differences, e.g. ``("x", "T", "U")``.
-DIFFERENCES = frozenset(TRIPLES["y", "x"])
+DIFFERENCES = tuple(sorted(TRIPLES["y", "x"]))
 #: ``(src, dst)`` of the 2-D interpolations, e.g. ``("U", "T")``.
-INTERPOLATIONS = frozenset(PAIRS["y", "x"])
+INTERPOLATIONS = tuple(sorted(PAIRS["y", "x"]))
 
 
 class Difference(GridOperator):

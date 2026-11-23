@@ -735,9 +735,9 @@ Every public name in gridax (418 entries), listed per public module (`gridax`, i
 
 | Name | Kind | What it does |
 |---|---|---|
-| `DIFFERENCES` | constant | `frozenset({('x', 'V', 'X'), ('y', 'U', 'X'), ('x', 'X', '...` |
+| `DIFFERENCES` | constant | `(('x', 'T', 'U'), ('x', 'U', 'T'), ('x', 'V', 'X'), ('x',...` |
 | `GHOST_FILLERS` | constant | `{'periodic': <function enforce_periodic>, 'zero': <functi...` |
-| `INTERPOLATIONS` | constant | `frozenset({('U', 'V'), ('T', 'V'), ('X', 'U'), ('T', 'U')...` |
+| `INTERPOLATIONS` | constant | `(('T', 'U'), ('T', 'V'), ('T', 'X'), ('U', 'T'), ('U', 'V...` |
 | `MASK_KINDS` | constant | `{'T': 'default', 'U': 'default', 'V': 'default', 'X': 'st...` |
 | `SCHEMES` | constant | `{'euler': <function euler_step>, 'heun': <function heun_s...` |
 | `STRAIN_COMPONENTS` | constant | `{'shear': 'shear', 'tensor': 'tensor', 'magnitude_squared...` |

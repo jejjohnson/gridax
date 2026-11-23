@@ -23,6 +23,23 @@ finitevolX answers this through a consistent **forward / backward** convention
 that is the backbone of all higher-level operators (divergence, vorticity,
 Laplacian, diffusion, advection, etc.).
 
+A move is named by its axis and its points, and the type of the grid gives the rank and the geometry:
+
+```python
+import numpy as np
+import gridax
+
+grid = gridax.CartesianCGrid2D.from_interior(16, 16, 1.0, 1.0)
+h = np.ones(grid.shape)
+
+# dh/dx at the east faces, dh[j, i+1/2] = (h[j, i+1] - h[j, i]) / dx
+dh_dx = gridax.difference(h, grid, axis="x", src="T", dst="U")
+# h at the corners, the mean of the four cells
+h_x = gridax.interpolate(h, grid, src="T", dst="X")
+```
+
+The classes `Difference*`, `SphericalDifference*` and `Interpolation*` hold a grid and a mask and call these two functions.
+
 ---
 
 ## Staggered Grid Locations

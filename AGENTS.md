@@ -106,7 +106,7 @@ whether it exists:
 | `h[1:-1, 2:] - h[1:-1, 1:-1]`, `0.5 * (h[1:-1, 1:-1] + h[2:, 1:-1])` | the raw stencils `<op>_<axis>_<side>_<d>d` (`diff_x_fwd_2d`, `avg_y_bwd_3d`, `avg_xfwd_yfwd_2d`, …): they read the trailing `d` axes of `[*batch, *spatial]`, trim every spatial axis and shift along `<axis>` |
 | `out = jnp.zeros_like(h); out = out.at[1:-1, 1:-1].set(...)` | `interior(values, like)` (`ghost=2` for advection) |
 | A gradient, divergence, curl or Laplacian on the C-grid | `Difference1D/2D/3D` (`diff_x_T_to_U`, `divergence`, `curl`, `laplacian`, `grad_perp`), `Divergence2D`, `Vorticity2D`; on the sphere `SphericalDifference2D/3D`, `SphericalDivergence*`, `SphericalLaplacian*`, `SphericalVorticity*` |
-| Moving a field between T / U / V / X points | `Interpolation1D/2D/3D` (`T_to_U`, `U_to_T`, `T_to_X`, `U_to_V`, …) |
+| Moving a field between T / U / V / X points | `gridax.interpolate(f, grid, src="T", dst="U", mask=mask)`, `gridax.difference(f, grid, axis="x", src="T", dst="U", mask=mask)` on any C-grid (the tables of moves are in `operators/triples.py`); `Interpolation*` and `Difference*` bind a grid and a mask to them |
 | A flux-form advective tendency, upwind / WENO / TVD face values | `Advection1D/2D/3D(...)(h, u, v, method=...)`, `Reconstruction1D/2D/3D`, `gridax.advection.reconstruct(q, u, axis=, scheme=Upwind(k) \| Centred() \| WENO(k) \| TVD(limiter), mask=)`, `upwind_flux`, the `weno_*` / `linear_*` stencils, the limiters `minmod` / `van_leer` / `superbee` / `mc`, `rusanov_flux` |
 | Harmonic / biharmonic diffusion, momentum advection, Coriolis | `Diffusion2D/3D`, `BiharmonicDiffusion2D/3D`, `MomentumAdvection2D/3D`, `Coriolis2D/3D` (and `Spherical*`) |
 | Kinetic energy, PV, enstrophy, strain, Okubo–Weiss, an Arakawa Jacobian | `Energetics2D`, `Vorticity2D`, `Strain2D`, `QGPotentialVorticity2D`, `ArakawaJacobian2D`; functional `kinetic_energy`, `arakawa_jacobian`, `okubo_weiss`, … |
@@ -353,6 +353,7 @@ docstring before changing what it checks.
 | `tests/test_convergence.py` | Second-order spatial convergence of the difference operators |
 | `tests/test_jax_transforms.py`, `tests/test_differentiable.py` | `jit` / `vmap` match eager execution; the smooth surrogates differentiate |
 | `tests/test_registry_parity.py` | Every canonical function is implemented on exactly the grid types `SUPPORT` lists, and raises `NotImplementedError` naming the others |
+| `tests/test_moves.py` | `difference` and `interpolate` are exact on the coordinates for every move and C-grid, and the bindings equal them bit for bit |
 | `tests/test_batch_dims.py` | Every 2-D entry point annotated `*batch Ny Nx` equals a loop over the batch members, masked and unmasked, eager and under `jit` |
 | `tests/test_dtype_behavior.py` | float32 and float64 agree; outputs are finite on extreme inputs |
 | `tests/test_open_walls.py`, conservation tests in `test_advection.py`, `test_jacobian.py`, `test_momentum.py`, `test_diagnostics.py` | Mass / energy / enstrophy conservation of the flux-form and Arakawa schemes, including `wall="open"` |
