@@ -204,17 +204,21 @@ class Scheme(abc.ABC):
         offsets = self.offsets(derivative=derivative, staggered=staggered)
         return _exact_coeffs(offsets, derivative, self._data or "point")
 
-    def degrades_on(self, grid: Any) -> bool:
-        """Whether the widest stencil does not fit next to the edges of ``grid``.
+    def degrades_on(self, grid: Any, mask: Any = None) -> bool:
+        """Whether the widest stencil does not fit everywhere on ``grid``.
 
-        True where the halo is wider than the grid's ghost ring, so the points
-        next to an edge take a narrower or a shifted stencil. A collocated
-        grid that is periodic on every axis has no edge.
+        True if the halo is wider than the grid's ghost ring, so the points
+        next to an edge take a narrower or a shifted stencil; and, with a
+        mask, if a wet output reads a dry cell, so it takes a narrower one. A
+        collocated grid that is periodic on every axis has no edge. For a model
+        to warn at setup: it reads the values of the mask.
 
         Parameters
         ----------
         grid : CGrid or collocated grid
             The grid.
+        mask : Mask1D, Mask2D or Mask3D, optional
+            The wet cells; not traced.
 
         Returns
         -------
@@ -228,6 +232,11 @@ class Scheme(abc.ABC):
         >>> Centred(2).degrades_on(grid), Centred(4).degrades_on(grid)
         (False, True)
         """
+        if mask is not None:
+            from gridax._src.schemes.adaptive import reads_dry
+
+            if reads_dry(self, grid, mask):
+                return True
         collocated = getattr(grid, "_collocated", False)
         if collocated and set(grid.axes) <= set(grid.periodic):
             return False

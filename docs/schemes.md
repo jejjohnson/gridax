@@ -95,3 +95,53 @@ dfdx = gridax.difference(f, agrid, axis="x", scheme=Biased(1, "right"))
 ## Next to a wall
 
 Where the widest stencil does not fit, a face value takes the next narrower tier, down to the upwind cell (`Centred`: down to the two cells of the face). With a mask, a dry cell ends the stencil as the edge of the array does, so a face value never reads a dry cell. A difference or an average next to the edge of the array shifts its stencil inwards instead (see [the two wall rules](stencils.md)), and with a mask it takes the next narrower stencil wherever it would read a dry point, down to the two points of `Centred(2)`. A collocated difference is one-sided there.
+
+## Saying what happens there: `Adaptive`
+
+Those are the defaults of each operation. `Adaptive(scheme, edges=…, mask=…)` wraps a scheme and says it instead, for every operation that takes a `scheme=`:
+
+| Policy | `edges=`, at the array bounds | `mask=`, next to dry points |
+|---|---|---|
+| `"narrow"` | the next narrower stencil that fits | the widest narrower stencil on wet points |
+| `"bias"` | as many points, shifted inwards | a stencil of the same order, shifted onto wet points |
+| `"extend"` | the full stencil, outside filled from `bc=` | |
+| `"periodic"` | the full stencil, wrapped around | |
+| `"fill"` | | the full stencil, dry points filled from `bc=` |
+| `"none"` | zero (NaN if collocated) where it does not fit | the full stencil, dry points read as they are |
+
+| Operation | Default `edges` | Default `mask` |
+|---|---|---|
+| `reconstruct`, `advect` | `"narrow"` | `"narrow"` |
+| `difference`, `interpolate` on a C-grid | `"bias"` | `"narrow"` |
+| `difference` on an A-grid | `"bias"` | shift, then narrow |
+
+With `bc=` the default at the edges is `"extend"`.
+
+```python
+import gridax
+import numpy as np
+from gridax.schemes import WENO, Adaptive, Centred
+
+grid = gridax.CartesianCGrid2D.from_interior(32, 32, 1.0, 1.0)
+wet = np.ones(grid.shape, dtype=bool)
+wet[10:16, 12:20] = False
+mask = gridax.Mask2D.from_grid(grid, wet)
+h, u, v = np.random.default_rng(0).normal(size=(3, *grid.shape))
+
+# fourth order up to the coast, with a stencil that leans away from it
+leaning = Adaptive(Centred(4), mask="bias")
+dhdx = gridax.difference(h, grid, axis="x", src="T", dst="U", scheme=leaning, mask=mask)
+
+# WENO-5 everywhere: across the seam, and through no-flux ghosts behind the coast
+bc = gridax.BC(
+    x=gridax.Periodic(),
+    y=gridax.Periodic(),
+    coast=gridax.BC(x=gridax.Neumann(), y=gridax.Neumann()),
+)
+full = Adaptive(WENO(5), mask="fill")
+dhdt = gridax.advect(h, u, v, grid, scheme=full, mask=mask, bc=bc)
+
+Adaptive(Centred(4), mask="bias").degrades_on(grid, mask)  # True: at the edges
+```
+
+A flux has one value per face whatever the policy, so `advect` conserves to rounding under all of them. An upwinded scheme has no `"bias"`, which would make it read downwind cells. The policy at the edges is chosen from the shape of the array and costs nothing; next to a coast every candidate is computed and one is selected per point.

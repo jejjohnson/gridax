@@ -8,9 +8,12 @@ the formal order of accuracy of each. A :class:`Scheme` is a ladder of
 - ``footprint(staggered=)`` and ``halo(staggered=)``: the cells it reads and
   the ghost cells it needs;
 - ``weights(derivative=, staggered=)``: its exact weights, as fractions;
-- ``degrades_on(grid)``: whether it must narrow or shift next to the edges;
+- ``degrades_on(grid, mask)``: whether it must narrow or shift somewhere;
 - ``linear`` and ``upwinded``: ``difference`` and ``interpolate`` take the
   schemes that are linear and not upwinded, ``reconstruct`` takes any.
+
+:class:`Adaptive` wraps any of them to say what happens where the stencil does
+not fit: at the edges of the array and next to dry points.
 
 Everything here imports without JAX.
 
@@ -22,8 +25,9 @@ Example:
     3
 """
 
+from gridax._src.schemes.adaptive import Adaptive
 from gridax._src.schemes.base import Scheme, Tier
 from gridax._src.schemes.linear import Biased, Centred, Upwind
 from gridax._src.schemes.nonlinear import TVD, WENO
 
-__all__ = ["TVD", "WENO", "Biased", "Centred", "Scheme", "Tier", "Upwind"]
+__all__ = ["TVD", "WENO", "Adaptive", "Biased", "Centred", "Scheme", "Tier", "Upwind"]

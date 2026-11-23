@@ -12,7 +12,14 @@ from gridax._src.analysis.differences import (
     difference as _collocated_difference,
 )
 from gridax._src.api import grid_dispatch
-from gridax._src.boundary.fill import BC, extend, extend_wet
+from gridax._src.backend import set_at
+from gridax._src.boundary.fill import (
+    BC,
+    extend,
+    extend_wet,
+    fill_coasts,
+    wrapping,
+)
 from gridax._src.fields.located import located
 from gridax._src.grid import (
     CartesianAGrid1D,
@@ -25,7 +32,7 @@ from gridax._src.grid import (
     SphericalCGrid2D,
     SphericalCGrid3D,
 )
-from gridax._src.grid.points import Stagger, point_stagger
+from gridax._src.grid.points import POINT_AXES, Stagger, point_stagger
 from gridax._src.mask.utils import shifted
 from gridax._src.operators._ghost import interior
 from gridax._src.operators._utils import _metric_like, _safe_div_cos, _spacing
@@ -37,14 +44,18 @@ from gridax._src.operators.triples import (
     point_name,
 )
 from gridax._src.pytree import array_namespace
+from gridax._src.schemes.adaptive import policies
 from gridax._src.schemes.base import Scheme
 from gridax._src.schemes.linear import Biased, Centred
 from gridax._src.stencils.staggered import (
     CENTRED2,
     along,
+    along_wet,
     check_linear,
     crop,
     is_two_point,
+    reads,
+    wet_windows,
 )
 
 if TYPE_CHECKING:
@@ -214,23 +225,26 @@ def _wet(mask: Any, point: str) -> Any:
     return mask.wet(at=point, kind="strict" if point == "X" else "default")
 
 
+def _others(f: Any, axes: tuple[str, ...], moved: list[str]) -> Any:
+    """``f`` without the ghost ring of the axes that are not moved along."""
+    return f[crop(f.ndim, [axes.index(a) - len(axes) for a in axes if a not in moved])]
+
+
 def _move(
-    f: Any, axes: tuple[str, ...], src: str, dst: str, scheme: Scheme, derivative: int
+    f: Any,
+    axes: tuple[str, ...],
+    src: str,
+    dst: str,
+    scheme: Scheme,
+    derivative: int,
+    edges: str = "bias",
 ) -> Any:
     """The wide stencil of one move, on the interior of every grid axis."""
     out = f
     for axis, side in moved_along(src, dst):
         position = axes.index(axis) - len(axes)
-        out = along(out, position, side, scheme, derivative=derivative)
-    others = [a for a in axes if a not in {axis for axis, _ in moved_along(src, dst)}]
-    return out[crop(f.ndim, [axes.index(a) - len(axes) for a in others])]
-
-
-def _cells(side: str, scheme: Scheme, derivative: int) -> list[int]:
-    """The points a move reads along one axis, relative to the one it writes."""
-    delta = 0.5 if side == "fwd" else -0.5
-    offsets = scheme.offsets(derivative=derivative, staggered=True)
-    return [int(delta + s) for s in offsets]
+        out = along(out, position, side, scheme, derivative=derivative, edges=edges)
+    return _others(out, axes, [axis for axis, _ in moved_along(src, dst)])
 
 
 def _reads_wet(
@@ -241,7 +255,7 @@ def _reads_wet(
     fits = xp.asarray(wet, dtype=bool)
     for axis, side in moved_along(src, dst):
         position = axes.index(axis) - len(axes)
-        cells = _cells(side, scheme, derivative)
+        _, cells = reads(scheme, side, derivative)
         ok = shifted(fits, position, cells[0])
         for k in cells[1:]:
             ok = ok & shifted(fits, position, k)
@@ -249,7 +263,7 @@ def _reads_wet(
     return fits[crop(fits.ndim, range(-len(axes), 0))]
 
 
-def _wide(
+def _narrowing(
     f: Any,
     axes: tuple[str, ...],
     src: str,
@@ -261,8 +275,6 @@ def _wide(
     two_point: Any,
 ) -> Any:
     """A move with more than two points, narrowing next to dry points."""
-    if wet is None:
-        return _move(f, axes, src, dst, scheme, derivative)
     xp = array_namespace(f)
     *wider, _ = scheme._ladder()
     out = two_point(f)
@@ -270,6 +282,34 @@ def _wide(
         fits = _reads_wet(wet, axes, src, dst, rung, derivative)
         out = xp.where(fits, _move(f, axes, src, dst, rung, derivative), out)
     return out
+
+
+def _shifting(
+    f: Any,
+    axes: tuple[str, ...],
+    src: str,
+    dst: str,
+    scheme: Scheme,
+    wet: Any,
+    *,
+    derivative: int,
+) -> Any:
+    """A move with its stencil shifted onto wet points, one axis at a time.
+
+    ``wet`` gives the wet points of a point.
+    """
+    out, point = f, src
+    moved: list[str] = []
+    for axis, side in moved_along(src, dst):
+        position = axes.index(axis) - len(axes)
+        # the axes moved along before have lost their ring
+        here = wet(point)
+        here = here[tuple(slice(1, -1) if a in moved else slice(None) for a in axes)]
+        out = along_wet(out, here, position, side, scheme, derivative=derivative)
+        along_axes = set(POINT_AXES[point]) ^ {axis}
+        point = next(p for p, on in POINT_AXES.items() if set(on) == along_axes)
+        moved.append(axis)
+    return _others(out, axes, moved)
 
 
 def _staggered(
@@ -286,30 +326,84 @@ def _staggered(
 ) -> Any:
     """A move without its metric, on the interior of every grid axis."""
     axes = grid.axes
-    along_axes = [axis for axis, _ in moved_along(src, dst)]
+    moves = moved_along(src, dst)
+    along_axes = [axis for axis, _ in moves]
+    scheme, edges, dry = policies(scheme, bc, edges="bias", dry="narrow")
     two = is_two_point(scheme)
-    wet = None if mask is None or two else _wet(mask, src)
+    if mask is None or (two and dry == "narrow"):
+        dry = "none"
+    reach = max(
+        abs(k)
+        for _, side in moves
+        for cells in (
+            wet_windows(scheme, side, derivative)
+            if dry == "bias"
+            else [reads(scheme, side, derivative)[1]]
+        )
+        for k in cells
+    )
+    if dry == "fill":
+        assert bc is not None  # policies() asked for it
+        f = fill_coasts(
+            f, grid, bc, mask, point_stagger(src), width=grid.ghost, layers=reach
+        )
+
     extra = 0
-    if bc is not None:
-        # as many layers as the stencil reads, the ring among them from bc
-        reach = max(
-            abs(k)
-            for _, side in moved_along(src, dst)
-            for k in _cells(side, scheme, derivative)
-        )
+    around: BC | None = None
+    if edges in ("extend", "periodic"):
+        # as many layers as the stencil reads, the ring among them
+        around = wrapping(along_axes) if edges == "periodic" else bc
+        assert around is not None  # policies() asked for it
         extra = max(reach - grid.ghost, 0)
-        f = extend(f, grid, bc, point_stagger(src), along_axes, extra)
-        wet = None if wet is None else extend_wet(wet, grid, bc, along_axes, extra)
-    if two:
+        f = extend(f, grid, around, point_stagger(src), along_axes, extra)
+
+    def wet(point: str) -> Any:
+        out = _wet(mask, point)
+        if around is None:
+            return out
+        return extend_wet(out, grid, around, along_axes, extra)
+
+    if dry == "bias":
+        raw = _shifting(f, axes, src, dst, scheme, wet, derivative=derivative)
+    elif two:
         raw = two_point(f)
-    else:
-        raw = _wide(
-            f, axes, src, dst, scheme, wet, derivative=derivative, two_point=two_point
+    elif dry == "narrow":
+        raw = _narrowing(
+            f,
+            axes,
+            src,
+            dst,
+            scheme,
+            wet(src),
+            derivative=derivative,
+            two_point=two_point,
         )
+    else:
+        at = edges if edges in ("bias", "narrow", "none") else "bias"
+        raw = _move(f, axes, src, dst, scheme, derivative, at)
+    if edges == "none" and dry in ("narrow", "bias"):
+        raw = _without_overhang(raw, axes, moves, scheme, derivative)
     if extra == 0:
         return raw
     kept = slice(extra, -extra)
     return raw[(..., *(kept if axis in along_axes else slice(None) for axis in axes))]
+
+
+def _without_overhang(
+    raw: Any, axes: tuple[str, ...], moves: Any, scheme: Scheme, derivative: int
+) -> Any:
+    """Zero where the widest stencil, unshifted, would leave the array."""
+    for axis, side in moves:
+        position = axes.index(axis) - len(axes)
+        _, cells = reads(scheme, side, derivative)
+        rest = (slice(None),) * (-position - 1)
+        # raw[r] is the output i = r + 1, which reads i + cells
+        low, high = max(-cells[0] - 1, 0), max(cells[-1] - 1, 0)
+        if low:
+            raw = set_at(raw, (..., slice(0, low), *rest), 0.0)
+        if high:
+            raw = set_at(raw, (..., slice(-high, None), *rest), 0.0)
+    return raw
 
 
 def _raw_difference(
@@ -439,32 +533,86 @@ def _difference_collocated(
     bc: BC | None,
 ) -> Any:
     _at_t("difference", src, dst, bc)
+    scheme, edges, dry = policies(scheme, bc, edges="bias", dry="narrow")
     method, accuracy = _collocated_stencil(scheme)
-    kwargs: dict[str, Any] = {
-        "axis": grid.axes.index(axis) - len(grid.axes),
-        "accuracy": accuracy,
-    }
+    uniform = grid._step(axis) is not None
+    kwargs: dict[str, Any] = {"axis": grid.axes.index(axis) - len(grid.axes)}
     scale: Any = None
-    if grid._step(axis) is not None:
+    if uniform:
         kwargs["step"] = grid.spacing(axis)
-        kwargs["periodic"] = axis in grid.periodic
+        kwargs["periodic"] = axis in grid.periodic or edges == "periodic"
     else:
+        if edges == "periodic":
+            raise ValueError(f'edges="periodic" needs a uniform {axis} axis')
         kwargs["coords"] = grid.coords(axis)
         if isinstance(grid, SphericalAGrid2D):
             # d/dx = 1 / (R cos(lat)) d/dlon, d/dy = 1/R d/dlat
             scale = grid.R * (grid._cos_lat() if axis == "x" else 1.0)
+
+    def plain(f: Any) -> Any:
+        if edges not in ("narrow", "none") or kwargs.get("periodic"):
+            return _collocated_difference(f, method=method, accuracy=accuracy, **kwargs)
+        return _at_bounds(f, scheme, method, accuracy, kwargs, edges)
+
+    xp = array_namespace(f)
     if mask is None:
-        out = _collocated_difference(f, method=method, **kwargs)
+        out = plain(f)
+    elif dry == "none":
+        out = xp.where(mask.wet(), plain(f), xp.nan)
     else:
         dropped = ~mask.wet()
-        out = adaptive_difference(f, mask=dropped, **kwargs)
-        if method != "central":
-            # the side of the scheme wherever it fits on wet cells
-            xp = array_namespace(f)
+        out = adaptive_difference(f, mask=dropped, accuracy=accuracy, **kwargs)
+        if method != "central" or edges in ("narrow", "none"):
+            # the side of the scheme, or what it does at the edges, wherever
+            # it fits on wet cells
             field = xp.where(dropped, xp.nan, f)
-            biased = _collocated_difference(field, method=method, **kwargs)
-            out = xp.where(xp.isfinite(biased), biased, out)
+            own = plain(field)
+            out = xp.where(xp.isfinite(own), own, out)
+            if edges == "none":
+                out = xp.where(_fits(f, scheme, kwargs), out, xp.nan)
     return out if scale is None else out / _metric_like(scale, out)
+
+
+def _fits(f: Any, scheme: Scheme, kwargs: dict[str, Any]) -> Any:
+    """Where the collocated stencil of ``scheme`` is inside the array."""
+    position = kwargs["axis"]
+    if kwargs.get("periodic"):
+        return np.ones((1,) * f.ndim, dtype=bool)
+    n = f.shape[position]
+    offsets = scheme.offsets(derivative=1, staggered=False)
+    index = np.arange(n)
+    inside = (index + offsets[0] >= 0) & (index + offsets[-1] <= n - 1)
+    return inside.reshape((n, *(1,) * (-position - 1)))
+
+
+def _at_bounds(
+    f: Any, scheme: Scheme, method: Any, accuracy: int, kwargs: Any, edges: str
+) -> Any:
+    """The collocated difference, NaN or narrower where its stencil does not fit."""
+    xp = array_namespace(f)
+    out = _collocated_difference(f, method=method, accuracy=accuracy, **kwargs)
+    if edges == "none":
+        return xp.where(_fits(f, scheme, kwargs), out, xp.nan)
+    for rung in _narrower(scheme):
+        _, narrow = _collocated_stencil(rung)
+        value = _collocated_difference(f, method=method, accuracy=narrow, **kwargs)
+        out = xp.where(_fits(f, _wider_than(scheme, rung), kwargs), out, value)
+    return out
+
+
+def _narrower(scheme: Scheme) -> list[Scheme]:
+    """The collocated schemes under ``scheme``, the widest first."""
+    if isinstance(scheme, Biased):
+        return [
+            Biased(k, scheme.side, scheme.data) for k in range(scheme.order - 1, 0, -1)
+        ]
+    return [Centred(k, scheme._data) for k in range(scheme.order - 2, 0, -2)]
+
+
+def _wider_than(scheme: Scheme, rung: Scheme) -> Scheme:
+    """The scheme one rung above ``rung``, on the way down from ``scheme``."""
+    ladder = [scheme, *_narrower(scheme)]
+    return ladder[ladder.index(rung) - 1]
 
 
 @interpolate.register(CartesianAGrid1D)
@@ -475,4 +623,5 @@ def _interpolate_collocated(
     grid: Any, f: Any, *, src: Any, dst: Any, scheme: Scheme, mask: Any, bc: BC | None
 ) -> Any:
     _at_t("interpolate", src, dst, bc)
+    policies(scheme, bc, edges="bias", dry="narrow")
     return _masked(f, mask, "T")
