@@ -5,7 +5,7 @@ Covers: streamfn_to_ssh, ssh_to_streamfn,
 """
 
 from geophysix.constants import STANDARD
-from gridax import CartesianGrid2D
+from gridax import CartesianCGrid2D
 from gridax._src.operators.diagnostics import (
     potential_vorticity_multilayer,
     qg_potential_vorticity,
@@ -24,7 +24,7 @@ import pytest
 
 @pytest.fixture
 def grid2d():
-    return CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
+    return CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
 
 
 # ======================================================================

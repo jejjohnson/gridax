@@ -30,7 +30,7 @@ The spherical 2-D class mirrors the public API of :class:`Advection2D`
 (same ``method`` alphabet, same mask-adaptive stencil dispatch) and
 differs only by:
 
-* ``grid`` is a :class:`SphericalGrid2D` instead of ``CartesianGrid2D``;
+* ``grid`` is a :class:`SphericalCGrid2D` instead of ``CartesianCGrid2D``;
 * the final divergence step applies the cos(lat) metric weights.
 
 At the equator (``cos(lat) = 1``) the spherical operator reduces to
@@ -98,7 +98,7 @@ from gridax._src.advection.reconstruction import (
     Reconstruction3D,
 )
 from gridax._src.backend import set_at
-from gridax._src.grid import SphericalGrid2D, SphericalGrid3D
+from gridax._src.grid import SphericalCGrid2D, SphericalCGrid3D
 from gridax._src.mask import Mask2D, Mask3D
 from gridax._src.operators._ghost import interior
 from gridax._src.operators._utils import _metric_like, _safe_div_cos
@@ -148,7 +148,7 @@ def _open_wall_fluxes(
 def _spherical_flux_divergence(
     fe: Float[Array, "*Nz Ny Nx"],
     fn: Float[Array, "*Nz Ny Nx"],
-    grid: SphericalGrid2D | SphericalGrid3D,
+    grid: SphericalCGrid2D | SphericalCGrid3D,
     ghost: int,
 ) -> Float[Array, "*Nz Ny-2g Nx-2g"]:
     """``-1/(R cosφ_T) [Δλ fe / dλ + Δφ (cosφ_V fn) / dφ]`` on ``[g:-g, g:-g]``.
@@ -249,7 +249,7 @@ class SphericalAdvection2D:
 
     Parameters
     ----------
-    grid : SphericalGrid2D
+    grid : SphericalCGrid2D
         The underlying 2-D spherical grid.
     mask : Mask2D or None, optional
         Optional land/ocean mask; every method is then land-safe,
@@ -266,8 +266,8 @@ class SphericalAdvection2D:
     Examples
     --------
     >>> import jax.numpy as jnp
-    >>> from gridax import SphericalGrid2D, SphericalAdvection2D
-    >>> grid = SphericalGrid2D.from_interior(
+    >>> from gridax import SphericalCGrid2D, SphericalAdvection2D
+    >>> grid = SphericalCGrid2D.from_interior(
     ...     nx_interior=16,
     ...     ny_interior=8,
     ...     lon_range=(0.0, 360.0),
@@ -282,7 +282,7 @@ class SphericalAdvection2D:
     (10, 18)
     """
 
-    grid: SphericalGrid2D
+    grid: SphericalCGrid2D
     mask: Mask2D | None
     recon: Reconstruction2D
     _mask_hierarchy_x: dict[int, Bool[Array, "Ny Nx"]] | None
@@ -290,7 +290,7 @@ class SphericalAdvection2D:
 
     def __init__(
         self,
-        grid: SphericalGrid2D,
+        grid: SphericalCGrid2D,
         mask: Mask2D | None = None,
     ) -> None:
         self.grid = grid
@@ -399,7 +399,7 @@ class SphericalAdvection3D:
 
     Parameters
     ----------
-    grid : SphericalGrid3D
+    grid : SphericalCGrid3D
     mask : Mask3D or None, optional
         Optional 3-D land/ocean mask; every method is then land-safe,
         as in :class:`Advection3D` (dry inputs zeroed, native 3-D
@@ -409,7 +409,7 @@ class SphericalAdvection3D:
         follow-up.
     """
 
-    grid: SphericalGrid3D
+    grid: SphericalCGrid3D
     mask: Mask3D | None
     recon: Reconstruction3D
     _mask_hierarchy_x: dict[int, Bool[Array, "Nz Ny Nx"]] | None
@@ -417,7 +417,7 @@ class SphericalAdvection3D:
 
     def __init__(
         self,
-        grid: SphericalGrid3D,
+        grid: SphericalCGrid3D,
         mask: Mask3D | None = None,
     ) -> None:
         self.grid = grid

@@ -17,7 +17,7 @@ from jaxtyping import Float
 import numpy as np
 
 from gridax._src.backend import vmap
-from gridax._src.grid import SphericalGrid2D, SphericalGrid3D
+from gridax._src.grid import SphericalCGrid2D, SphericalCGrid3D
 from gridax._src.mask import Mask2D, Mask3D
 from gridax._src.operators._ghost import interior, zero_z_ghosts
 from gridax._src.operators._utils import (
@@ -55,7 +55,7 @@ class SphericalDivergence2D:
 
     Parameters
     ----------
-    grid : SphericalGrid2D
+    grid : SphericalCGrid2D
         The underlying 2-D spherical grid.
     mask : Mask2D or None, optional
         Optional land/ocean mask.  Post-compute pattern — the divergence
@@ -64,7 +64,7 @@ class SphericalDivergence2D:
         ``SphericalMask2D`` follow-up.
     """
 
-    grid: SphericalGrid2D
+    grid: SphericalCGrid2D
     mask: Mask2D | None = None
 
     def __call__(
@@ -112,7 +112,7 @@ class SphericalVorticity2D:
 
     Parameters
     ----------
-    grid : SphericalGrid2D
+    grid : SphericalCGrid2D
         The underlying 2-D spherical grid.
     mask : Mask2D or None, optional
         Optional land/ocean mask.  Pass-down pattern — the internal
@@ -130,13 +130,13 @@ class SphericalVorticity2D:
         ``SphericalMask2D`` follow-up.
     """
 
-    grid: SphericalGrid2D
+    grid: SphericalCGrid2D
     mask: Mask2D | None
     _interp: Interpolation2D
 
     def __init__(
         self,
-        grid: SphericalGrid2D,
+        grid: SphericalCGrid2D,
         mask: Mask2D | None = None,
     ) -> None:
         self.grid = grid
@@ -282,7 +282,7 @@ class SphericalLaplacian2D:
 
     Parameters
     ----------
-    grid : SphericalGrid2D
+    grid : SphericalCGrid2D
         The underlying 2-D spherical grid.
     mask : Mask2D or None, optional
         Optional land/ocean mask.  Post-compute pattern — the output
@@ -290,7 +290,7 @@ class SphericalLaplacian2D:
         a Cartesian ``Mask2D`` pending a ``SphericalMask2D`` follow-up.
     """
 
-    grid: SphericalGrid2D
+    grid: SphericalCGrid2D
     mask: Mask2D | None = None
 
     def __call__(self, h: Float[Array, "Ny Nx"]) -> Float[Array, "Ny Nx"]:
@@ -321,7 +321,7 @@ class SphericalLaplacian2D:
 def geostrophic_velocity_sphere(
     h: Float[Array, "Ny Nx"],
     f: Float[Array, "Ny Nx"],
-    grid: SphericalGrid2D,
+    grid: SphericalCGrid2D,
     gravity: float = 9.80665,
 ) -> tuple[Float[Array, "Ny Nx"], Float[Array, "Ny Nx"]]:
     """Geostrophic velocity from free-surface height on a sphere.
@@ -335,7 +335,7 @@ def geostrophic_velocity_sphere(
         Free-surface height at T-points.
     f : Float[Array, "Ny Nx"]
         Coriolis parameter at T-points.
-    grid : SphericalGrid2D
+    grid : SphericalCGrid2D
         The spherical grid.
     gravity : float
         Gravitational acceleration.
@@ -351,7 +351,7 @@ def geostrophic_velocity_sphere(
 def _geostrophic_velocity_sphere(
     h: Float[Array, "Ny Nx"],
     f: Float[Array, "Ny Nx"],
-    grid: SphericalGrid2D,
+    grid: SphericalCGrid2D,
     gravity: float,
     wet_u: Array | None = None,
     wet_v: Array | None = None,
@@ -403,18 +403,18 @@ class SphericalDivergence3D:
 
     Parameters
     ----------
-    grid : SphericalGrid3D
+    grid : SphericalCGrid3D
     mask : Mask3D or None, optional
         Optional land/ocean mask (Cartesian ``Mask3D``; #209 Q3).
     """
 
-    grid: SphericalGrid3D
+    grid: SphericalCGrid3D
     mask: Mask3D | None
     _div2d: SphericalDivergence2D
 
     def __init__(
         self,
-        grid: SphericalGrid3D,
+        grid: SphericalCGrid3D,
         mask: Mask3D | None = None,
     ) -> None:
         self.grid = grid
@@ -442,18 +442,18 @@ class SphericalVorticity3D:
 
     Parameters
     ----------
-    grid : SphericalGrid3D
+    grid : SphericalCGrid3D
     mask : Mask3D or None, optional
         Optional land/ocean mask (Cartesian ``Mask3D``; #209 Q3).
     """
 
-    grid: SphericalGrid3D
+    grid: SphericalCGrid3D
     mask: Mask3D | None
     _vort2d: SphericalVorticity2D
 
     def __init__(
         self,
-        grid: SphericalGrid3D,
+        grid: SphericalCGrid3D,
         mask: Mask3D | None = None,
     ) -> None:
         self.grid = grid
@@ -481,18 +481,18 @@ class SphericalLaplacian3D:
 
     Parameters
     ----------
-    grid : SphericalGrid3D
+    grid : SphericalCGrid3D
     mask : Mask3D or None, optional
         Optional land/ocean mask (Cartesian ``Mask3D``; #209 Q3).
     """
 
-    grid: SphericalGrid3D
+    grid: SphericalCGrid3D
     mask: Mask3D | None
     _lap2d: SphericalLaplacian2D
 
     def __init__(
         self,
-        grid: SphericalGrid3D,
+        grid: SphericalCGrid3D,
         mask: Mask3D | None = None,
     ) -> None:
         self.grid = grid

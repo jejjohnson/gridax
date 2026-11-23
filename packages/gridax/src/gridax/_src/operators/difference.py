@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 from jaxtyping import Float
 import numpy as np
 
-from gridax._src.grid import CartesianGrid1D, CartesianGrid2D, CartesianGrid3D
+from gridax._src.grid import CartesianCGrid1D, CartesianCGrid2D, CartesianCGrid3D
 from gridax._src.mask import Mask1D, Mask2D, Mask3D
 from gridax._src.operators._ghost import interior
 from gridax._src.operators._utils import _spacing
@@ -109,7 +109,7 @@ class Difference1D:
 
     Parameters
     ----------
-    grid : CartesianGrid1D
+    grid : CartesianCGrid1D
         The underlying 1-D grid.
     mask : Mask1D or None, optional
         Optional land/ocean mask.  When provided, every method
@@ -122,7 +122,7 @@ class Difference1D:
         ``None`` (default) leaves every output untouched.
     """
 
-    grid: CartesianGrid1D
+    grid: CartesianCGrid1D
     mask: Mask1D | None = None
 
     def diff_x_T_to_U(self, h: Float[Array, "Nx"]) -> Float[Array, "Nx"]:
@@ -204,7 +204,7 @@ class Difference2D:
 
     Parameters
     ----------
-    grid : CartesianGrid2D
+    grid : CartesianCGrid2D
         The underlying 2-D grid.
     mask : Mask2D or None, optional
         Optional land/ocean mask.  When provided, every method
@@ -221,7 +221,7 @@ class Difference2D:
         ``None`` (default) leaves every output untouched.
     """
 
-    grid: CartesianGrid2D
+    grid: CartesianCGrid2D
     mask: Mask2D | None = None
 
     # ------------------------------------------------------------------
@@ -558,8 +558,8 @@ class Difference2D:
 
         Examples
         --------
-        >>> from gridax import CartesianGrid2D, Difference2D
-        >>> grid = CartesianGrid2D.from_interior(8, 8, 1e3, 1e3)
+        >>> from gridax import CartesianCGrid2D, Difference2D
+        >>> grid = CartesianCGrid2D.from_interior(8, 8, 1e3, 1e3)
         >>> diff = Difference2D(grid=grid)
         >>> psi = jnp.ones((grid.Ny, grid.Nx))
         >>> u, v = diff.grad_perp(psi)
@@ -604,7 +604,7 @@ class Difference3D:
 
     Parameters
     ----------
-    grid : CartesianGrid3D
+    grid : CartesianCGrid3D
         The underlying 3-D grid.
     mask : Mask3D or None, optional
         Optional land/ocean mask.  When provided, every method
@@ -613,7 +613,7 @@ class Difference3D:
         ``None`` (default) leaves every output untouched.
     """
 
-    grid: CartesianGrid3D
+    grid: CartesianCGrid3D
     mask: Mask3D | None = None
 
     def diff_x_T_to_U(self, h: Float[Array, "Nz Ny Nx"]) -> Float[Array, "Nz Ny Nx"]:

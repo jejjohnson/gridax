@@ -13,16 +13,16 @@ from pathlib import Path
 
 import equinox as eqx
 from gridax import (
-    CartesianGrid1D,
-    CartesianGrid2D,
-    CartesianGrid3D,
+    CartesianCGrid1D,
+    CartesianCGrid2D,
+    CartesianCGrid3D,
     Difference1D,
     Difference2D,
     Difference3D,
+    SphericalCGrid2D,
+    SphericalCGrid3D,
     SphericalDifference2D,
     SphericalDifference3D,
-    SphericalGrid2D,
-    SphericalGrid3D,
 )
 import jax
 import jax.numpy as jnp
@@ -32,13 +32,13 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 GRIDS = {
-    "CartesianGrid1D": lambda: CartesianGrid1D.from_interior(8, 1.0),
-    "CartesianGrid2D": lambda: CartesianGrid2D.from_interior(8, 6, 1.0, 2.0),
-    "CartesianGrid3D": lambda: CartesianGrid3D.from_interior(8, 6, 4, 1.0, 2.0, 3.0),
-    "SphericalGrid2D": lambda: SphericalGrid2D.from_interior(
+    "CartesianCGrid1D": lambda: CartesianCGrid1D.from_interior(8, 1.0),
+    "CartesianCGrid2D": lambda: CartesianCGrid2D.from_interior(8, 6, 1.0, 2.0),
+    "CartesianCGrid3D": lambda: CartesianCGrid3D.from_interior(8, 6, 4, 1.0, 2.0, 3.0),
+    "SphericalCGrid2D": lambda: SphericalCGrid2D.from_interior(
         8, 6, (0.0, 40.0), (-30.0, 30.0)
     ),
-    "SphericalGrid3D": lambda: SphericalGrid3D.from_interior(
+    "SphericalCGrid3D": lambda: SphericalCGrid3D.from_interior(
         8, 6, 4, (0.0, 40.0), (-30.0, 30.0), 100.0
     ),
 }
@@ -106,18 +106,18 @@ class TestPytree:
 def _jitted_operator_case(name):
     """One operator per grid class, jitted with the grid as an argument."""
     g = GRIDS[name]()
-    if name == "CartesianGrid1D":
+    if name == "CartesianCGrid1D":
         h = jnp.sin(jnp.arange(g.Nx, dtype=float))
         return g, h, lambda grid, h: Difference1D(grid=grid).diff_x_T_to_U(h)
-    if name == "CartesianGrid2D":
+    if name == "CartesianCGrid2D":
         h = jnp.sin(jnp.arange(g.Ny * g.Nx, dtype=float)).reshape(g.Ny, g.Nx)
         return g, h, lambda grid, h: Difference2D(grid=grid).laplacian(h)
-    if name == "CartesianGrid3D":
+    if name == "CartesianCGrid3D":
         h = jnp.sin(jnp.arange(g.Nz * g.Ny * g.Nx, dtype=float)).reshape(
             g.Nz, g.Ny, g.Nx
         )
         return g, h, lambda grid, h: Difference3D(grid=grid).diff_x_T_to_U(h)
-    if name == "SphericalGrid2D":
+    if name == "SphericalCGrid2D":
         h = jnp.sin(jnp.arange(g.Ny * g.Nx, dtype=float)).reshape(g.Ny, g.Nx)
         return g, h, lambda grid, h: SphericalDifference2D(grid=grid).diff_lon_T_to_U(h)
     h = jnp.sin(jnp.arange(g.Nz * g.Ny * g.Nx, dtype=float)).reshape(g.Nz, g.Ny, g.Nx)
@@ -132,7 +132,7 @@ def test_operator_jits_with_grid_as_argument(name):
 
 
 def test_spherical_metric_properties_run_under_jit():
-    grid = GRIDS["SphericalGrid2D"]()
+    grid = GRIDS["SphericalCGrid2D"]()
     for prop in ("min_cell_width", "max_aspect"):
         eager = getattr(grid, prop)
         traced = jax.jit(lambda g, prop=prop: getattr(g, prop))(grid)
@@ -151,7 +151,7 @@ def test_one_compile_for_two_grids_of_one_shape(jit):
 
     h = jnp.sin(jnp.arange(80.0)).reshape(8, 10)
     out = [
-        diff(CartesianGrid2D.from_interior(8, 6, length, 1.0), h)
+        diff(CartesianCGrid2D.from_interior(8, 6, length, 1.0), h)
         for length in (1.0, 2.0)
     ]
     assert len(traces) == 1
@@ -160,7 +160,7 @@ def test_one_compile_for_two_grids_of_one_shape(jit):
 
 def test_gradient_of_a_spherical_area_sum_with_respect_to_the_radius():
     """A ∝ R², so d(∑A)/dR = (2 / R) ∑A."""
-    grid = GRIDS["SphericalGrid2D"]()
+    grid = GRIDS["SphericalCGrid2D"]()
 
     def total(radius):
         return jnp.sum(dataclasses.replace(grid, R=radius).area()[1:-1, 1:-1])

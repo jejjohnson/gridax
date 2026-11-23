@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from gridax import CartesianGrid2D, CartesianGrid3D, Mask2D, Mask3D
+from gridax import CartesianCGrid2D, CartesianCGrid3D, Mask2D, Mask3D
 from gridax._src.advection.advection import Advection2D, Advection3D
 from gridax._src.advection.flux import upwind_flux
 from gridax._src.advection.reconstruction import Reconstruction2D
@@ -16,7 +16,7 @@ import pytest
 @pytest.fixture
 def grid2d():
     """10×10 grid (8×8 interior cells)."""
-    return CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
+    return CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
 
 
 @pytest.fixture
@@ -208,7 +208,7 @@ class TestUpwindFluxRectangular:
     def test_all_ocean_x_matches_weno5_x(self):
         """On an all-ocean mask, upwind_flux must equal Reconstruction2D.weno5_x."""
         # Large enough grid for interior cells to qualify for WENO5 (stencil size 6)
-        grid = CartesianGrid2D.from_interior(12, 12, 1.0, 1.0)
+        grid = CartesianCGrid2D.from_interior(12, 12, 1.0, 1.0)
         recon = Reconstruction2D(grid=grid)
         mask = Mask2D.from_dimensions(14, 14)
         q = jnp.broadcast_to(jnp.arange(14, dtype=float), (14, 14))
@@ -224,7 +224,7 @@ class TestUpwindFluxRectangular:
     @pytest.mark.slow
     def test_all_ocean_y_matches_weno5_y(self):
         """On an all-ocean mask, upwind_flux must equal Reconstruction2D.weno5_y."""
-        grid = CartesianGrid2D.from_interior(12, 12, 1.0, 1.0)
+        grid = CartesianCGrid2D.from_interior(12, 12, 1.0, 1.0)
         recon = Reconstruction2D(grid=grid)
         mask = Mask2D.from_dimensions(14, 14)
         q = jnp.broadcast_to(jnp.arange(14, dtype=float)[:, None], (14, 14))
@@ -244,7 +244,7 @@ class TestUpwindFluxMaskedDomain:
     """Verify that near-land cells receive lower-order stencils."""
 
     def test_coastal_x_finite_everywhere(self, coastal_mask):
-        grid = CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
+        grid = CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
         recon = Reconstruction2D(grid=grid)
         q = jnp.broadcast_to(jnp.arange(10, dtype=float), (10, 10))
         u = jnp.ones((10, 10))
@@ -257,7 +257,7 @@ class TestUpwindFluxMaskedDomain:
         assert jnp.all(jnp.isfinite(result)).item()
 
     def test_coastal_y_finite_everywhere(self, coastal_mask):
-        grid = CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
+        grid = CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
         recon = Reconstruction2D(grid=grid)
         q = jnp.broadcast_to(jnp.arange(10, dtype=float)[:, None], (10, 10))
         v = jnp.ones((10, 10))
@@ -276,7 +276,7 @@ class TestUpwindFluxMaskedDomain:
         into the 2-point or 4-point stencil tier.  With a non-constant field
         this produces different flux values than the unconstrained WENO5.
         """
-        grid = CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
+        grid = CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
         recon = Reconstruction2D(grid=grid)
         x_idx = jnp.arange(10, dtype=float)
         q = jnp.broadcast_to(x_idx, (10, 10))
@@ -302,7 +302,7 @@ class TestUpwindFluxMaskedDomain:
 
     @pytest.mark.slow
     def test_island_x_finite_everywhere(self, island_mask):
-        grid = CartesianGrid2D.from_interior(18, 18, 1.0, 1.0)
+        grid = CartesianCGrid2D.from_interior(18, 18, 1.0, 1.0)
         recon = Reconstruction2D(grid=grid)
         q = jnp.ones((20, 20))
         u = jnp.ones((20, 20))
@@ -338,7 +338,7 @@ class TestUpwindFluxConservation:
 
         Sum_i (fe[j,i] - fe[j,i-1]) = fe[east wall] - fe[west wall] = 0 - 0.
         """
-        grid = CartesianGrid2D.from_interior(12, 12, 1.0, 1.0)
+        grid = CartesianCGrid2D.from_interior(12, 12, 1.0, 1.0)
         recon = Reconstruction2D(grid=grid)
         mask = Mask2D.from_dimensions(14, 14)
         q = 2.0 * jnp.ones((14, 14))
@@ -357,7 +357,7 @@ class TestUpwindFluxConservation:
 
         Sum_j (fn[j,i] - fn[j-1,i]) = fn[north wall] - fn[south wall] = 0 - 0.
         """
-        grid = CartesianGrid2D.from_interior(12, 12, 1.0, 1.0)
+        grid = CartesianCGrid2D.from_interior(12, 12, 1.0, 1.0)
         recon = Reconstruction2D(grid=grid)
         mask = Mask2D.from_dimensions(14, 14)
         q = 5.0 * jnp.ones((14, 14))
@@ -381,7 +381,7 @@ class TestAdvection2DMasked:
     def test_rectangular_weno5_matches_unmasked(self):
         """On a rectangular domain, masked weno5 should match unmasked."""
         Ny, Nx = 14, 14
-        grid = CartesianGrid2D.from_interior(Ny - 2, Nx - 2, 1.0, 1.0)
+        grid = CartesianCGrid2D.from_interior(Ny - 2, Nx - 2, 1.0, 1.0)
         mask = Mask2D.from_dimensions(Ny, Nx)
         adv_masked = Advection2D(grid=grid, mask=mask)
         adv_plain = Advection2D(grid=grid)
@@ -398,7 +398,7 @@ class TestAdvection2DMasked:
 
     def test_rectangular_weno3_runs(self):
         Ny, Nx = 10, 10
-        grid = CartesianGrid2D.from_interior(Ny - 2, Nx - 2, 1.0, 1.0)
+        grid = CartesianCGrid2D.from_interior(Ny - 2, Nx - 2, 1.0, 1.0)
         mask = Mask2D.from_dimensions(Ny, Nx)
         adv = Advection2D(grid=grid, mask=mask)
         h = jnp.ones((Ny, Nx))
@@ -410,7 +410,7 @@ class TestAdvection2DMasked:
 
     def test_rectangular_tvd_runs(self):
         Ny, Nx = 10, 10
-        grid = CartesianGrid2D.from_interior(Ny - 2, Nx - 2, 1.0, 1.0)
+        grid = CartesianCGrid2D.from_interior(Ny - 2, Nx - 2, 1.0, 1.0)
         mask = Mask2D.from_dimensions(Ny, Nx)
         adv = Advection2D(grid=grid, mask=mask)
         h = jnp.ones((Ny, Nx)) * 2.0
@@ -426,7 +426,7 @@ class TestAdvection2DMasked:
         h_mask = np.ones((Ny, Nx), dtype=bool)
         h_mask[:, 4:6] = False
         mask = Mask2D.from_mask(h_mask)
-        grid = CartesianGrid2D.from_interior(Ny - 2, Nx - 2, 1.0, 1.0)
+        grid = CartesianCGrid2D.from_interior(Ny - 2, Nx - 2, 1.0, 1.0)
         adv = Advection2D(grid=grid, mask=mask)
         h = jnp.broadcast_to(jnp.arange(Nx, dtype=float), (Ny, Nx))
         u = jnp.ones((Ny, Nx))
@@ -442,7 +442,7 @@ class TestAdvection2DMasked:
         h_mask[:, 0] = False
         h_mask[:, -1] = False
         mask = Mask2D.from_mask(h_mask)
-        grid = CartesianGrid2D.from_interior(Ny - 2, Nx - 2, 1.0, 1.0)
+        grid = CartesianCGrid2D.from_interior(Ny - 2, Nx - 2, 1.0, 1.0)
         adv = Advection2D(grid=grid, mask=mask)
         h = jnp.ones((Ny, Nx))
         # Put NaN on land columns
@@ -458,7 +458,7 @@ class TestAdvection2DMasked:
     def test_mask_none_is_noop(self):
         """mask=None should produce identical results to no mask."""
         Ny, Nx = 10, 10
-        grid = CartesianGrid2D.from_interior(Ny - 2, Nx - 2, 1.0, 1.0)
+        grid = CartesianCGrid2D.from_interior(Ny - 2, Nx - 2, 1.0, 1.0)
         adv_default = Advection2D(grid=grid)
         adv_none = Advection2D(grid=grid, mask=None)
         h = jnp.ones((Ny, Nx)) * 3.0
@@ -474,7 +474,7 @@ class TestAdvection2DMasked:
         mask the post-compute ``* mask.h`` is a no-op and the output must
         bit-match the unmasked path."""
         Ny, Nx = 14, 14
-        grid = CartesianGrid2D.from_interior(Ny - 2, Nx - 2, 1.0, 1.0)
+        grid = CartesianCGrid2D.from_interior(Ny - 2, Nx - 2, 1.0, 1.0)
         mask = Mask2D.from_dimensions(Ny, Nx)
         adv_plain = Advection2D(grid=grid)
         adv_masked = Advection2D(grid=grid, mask=mask)
@@ -495,7 +495,7 @@ class TestAdvection3DMasked:
     @pytest.mark.slow
     def test_rectangular_weno3_runs(self):
         Nz, Ny, Nx = 3, 10, 10
-        grid = CartesianGrid3D.from_interior(Nx - 2, Ny - 2, Nz - 2, 1.0, 1.0, 1.0)
+        grid = CartesianCGrid3D.from_interior(Nx - 2, Ny - 2, Nz - 2, 1.0, 1.0, 1.0)
         mask = Mask3D.from_dimensions(nz=Nz, ny=Ny, nx=Nx)
         adv = Advection3D(grid=grid, mask=mask)
         h = jnp.ones((Nz, Ny, Nx))
@@ -508,7 +508,7 @@ class TestAdvection3DMasked:
     @pytest.mark.slow
     def test_rectangular_weno5_runs(self):
         Nz, Ny, Nx = 3, 14, 14
-        grid = CartesianGrid3D.from_interior(Nx - 2, Ny - 2, Nz - 2, 1.0, 1.0, 1.0)
+        grid = CartesianCGrid3D.from_interior(Nx - 2, Ny - 2, Nz - 2, 1.0, 1.0, 1.0)
         mask = Mask3D.from_dimensions(nz=Nz, ny=Ny, nx=Nx)
         adv = Advection3D(grid=grid, mask=mask)
         h = jnp.ones((Nz, Ny, Nx))
@@ -520,7 +520,7 @@ class TestAdvection3DMasked:
 
     def test_rectangular_tvd_runs(self):
         Nz, Ny, Nx = 3, 10, 10
-        grid = CartesianGrid3D.from_interior(Nx - 2, Ny - 2, Nz - 2, 1.0, 1.0, 1.0)
+        grid = CartesianCGrid3D.from_interior(Nx - 2, Ny - 2, Nz - 2, 1.0, 1.0, 1.0)
         mask = Mask3D.from_dimensions(nz=Nz, ny=Ny, nx=Nx)
         adv = Advection3D(grid=grid, mask=mask)
         h = jnp.ones((Nz, Ny, Nx)) * 2.0
@@ -538,7 +538,7 @@ class TestAdvection3DMasked:
         h_mask_2d[:, 4:6] = False
         h_mask_3d = np.broadcast_to(h_mask_2d, (Nz, Ny, Nx)).copy()
         mask = Mask3D.from_mask(h_mask_3d)
-        grid = CartesianGrid3D.from_interior(Nx - 2, Ny - 2, Nz - 2, 1.0, 1.0, 1.0)
+        grid = CartesianCGrid3D.from_interior(Nx - 2, Ny - 2, Nz - 2, 1.0, 1.0, 1.0)
         adv = Advection3D(grid=grid, mask=mask)
         h = jnp.ones((Nz, Ny, Nx))
         u = jnp.ones((Nz, Ny, Nx))
@@ -549,7 +549,7 @@ class TestAdvection3DMasked:
     def test_mask_none_is_noop(self):
         """mask=None should produce identical results to no mask."""
         Nz, Ny, Nx = 3, 10, 10
-        grid = CartesianGrid3D.from_interior(Nx - 2, Ny - 2, Nz - 2, 1.0, 1.0, 1.0)
+        grid = CartesianCGrid3D.from_interior(Nx - 2, Ny - 2, Nz - 2, 1.0, 1.0, 1.0)
         adv_default = Advection3D(grid=grid)
         adv_none = Advection3D(grid=grid, mask=None)
         h = jnp.ones((Nz, Ny, Nx)) * 3.0

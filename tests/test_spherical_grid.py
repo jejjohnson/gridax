@@ -1,10 +1,10 @@
-"""Tests for SphericalGrid2D and SphericalGrid3D."""
+"""Tests for SphericalCGrid2D and SphericalCGrid3D."""
 
 from gridax import (
     CurvilinearGrid2D,
     CurvilinearGrid3D,
-    SphericalGrid2D,
-    SphericalGrid3D,
+    SphericalCGrid2D,
+    SphericalCGrid3D,
 )
 import jax
 import jax.numpy as jnp
@@ -14,7 +14,7 @@ import pytest
 
 @pytest.fixture
 def grid2d():
-    return SphericalGrid2D.from_interior(
+    return SphericalCGrid2D.from_interior(
         nx_interior=10,
         ny_interior=8,
         lon_range=(0.0, 360.0),
@@ -25,7 +25,7 @@ def grid2d():
 
 @pytest.fixture
 def grid3d():
-    return SphericalGrid3D.from_interior(
+    return SphericalCGrid3D.from_interior(
         nx_interior=10,
         ny_interior=8,
         nz_interior=4,
@@ -94,7 +94,7 @@ class TestSphericalArakawaCGrid2D:
 
     def test_lat_T_is_symmetric_and_off_the_poles(self):
         """#322: symmetric rows, no T row on a pole, ghosts at most dlat/2 past it."""
-        grid = SphericalGrid2D.from_interior(
+        grid = SphericalCGrid2D.from_interior(
             nx_interior=12,
             ny_interior=6,
             lon_range=(0.0, 360.0),
@@ -143,7 +143,7 @@ class TestSphericalArakawaCGrid3D:
 
     def test_horizontal_grid(self, grid3d):
         h_grid = grid3d.horizontal_grid()
-        assert isinstance(h_grid, SphericalGrid2D)
+        assert isinstance(h_grid, SphericalCGrid2D)
         assert h_grid.Nx == grid3d.Nx
         assert h_grid.Ny == grid3d.Ny
         np.testing.assert_allclose(h_grid.dlon, grid3d.dlon, atol=0)

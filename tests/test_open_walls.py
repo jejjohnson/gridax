@@ -18,9 +18,9 @@ from __future__ import annotations
 import itertools
 
 from gridax import (
-    CartesianGrid1D,
-    CartesianGrid2D,
-    CartesianGrid3D,
+    CartesianCGrid1D,
+    CartesianCGrid2D,
+    CartesianCGrid3D,
 )
 from gridax._src.advection.advection import (
     Advection1D,
@@ -36,17 +36,17 @@ import pytest
 # ── fixtures ────────────────────────────────────────────────────────────────
 @pytest.fixture
 def grid1d():
-    return CartesianGrid1D.from_interior(8, 1.0)
+    return CartesianCGrid1D.from_interior(8, 1.0)
 
 
 @pytest.fixture
 def grid2d():
-    return CartesianGrid2D.from_interior(nx_interior=8, ny_interior=8, Lx=8.0, Ly=8.0)
+    return CartesianCGrid2D.from_interior(nx_interior=8, ny_interior=8, Lx=8.0, Ly=8.0)
 
 
 @pytest.fixture
 def grid3d():
-    return CartesianGrid3D.from_interior(
+    return CartesianCGrid3D.from_interior(
         nx_interior=8, ny_interior=8, nz_interior=4, Lx=8.0, Ly=8.0, Lz=4.0
     )
 

@@ -75,7 +75,7 @@ import numpy as np
 
 from gridax._src.backend import set_at, vmap
 from gridax._src.diffusion.diffusion import _face_kappa
-from gridax._src.grid import SphericalGrid2D, SphericalGrid3D
+from gridax._src.grid import SphericalCGrid2D, SphericalCGrid3D
 from gridax._src.mask import Mask2D, Mask3D
 from gridax._src.operators._ghost import interior, zero_z_ghosts
 from gridax._src.operators._utils import _metric_like, _safe_div_cos
@@ -196,7 +196,7 @@ class SphericalDiffusion2D:
 
     Parameters
     ----------
-    grid : SphericalGrid2D
+    grid : SphericalCGrid2D
         The underlying 2-D spherical Arakawa C-grid.
     mask : Mask2D or None, optional
         Optional land/ocean mask.  When provided, the three-step
@@ -214,8 +214,8 @@ class SphericalDiffusion2D:
     Examples
     --------
     >>> import jax.numpy as jnp
-    >>> from gridax import SphericalGrid2D, SphericalDiffusion2D
-    >>> grid = SphericalGrid2D.from_interior(
+    >>> from gridax import SphericalCGrid2D, SphericalDiffusion2D
+    >>> grid = SphericalCGrid2D.from_interior(
     ...     nx_interior=16,
     ...     ny_interior=8,
     ...     lon_range=(0.0, 360.0),
@@ -229,7 +229,7 @@ class SphericalDiffusion2D:
     (10, 18)
     """
 
-    grid: SphericalGrid2D
+    grid: SphericalCGrid2D
     mask: Mask2D | None = None
 
     def __call__(
@@ -320,7 +320,7 @@ class SphericalDiffusion3D:
 
     Parameters
     ----------
-    grid : SphericalGrid3D
+    grid : SphericalCGrid3D
     mask : Mask3D or None, optional
         Optional 3-D land/ocean mask.  When provided, the intermediate
         flux masking pattern from :class:`SphericalDiffusion2D` is
@@ -328,7 +328,7 @@ class SphericalDiffusion3D:
         ``mask.u``, ``mask.v`` — same approach as :class:`Diffusion3D`.
     """
 
-    grid: SphericalGrid3D
+    grid: SphericalCGrid3D
     mask: Mask3D | None = None
 
     def __call__(
@@ -445,7 +445,7 @@ class SphericalBiharmonicDiffusion2D:
 
     Parameters
     ----------
-    grid : SphericalGrid2D
+    grid : SphericalCGrid2D
         The underlying 2-D spherical grid.
     mask : Mask2D or None, optional
         Optional land/ocean mask.  When provided, the tendency is
@@ -467,8 +467,8 @@ class SphericalBiharmonicDiffusion2D:
     Examples
     --------
     >>> import jax.numpy as jnp
-    >>> from gridax import SphericalGrid2D, SphericalBiharmonicDiffusion2D
-    >>> grid = SphericalGrid2D.from_interior(
+    >>> from gridax import SphericalCGrid2D, SphericalBiharmonicDiffusion2D
+    >>> grid = SphericalCGrid2D.from_interior(
     ...     nx_interior=16,
     ...     ny_interior=10,
     ...     lon_range=(0.0, 360.0),
@@ -481,13 +481,13 @@ class SphericalBiharmonicDiffusion2D:
     (12, 18)
     """
 
-    grid: SphericalGrid2D
+    grid: SphericalCGrid2D
     mask: Mask2D | None
     _harm: SphericalDiffusion2D
 
     def __init__(
         self,
-        grid: SphericalGrid2D,
+        grid: SphericalCGrid2D,
         mask: Mask2D | None = None,
     ) -> None:
         self.grid = grid
@@ -540,7 +540,7 @@ class SphericalBiharmonicDiffusion3D:
 
     Parameters
     ----------
-    grid : SphericalGrid3D
+    grid : SphericalCGrid3D
     mask : Mask3D or None, optional
         Optional 3-D land/ocean mask.  When provided, the tendency is
         ``−κ · Dm(Dm(h))`` at every z-level with ``Dm`` the masked
@@ -548,13 +548,13 @@ class SphericalBiharmonicDiffusion3D:
         same semantics as :class:`SphericalBiharmonicDiffusion2D`.
     """
 
-    grid: SphericalGrid3D
+    grid: SphericalCGrid3D
     mask: Mask3D | None
     _harm: SphericalDiffusion3D
 
     def __init__(
         self,
-        grid: SphericalGrid3D,
+        grid: SphericalCGrid3D,
         mask: Mask3D | None = None,
     ) -> None:
         self.grid = grid

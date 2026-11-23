@@ -12,8 +12,8 @@ grid type (Cartesian, spherical):
                                      serves as the parent for all concrete
                                      grids.
         ↓
-    CartesianGrid* (cartesian.py)
-    SphericalGrid* (spherical.py)
+    CartesianCGrid* (cartesian.py)
+    SphericalCGrid* (spherical.py)
 
 The split lets operators that only need topology (e.g. shape and
 ghost-cell handling) accept ``ArakawaCGrid*``, operators that need a
@@ -72,7 +72,7 @@ class ArakawaCGrid1D:
     """1-D Arakawa C-grid topology (no metric).
 
     Records only the integer dimension and the ghost-cell convention;
-    no physical spacing.  Concrete subclasses (``CartesianGrid1D``,
+    no physical spacing.  Concrete subclasses (``CartesianCGrid1D``,
     etc.) attach a metric.
 
     Parameters
@@ -95,7 +95,7 @@ class ArakawaCGrid1D:
         (west)                             (east)
 
     The 1-D C-grid uses two staggering locations (T-cell centres and
-    U-east-faces); see ``CartesianGrid1D`` for the colocation rule.
+    U-east-faces); see ``CartesianCGrid1D`` for the colocation rule.
     """
 
     Nx: int = static_field()
@@ -113,8 +113,8 @@ class ArakawaCGrid2D:
     """2-D Arakawa C-grid topology (no metric).
 
     Records only the integer dimensions and the ghost-cell convention;
-    no physical spacing.  Concrete subclasses (``CartesianGrid2D``,
-    ``SphericalGrid2D``, ...) attach a metric.
+    no physical spacing.  Concrete subclasses (``CartesianCGrid2D``,
+    ``SphericalCGrid2D``, ...) attach a metric.
 
     Parameters
     ----------
@@ -144,7 +144,7 @@ class ArakawaCGrid2D:
 
     The 2-D C-grid uses four staggering locations (T, U, V, X); array
     index ``[j, i]`` encodes the **south-west** corner of the stencil
-    neighbourhood.  See ``CartesianGrid2D`` for the colocation rule.
+    neighbourhood.  See ``CartesianCGrid2D`` for the colocation rule.
     """
 
     Nx: int = static_field()
@@ -163,8 +163,8 @@ class ArakawaCGrid3D:
     """3-D Arakawa C-grid topology (no metric).
 
     Records only the integer dimensions and the ghost-cell convention;
-    no physical spacing.  Concrete subclasses (``CartesianGrid3D``,
-    ``SphericalGrid3D``, ...) attach a metric.
+    no physical spacing.  Concrete subclasses (``CartesianCGrid3D``,
+    ``SphericalCGrid3D``, ...) attach a metric.
 
     Parameters
     ----------
@@ -275,7 +275,7 @@ class _UniformMetric:
         Examples
         --------
         >>> import gridax
-        >>> grid = gridax.CartesianGrid2D.from_interior(10, 5, 1.0, 1.0)
+        >>> grid = gridax.CartesianCGrid2D.from_interior(10, 5, 1.0, 1.0)
         >>> float(grid.spacing("x")), float(grid.spacing("y", at="V"))
         (0.1, 0.2)
         """
@@ -304,7 +304,7 @@ class _UniformMetric:
         Examples
         --------
         >>> import gridax
-        >>> grid = gridax.CartesianGrid1D.from_interior(2, 1.0)
+        >>> grid = gridax.CartesianCGrid1D.from_interior(2, 1.0)
         >>> grid.coords("x").tolist(), grid.coords("x", at="U").tolist()
         ([0.0, 0.5, 1.0, 1.5], [0.25, 0.75, 1.25, 1.75])
         """
@@ -333,7 +333,7 @@ class _UniformMetric:
         Examples
         --------
         >>> import gridax
-        >>> grid = gridax.CartesianGrid2D.from_interior(4, 2, 1.0, 1.0)
+        >>> grid = gridax.CartesianCGrid2D.from_interior(4, 2, 1.0, 1.0)
         >>> grid.area().shape, float(grid.area()[0, 0])
         ((4, 6), 0.125)
         """
@@ -357,7 +357,7 @@ class CurvilinearGrid1D(_UniformMetric, ArakawaCGrid1D):
 
     Adds the physical extent ``Lx`` to :class:`ArakawaCGrid1D`; the spacing
     follows from it (:meth:`spacing`). Concrete subclasses
-    (``CartesianGrid1D``) inherit from this layer and provide their
+    (``CartesianCGrid1D``) inherit from this layer and provide their
     coordinate-system-specific construction logic.
 
     Parameters
@@ -377,7 +377,7 @@ class CurvilinearGrid2D(_UniformMetric, ArakawaCGrid2D):
 
     Adds the physical extents ``Lx`` and ``Ly`` to :class:`ArakawaCGrid2D`;
     the spacings follow from them (:meth:`spacing`). Concrete subclasses
-    (``CartesianGrid2D``, ``SphericalGrid2D``) inherit from this layer and
+    (``CartesianCGrid2D``, ``SphericalCGrid2D``) inherit from this layer and
     provide their coordinate-system-specific construction logic.
 
     Parameters
@@ -402,8 +402,8 @@ class CurvilinearGrid3D(_UniformMetric, ArakawaCGrid3D):
 
     Adds the physical extents ``Lx``, ``Ly`` and ``Lz`` to
     :class:`ArakawaCGrid3D`; the spacings follow from them
-    (:meth:`spacing`). Concrete subclasses (``CartesianGrid3D``,
-    ``SphericalGrid3D``) inherit from this layer and provide their
+    (:meth:`spacing`). Concrete subclasses (``CartesianCGrid3D``,
+    ``SphericalCGrid3D``) inherit from this layer and provide their
     coordinate-system-specific construction logic.
 
     Parameters

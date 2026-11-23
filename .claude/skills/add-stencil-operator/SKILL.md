@@ -39,7 +39,7 @@ step-by-step.
 - Inputs that may hold `NaN` on land: zero them with `jnp.where` before the
   stencil (as `Energetics2D` does), then mask the output
   with `jnp.where`.
-- Spherical: take the metric from `SphericalGrid2D/3D` (`cos_lat_*`,
+- Spherical: take the metric from `SphericalCGrid2D/3D` (`cos_lat_*`,
   `dx_T`, …) and divide by `cos(lat)` through
   `operators/_utils._safe_div_cos`.
 - 3-D: leave the `k = 0` / `k = Nz-1` ghost slabs zero; a multilayer use

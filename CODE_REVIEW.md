@@ -69,7 +69,7 @@ order); review what they cannot see.
   is documented, or the BC is applied.
 - 3-D operators leave the `k = 0` / `k = Nz-1` slabs alone; multilayer code
   uses `jax.vmap` over a 2-D operator, not a `3D` operator.
-- Spherical operators use the `SphericalGrid*` metric and guard `cos(lat)`
+- Spherical operators use the `SphericalCGrid*` metric and guard `cos(lat)`
   near the poles.
 
 ### 3. Masks

@@ -78,10 +78,10 @@ def _okubo_weiss_fn(u, v):
 
 
 def _cases(n: int, nz: int) -> list[Case]:
-    g1 = fvx.CartesianGrid1D.from_interior(n * n - 2, 1.0)
-    g2 = fvx.CartesianGrid2D.from_interior(n - 2, n - 2, 1.0, 1.0)
-    g3 = fvx.CartesianGrid3D.from_interior(n - 2, n - 2, nz - 2, 1.0, 1.0, 1.0)
-    gs = fvx.SphericalGrid2D.from_interior(
+    g1 = fvx.CartesianCGrid1D.from_interior(n * n - 2, 1.0)
+    g2 = fvx.CartesianCGrid2D.from_interior(n - 2, n - 2, 1.0, 1.0)
+    g3 = fvx.CartesianCGrid3D.from_interior(n - 2, n - 2, nz - 2, 1.0, 1.0, 1.0)
+    gs = fvx.SphericalCGrid2D.from_interior(
         n - 2, n - 2, lon_range=(0.0, 60.0), lat_range=(-30.0, 30.0)
     )
     s1, s2, s3 = (n * n,), (n, n), (nz, n, n)

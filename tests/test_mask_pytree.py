@@ -17,9 +17,9 @@ from gridax import (
     Advection1D,
     Advection2D,
     Advection3D,
-    CartesianGrid1D,
-    CartesianGrid2D,
-    CartesianGrid3D,
+    CartesianCGrid1D,
+    CartesianCGrid2D,
+    CartesianCGrid3D,
     Mask1D,
     Mask2D,
 )
@@ -122,14 +122,14 @@ class TestPytree:
 
 def _advection_case(dim):
     if dim == "1d":
-        grid = CartesianGrid1D.from_interior(inputs.NX - 2, 1.0)
+        grid = CartesianCGrid1D.from_interior(inputs.NX - 2, 1.0)
         h = jnp.cos(jnp.linspace(0.0, 3.0, inputs.NX))
         return grid, (h, jnp.ones_like(h)), Advection1D
     if dim == "2d":
-        grid = CartesianGrid2D.from_interior(inputs.NX - 2, inputs.NY - 2, 1.0, 1.0)
+        grid = CartesianCGrid2D.from_interior(inputs.NX - 2, inputs.NY - 2, 1.0, 1.0)
         h = inputs.make_h_field_2d()
         return grid, (h, jnp.ones_like(h), 0.5 * jnp.ones_like(h)), Advection2D
-    grid = CartesianGrid3D.from_interior(
+    grid = CartesianCGrid3D.from_interior(
         inputs.NX - 2, inputs.NY - 2, inputs.NZ - 2, 1.0, 1.0, 1.0
     )
     h = jnp.broadcast_to(inputs.make_h_field_2d(), (inputs.NZ, inputs.NY, inputs.NX))

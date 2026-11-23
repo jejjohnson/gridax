@@ -11,10 +11,10 @@ Two tiers, as in geotoolz::
             JSON config, eqx.Module      composes in pipekit Sequential / Graph,
             leaves, `|` composition      runs under jit / grad / vmap
 
-A Tier-B operator holds its `CartesianGrid2D` as a pytree field: the grid's
+A Tier-B operator holds its `CartesianCGrid2D` as a pytree field: the grid's
 sizes are static and its extents are array leaves, so it crosses ``jit`` with
 the operator. In the JSON config (``op.state`` / ``Operator.from_state``) it
-is the argument list of `CartesianGrid2D.from_interior`.
+is the argument list of `CartesianCGrid2D.from_interior`.
 
 Fields are ``[*batch, Ny, Nx]``: the 2-D Tier-A operators broadcast over
 leading axes themselves (finitevolX #386), so Tier B calls them directly.
@@ -32,38 +32,38 @@ import jax
 from jaxtyping import Array
 from pipekit_jax import JaxOperator
 
-from gridax import CartesianGrid2D
+from gridax import CartesianCGrid2D
 
 
-def _as_grid(spec: Sequence[Any] | CartesianGrid2D) -> CartesianGrid2D:
+def _as_grid(spec: Sequence[Any] | CartesianCGrid2D) -> CartesianCGrid2D:
     """The grid of an operator, from a grid or from its JSON config.
 
     Parameters
     ----------
-    spec : CartesianGrid2D or sequence of 4 numbers
+    spec : CartesianCGrid2D or sequence of 4 numbers
         A grid, or ``(nx_interior, ny_interior, Lx, Ly)``, the arguments of
-        `CartesianGrid2D.from_interior` (a list after a JSON round trip).
+        `CartesianCGrid2D.from_interior` (a list after a JSON round trip).
 
     Returns
     -------
-    CartesianGrid2D
+    CartesianCGrid2D
 
     Raises
     ------
     ValueError
         If ``spec`` does not have four entries or a count is not positive.
     """
-    if isinstance(spec, CartesianGrid2D):
+    if isinstance(spec, CartesianCGrid2D):
         return spec
     if len(spec) != 4:
         raise ValueError(
-            f"grid must be a CartesianGrid2D or (nx_interior, ny_interior, Lx, Ly),"
+            f"grid must be a CartesianCGrid2D or (nx_interior, ny_interior, Lx, Ly),"
             f" got {spec!r}"
         )
     nx, ny, lx, ly = spec
     if int(nx) < 1 or int(ny) < 1:
         raise ValueError(f"grid needs positive cell counts, got {spec!r}")
-    return CartesianGrid2D.from_interior(int(nx), int(ny), lx, ly)
+    return CartesianCGrid2D.from_interior(int(nx), int(ny), lx, ly)
 
 
 def over_leading(fn: Callable[..., Any], core_ndim: int = 2) -> Callable[..., Any]:
@@ -127,12 +127,12 @@ class GridOperator(FVXOperator):
 
     Attributes
     ----------
-    grid : CartesianGrid2D
+    grid : CartesianCGrid2D
         The grid; ``(nx_interior, ny_interior, Lx, Ly)`` (a list after a JSON
         round trip) is converted on construction.
     """
 
-    grid: CartesianGrid2D = eqx.field(converter=_as_grid)
+    grid: CartesianCGrid2D = eqx.field(converter=_as_grid)
 
     def get_config(self) -> dict[str, Any]:
         """The constructor config, with the grid as ``from_interior``'s arguments."""

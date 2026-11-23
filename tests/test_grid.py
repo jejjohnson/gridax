@@ -1,53 +1,53 @@
-"""Tests for CartesianGrid1D, CartesianGrid2D, CartesianGrid3D."""
+"""Tests for CartesianCGrid1D, CartesianCGrid2D, CartesianCGrid3D."""
 
 from gridax import (
-    CartesianGrid1D,
-    CartesianGrid2D,
-    CartesianGrid3D,
-    SphericalGrid2D,
-    SphericalGrid3D,
+    CartesianCGrid1D,
+    CartesianCGrid2D,
+    CartesianCGrid3D,
+    SphericalCGrid2D,
+    SphericalCGrid3D,
 )
 import pytest
 
 
 class TestArakawaCGrid1D:
     def test_from_interior_sizes(self):
-        g = CartesianGrid1D.from_interior(10, 1.0)
+        g = CartesianCGrid1D.from_interior(10, 1.0)
         assert g.Nx == 12
         assert g.Lx == 1.0
         assert g.spacing("x") == pytest.approx(0.1)
 
     def test_direct_construction(self):
-        g = CartesianGrid1D(Nx=6, Lx=4.0)
+        g = CartesianCGrid1D(Nx=6, Lx=4.0)
         assert g.Nx == 6
         assert g.spacing("x") == 1.0
 
     def test_dx_matches_Lx(self):
-        g = CartesianGrid1D.from_interior(4, 2.0)
+        g = CartesianCGrid1D.from_interior(4, 2.0)
         assert g.spacing("x") == pytest.approx(g.Lx / (g.Nx - 2))
 
 
 class TestArakawaCGrid2D:
     def test_from_interior_sizes(self):
-        g = CartesianGrid2D.from_interior(8, 6, 1.0, 2.0)
+        g = CartesianCGrid2D.from_interior(8, 6, 1.0, 2.0)
         assert g.Nx == 10
         assert g.Ny == 8
         assert g.spacing("x") == pytest.approx(1.0 / 8)
         assert g.spacing("y") == pytest.approx(2.0 / 6)
 
     def test_direct_construction(self):
-        g = CartesianGrid2D(Nx=4, Ny=4, Lx=1.0, Ly=1.0)
+        g = CartesianCGrid2D(Nx=4, Ny=4, Lx=1.0, Ly=1.0)
         assert g.Nx == 4
         assert g.Ny == 4
 
     def test_square_grid(self):
-        g = CartesianGrid2D.from_interior(10, 10, 1.0, 1.0)
+        g = CartesianCGrid2D.from_interior(10, 10, 1.0, 1.0)
         assert g.spacing("x") == g.spacing("y")
 
 
 class TestArakawaCGrid3D:
     def test_from_interior_sizes(self):
-        g = CartesianGrid3D.from_interior(4, 5, 6, 1.0, 2.0, 3.0)
+        g = CartesianCGrid3D.from_interior(4, 5, 6, 1.0, 2.0, 3.0)
         assert g.Nx == 6
         assert g.Ny == 7
         assert g.Nz == 8
@@ -56,7 +56,7 @@ class TestArakawaCGrid3D:
         assert g.spacing("z") == pytest.approx(3.0 / 6)
 
     def test_direct_construction(self):
-        g = CartesianGrid3D(Nx=4, Ny=4, Nz=4, Lx=1.0, Ly=1.0, Lz=1.0)
+        g = CartesianCGrid3D(Nx=4, Ny=4, Nz=4, Lx=1.0, Ly=1.0, Lz=1.0)
         assert g.Nz == 4
 
 
@@ -80,7 +80,7 @@ class TestGridStaggerPositions2D:
 
     def test_T_cell_centre_positions(self):
         """T[j,i] is at (i*dx, j*dy)."""
-        g = CartesianGrid2D.from_interior(8, 6, 1.0, 2.0)
+        g = CartesianCGrid2D.from_interior(8, 6, 1.0, 2.0)
         for i in range(1, g.Nx - 1):
             assert g.spacing("x") * i == pytest.approx(i * g.spacing("x"))
         # Simply verify the grid spacing is consistent
@@ -89,7 +89,7 @@ class TestGridStaggerPositions2D:
 
     def test_U_face_offset_by_half_dx(self):
         """U-face coordinate in x is T-centre shifted by +dx/2."""
-        g = CartesianGrid2D.from_interior(8, 6, 1.0, 2.0)
+        g = CartesianCGrid2D.from_interior(8, 6, 1.0, 2.0)
         # T-point x at index i: x_T[i] = i * dx
         # U-point x at index i: x_U[i] = (i + 0.5) * dx = x_T[i] + dx/2
         for i in range(1, g.Nx - 1):
@@ -99,7 +99,7 @@ class TestGridStaggerPositions2D:
 
     def test_V_face_offset_by_half_dy(self):
         """V-face coordinate in y is T-centre shifted by +dy/2."""
-        g = CartesianGrid2D.from_interior(8, 6, 1.0, 2.0)
+        g = CartesianCGrid2D.from_interior(8, 6, 1.0, 2.0)
         for j in range(1, g.Ny - 1):
             y_T = j * g.spacing("y")
             y_V = (j + 0.5) * g.spacing("y")
@@ -107,7 +107,7 @@ class TestGridStaggerPositions2D:
 
     def test_X_corner_offset_by_half_dx_and_dy(self):
         """X-corner is offset by (dx/2, dy/2) from the T-centre."""
-        g = CartesianGrid2D.from_interior(8, 6, 1.0, 2.0)
+        g = CartesianCGrid2D.from_interior(8, 6, 1.0, 2.0)
         for i in range(1, g.Nx - 1):
             for j in range(1, g.Ny - 1):
                 x_X = (i + 0.5) * g.spacing("x")
@@ -120,7 +120,7 @@ class TestGridStaggerPositions2D:
     def test_grid_symmetry_square_domain(self):
         """For a square uniform domain [0,L]x[0,L] the grid is symmetric."""
         L = 1.0
-        g = CartesianGrid2D.from_interior(10, 10, L, L)
+        g = CartesianCGrid2D.from_interior(10, 10, L, L)
         assert g.spacing("x") == g.spacing("y")
         # T-point positions are symmetric about L/2
 
@@ -131,7 +131,7 @@ class TestGridStaggerPositions2D:
 
     def test_ghost_cell_count(self):
         """There is exactly one ghost cell ring on each side."""
-        g = CartesianGrid2D.from_interior(8, 6, 1.0, 2.0)
+        g = CartesianCGrid2D.from_interior(8, 6, 1.0, 2.0)
         assert g.Nx == 8 + 2
         assert g.Ny == 6 + 2
 
@@ -139,7 +139,7 @@ class TestGridStaggerPositions2D:
         """dx = Lx / Nx_interior, dy = Ly / Ny_interior."""
         Lx, Ly = 3.0, 5.0
         nx, ny = 12, 20
-        g = CartesianGrid2D.from_interior(nx, ny, Lx, Ly)
+        g = CartesianCGrid2D.from_interior(nx, ny, Lx, Ly)
         assert g.spacing("x") == pytest.approx(Lx / nx)
         assert g.spacing("y") == pytest.approx(Ly / ny)
 
@@ -149,13 +149,13 @@ class TestGridStaggerPositions1D:
 
     def test_T_positions(self):
         """T[i] is at i * dx."""
-        g = CartesianGrid1D.from_interior(8, 1.0)
+        g = CartesianCGrid1D.from_interior(8, 1.0)
         for i in range(1, g.Nx - 1):
             assert i * g.spacing("x") == pytest.approx(i * g.spacing("x"))
 
     def test_U_face_at_plus_half_dx(self):
         """U[i] (east face) is at (i + 0.5) * dx."""
-        g = CartesianGrid1D.from_interior(8, 1.0)
+        g = CartesianCGrid1D.from_interior(8, 1.0)
         for i in range(1, g.Nx - 1):
             x_U = (i + 0.5) * g.spacing("x")
             assert x_U == pytest.approx(i * g.spacing("x") + g.spacing("x") / 2)
@@ -163,7 +163,7 @@ class TestGridStaggerPositions1D:
     def test_dx_equals_Lx_over_n(self):
         n = 16
         L = 2.0
-        g = CartesianGrid1D.from_interior(n, L)
+        g = CartesianCGrid1D.from_interior(n, L)
         assert g.spacing("x") == pytest.approx(L / n)
 
 
@@ -173,7 +173,7 @@ class TestTPointCoordinates:
     def test_2d_points_follow_the_raveled_field(self):
         from gridax import t_point_coordinates
 
-        grid = CartesianGrid2D.from_interior(3, 2, 6.0, 1.0)
+        grid = CartesianCGrid2D.from_interior(3, 2, 6.0, 1.0)
         points = t_point_coordinates(grid)
         assert points.shape == (grid.Ny * grid.Nx, 2)
         rows, cols = np.meshgrid(np.arange(grid.Ny), np.arange(grid.Nx), indexing="ij")
@@ -181,29 +181,29 @@ class TestTPointCoordinates:
         np.testing.assert_array_equal(points[:, 1], cols.ravel() * grid.spacing("x"))
 
     def test_1d_points(self):
-        from gridax import CartesianGrid1D, t_point_coordinates
+        from gridax import CartesianCGrid1D, t_point_coordinates
 
-        grid = CartesianGrid1D.from_interior(4, 2.0)
+        grid = CartesianCGrid1D.from_interior(4, 2.0)
         np.testing.assert_array_equal(
             t_point_coordinates(grid)[:, 0], np.arange(grid.Nx) * grid.spacing("x")
         )
 
     def test_spherical_grid_raises(self):
-        from gridax import SphericalGrid2D, t_point_coordinates
+        from gridax import SphericalCGrid2D, t_point_coordinates
 
-        grid = SphericalGrid2D.from_interior(4, 4, (0.0, 1.0), (0.0, 1.0))
+        grid = SphericalCGrid2D.from_interior(4, 4, (0.0, 1.0), (0.0, 1.0))
         with pytest.raises(TypeError, match="latitudes"):
             t_point_coordinates(grid)
 
 
 METRIC_GRIDS = {
-    "c1": lambda: CartesianGrid1D.from_interior(8, 4.0),
-    "c2": lambda: CartesianGrid2D.from_interior(8, 6, 4.0, 3.0),
-    "c3": lambda: CartesianGrid3D.from_interior(8, 6, 5, 4.0, 3.0, 10.0),
-    "s2": lambda: SphericalGrid2D.from_interior(
+    "c1": lambda: CartesianCGrid1D.from_interior(8, 4.0),
+    "c2": lambda: CartesianCGrid2D.from_interior(8, 6, 4.0, 3.0),
+    "c3": lambda: CartesianCGrid3D.from_interior(8, 6, 5, 4.0, 3.0, 10.0),
+    "s2": lambda: SphericalCGrid2D.from_interior(
         8, 6, (0.0, 40.0), (-30.0, 30.0), R=2.0
     ),
-    "s3": lambda: SphericalGrid3D.from_interior(
+    "s3": lambda: SphericalCGrid3D.from_interior(
         8, 6, 5, (0.0, 40.0), (-30.0, 30.0), 10.0, R=2.0
     ),
 }
@@ -264,7 +264,7 @@ class TestMetricAccessor:
             assert grid.area(at=at).shape == tuple(
                 grid.shape[grid.axes.index(a)] for a in horizontal
             )
-        if isinstance(grid, SphericalGrid2D | SphericalGrid3D):
+        if isinstance(grid, SphericalCGrid2D | SphericalCGrid3D):
             # ∑A = R² Lλ (sin lat_max - sin lat_min), exactly
             want = 4.0 * np.deg2rad(40.0) * (2.0 * np.sin(np.deg2rad(30.0)))
         else:
@@ -273,7 +273,7 @@ class TestMetricAccessor:
         np.testing.assert_allclose(grid.area()[inner].sum(), want, rtol=1e-12)
 
     def test_a_wider_ghost_ring_keeps_the_spacing(self):
-        grid = CartesianGrid1D(Nx=8 + 2 * 4, Lx=4.0, ghost=4)
+        grid = CartesianCGrid1D(Nx=8 + 2 * 4, Lx=4.0, ghost=4)
         assert grid.spacing("x") == 0.5
 
     @pytest.mark.parametrize("call", ["spacing", "coords"])
@@ -290,3 +290,15 @@ class TestMetricAccessor:
         for name in ("dx", "dy", "dx_T", "dy_T", "cos_lat_T", "lat_T", "lon_T"):
             assert not hasattr(METRIC_GRIDS["s2"](), name)
         assert not hasattr(METRIC_GRIDS["c2"](), "dx")
+
+
+@pytest.mark.parametrize(
+    "name",
+    [f"CartesianGrid{d}D" for d in (1, 2, 3)] + [f"SphericalGrid{d}D" for d in (2, 3)],
+)
+def test_the_old_grid_names_are_gone(name):
+    """A C-grid is named one: ``CartesianCGrid2D``, with no alias."""
+    import gridax
+
+    assert not hasattr(gridax, name)
+    assert hasattr(gridax, name.replace("Grid", "CGrid"))

@@ -24,7 +24,7 @@ TVD = ("minmod", "van_leer", "superbee", "mc")
 
 
 def _tendency_grad(h, method, mask=None):
-    grid = fvx.CartesianGrid2D.from_interior(N, N, 1.0, 1.0)
+    grid = fvx.CartesianCGrid2D.from_interior(N, N, 1.0, 1.0)
     adv = fvx.Advection2D(grid, mask=mask)
     u = jnp.ones_like(h)
     v = 0.5 * jnp.ones_like(h)

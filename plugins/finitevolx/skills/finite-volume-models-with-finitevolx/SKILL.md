@@ -35,7 +35,7 @@ Poisson solver or an RK loop, look it up:
 
 | You need… | Use |
 |---|---|
-| A grid | `fvx.CartesianGrid1D/2D/3D.from_interior(...)`, `fvx.SphericalGrid2D/3D.from_interior(...)`; arrays are `[Ny, Nx]` including one ghost ring, interior `[1:-1, 1:-1]` |
+| A grid | `fvx.CartesianCGrid1D/2D/3D.from_interior(...)`, `fvx.SphericalCGrid2D/3D.from_interior(...)`; arrays are `[Ny, Nx]` including one ghost ring, interior `[1:-1, 1:-1]` |
 | Raw shifted differences / averages | `fvx.diff_x_fwd_2d`, `fvx.diff_y_bwd_2d`, `fvx.avg_xfwd_yfwd_2d`, … (+ `_1d` / `_3d`); pad back with `fvx.interior(values, like)` |
 | Gradients, divergence, curl, Laplacian | `fvx.Difference1D/2D/3D` (`diff_x_T_to_U`, `divergence`, `curl`, `laplacian`, `grad_perp`), `fvx.Divergence2D`, `fvx.Vorticity2D`; on the sphere `fvx.SphericalDifference2D`, `fvx.SphericalDivergence2D`, `fvx.SphericalLaplacian2D`, `fvx.SphericalVorticity2D` |
 | Moving fields between T / U / V / X points | `fvx.Interpolation1D/2D/3D` (`T_to_U`, `U_to_T`, `T_to_X`, …) |
@@ -100,7 +100,7 @@ from integrix.march import rk3_ssp_step
 jax.config.update("jax_enable_x64", True)
 
 # 1. A doubly periodic 64 × 64 C-grid on [0, 1]²: arrays are [Ny, Nx] = [66, 66]
-grid = fvx.CartesianGrid2D.from_interior(64, 64, 1.0, 1.0)
+grid = fvx.CartesianCGrid2D.from_interior(64, 64, 1.0, 1.0)
 xc = (jnp.arange(grid.Nx) - 0.5) * grid.spacing("x")  # T-point x, ghost columns included
 yc = (jnp.arange(grid.Ny) - 0.5) * grid.spacing("y")
 X, Y = jnp.meshgrid(xc, yc)  # [Ny, Nx] T-point coordinates

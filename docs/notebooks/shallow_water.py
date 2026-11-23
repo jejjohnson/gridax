@@ -108,7 +108,7 @@ IMG_DIR.mkdir(parents=True, exist_ok=True)
 nx, ny = 32, 32
 Lx, Ly = 5.12e6, 5.12e6  # 5120 km square basin
 
-grid = fvx.CartesianGrid2D.from_interior(nx, ny, Lx, Ly)
+grid = fvx.CartesianCGrid2D.from_interior(nx, ny, Lx, Ly)
 dx, dy = grid.spacing("x"), grid.spacing("y")
 Ny, Nx = ny + 2, nx + 2
 
@@ -599,7 +599,7 @@ plt.show()
 #
 # | Class / Function | Role in this notebook |
 # |-----------------|----------------------|
-# | `CartesianGrid2D.from_interior` | Build the C-grid with ghost ring |
+# | `CartesianCGrid2D.from_interior` | Build the C-grid with ghost ring |
 # | `Difference2D` | Finite differences, Laplacian, divergence |
 # | `Interpolation2D` | Stagger-point averaging (T/U/V/X) |
 # | `Advection2D` | Upwind flux advection $-\nabla\cdot(h\,\mathbf{u})$ |

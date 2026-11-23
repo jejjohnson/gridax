@@ -8,9 +8,9 @@ momentum advection, and RHS assembly.
 
 Typical usage::
 
-    from gridax import uv_center_flux, CartesianGrid2D
+    from gridax import uv_center_flux, CartesianCGrid2D
 
-    grid = CartesianGrid2D.from_interior(nx, ny, Lx, Ly)
+    grid = CartesianCGrid2D.from_interior(nx, ny, Lx, Ly)
     fe, fn = uv_center_flux(h, u, v, grid)
 
 See Also
@@ -32,7 +32,7 @@ from gridax._src.advection.advection import (
 )
 from gridax._src.advection.flux import upwind_flux
 from gridax._src.advection.reconstruction import Reconstruction2D
-from gridax._src.grid import CartesianGrid2D
+from gridax._src.grid import CartesianCGrid2D
 from gridax._src.mask import Mask2D
 from gridax._src.operators.differentiable import smooth_abs
 from gridax._src.pytree import array_namespace
@@ -47,7 +47,7 @@ def uv_center_flux(
     h: Float[Array, "Ny Nx"],
     u: Float[Array, "Ny Nx"],
     v: Float[Array, "Ny Nx"],
-    grid: CartesianGrid2D,
+    grid: CartesianCGrid2D,
     method: str = "upwind1",
     mask: Mask2D | None = None,
 ) -> tuple[Float[Array, "Ny Nx"], Float[Array, "Ny Nx"]]:
@@ -73,7 +73,7 @@ def uv_center_flux(
         x-velocity at U-points.
     v : Float[Array, "Ny Nx"]
         y-velocity at V-points.
-    grid : CartesianGrid2D
+    grid : CartesianCGrid2D
         Grid object (used only for creating the reconstruction engine).
     method : str
         Reconstruction method: ``'naive'``, ``'upwind1'``, ``'upwind2'``,
@@ -99,7 +99,7 @@ def uv_node_flux(
     q: Float[Array, "Ny Nx"],
     u: Float[Array, "Ny Nx"],
     v: Float[Array, "Ny Nx"],
-    grid: CartesianGrid2D,
+    grid: CartesianCGrid2D,
     method: str = "upwind1",
     mask: Mask2D | None = None,
 ) -> tuple[Float[Array, "Ny Nx"], Float[Array, "Ny Nx"]]:
@@ -119,7 +119,7 @@ def uv_node_flux(
         x-velocity at U-points.
     v : Float[Array, "Ny Nx"]
         y-velocity at V-points.
-    grid : CartesianGrid2D
+    grid : CartesianCGrid2D
         Grid object (used only for creating the reconstruction engine).
     method : str
         Reconstruction method (same options as :func:`uv_center_flux`).

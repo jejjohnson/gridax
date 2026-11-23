@@ -89,7 +89,7 @@ def exactness(max_degree: int = 8) -> dict[str, tuple[int, int]]:
     """
     n = 40
     dx = 1.0 / 8.0  # O(1) polynomial values, so 1e-9 is a clean threshold
-    grid = fvx.CartesianGrid1D.from_interior(n, n * dx)
+    grid = fvx.CartesianCGrid1D.from_interior(n, n * dx)
     recon = fvx.Reconstruction1D(grid=grid)
     k = np.arange(n + 2)
     xl = (k - 1 - n / 2) * dx  # west face of cell k, centred on 0
@@ -142,7 +142,7 @@ def _tendency_errors_1d(
     """
     ntot = n + 2 * HALO
     dx = 1.0 / n
-    grid = fvx.CartesianGrid1D.from_interior(ntot - 2, (ntot - 2) * dx)
+    grid = fvx.CartesianCGrid1D.from_interior(ntot - 2, (ntot - 2) * dx)
     adv = fvx.Advection1D(grid=grid)
     k = np.arange(ntot)
     xl = (k - HALO) * dx  # west face of cell k
@@ -233,7 +233,7 @@ def _tendency_error_2d(method: str, n: int, variable: bool) -> float:
     """Max error of the 2-D cell-average tendency against the exact one."""
     ntot = n + 2 * HALO
     d = 1.0 / n
-    grid = fvx.CartesianGrid2D.from_interior(
+    grid = fvx.CartesianCGrid2D.from_interior(
         ntot - 2, ntot - 2, (ntot - 2) * d, (ntot - 2) * d
     )
     adv = fvx.Advection2D(grid=grid)
@@ -306,7 +306,7 @@ def _gauss_avg(lo, d, c, sig):
 
 def benchmark(n: int = 64, cfl: float = 0.25, sigma: float = 0.05) -> None:
     """One revolution of q0 = exp(-r²/2σ²) about (½, ½), centred at (½, ¾)."""
-    grid = fvx.CartesianGrid2D.from_interior(n, n, 1.0, 1.0)
+    grid = fvx.CartesianCGrid2D.from_interior(n, n, 1.0, 1.0)
     d = 1.0 / n
     k = np.arange(n + 2)
     lo = (k - 1) * d  # west / south edge of cell k (cell 1 starts at 0)
@@ -355,7 +355,7 @@ def benchmark(n: int = 64, cfl: float = 0.25, sigma: float = 0.05) -> None:
 
 def _forward_cost(n: int = 256, repeats: int = 50) -> dict[str, float]:
     """Fastest wall time (ms) of the jitted 2-D tendency."""
-    grid = fvx.CartesianGrid2D.from_interior(n, n, 1.0, 1.0)
+    grid = fvx.CartesianCGrid2D.from_interior(n, n, 1.0, 1.0)
     adv = fvx.Advection2D(grid=grid)
     q = jax.random.normal(jax.random.PRNGKey(0), (n + 2, n + 2))
     u = jax.random.normal(jax.random.PRNGKey(1), (n + 2, n + 2))

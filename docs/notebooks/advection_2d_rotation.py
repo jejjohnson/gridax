@@ -146,7 +146,7 @@ ng = 5  # ghost cells per side (≥ 5 for WENO9)
 # --- grid ---
 dx = Lx / nx
 dy = Ly / ny
-grid = fvx.CartesianGrid2D(
+grid = fvx.CartesianCGrid2D(
     Nx=nx + 2 * ng, Ny=ny + 2 * ng, Lx=Lx, Ly=Ly, ghost=ng
 )
 

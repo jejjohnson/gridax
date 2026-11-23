@@ -155,7 +155,7 @@ def energy_graph() -> Graph:
 
 
 def _initial_state() -> dict[str, jax.Array]:
-    g = fvx.CartesianGrid2D.from_interior(*SW_SPEC)
+    g = fvx.CartesianCGrid2D.from_interior(*SW_SPEC)
     y = (jnp.arange(g.Ny) - 0.5) / N
     x = (jnp.arange(g.Nx) - 0.5) / N
     Y, X = jnp.meshgrid(y, x, indexing="ij")
@@ -167,7 +167,7 @@ def _initial_state() -> dict[str, jax.Array]:
 def test_energy_graph_equals_tier_a_on_a_trajectory():
     traj = {k: _field(i, (4,)) for i, k in enumerate("huv")}
     got = energy_graph()(**traj)["E"]
-    g = fvx.CartesianGrid2D.from_interior(*SW_SPEC)
+    g = fvx.CartesianCGrid2D.from_interior(*SW_SPEC)
     filled = {k: fvx.enforce_periodic(traj[k]) for k in "huv"}
     ke = fvx.Energetics2D(grid=g).kinetic_energy(filled["u"], filled["v"])
     ape = 0.5 * G * filled["h"] ** 2

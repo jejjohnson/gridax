@@ -21,9 +21,9 @@ CHECKS = textwrap.dedent(
 
     import gridax
 
-    gridax.CartesianGrid1D.from_interior(4, 1.0)
-    gridax.CartesianGrid3D.from_interior(4, 4, 4, 1.0, 1.0, 1.0).horizontal_grid()
-    s = gridax.SphericalGrid3D.from_interior(8, 6, 3, (0, 40), (-30, 30), 1.0)
+    gridax.CartesianCGrid1D.from_interior(4, 1.0)
+    gridax.CartesianCGrid3D.from_interior(4, 4, 4, 1.0, 1.0, 1.0).horizontal_grid()
+    s = gridax.SphericalCGrid3D.from_interior(8, 6, 3, (0, 40), (-30, 30), 1.0)
     float(s.min_cell_width), float(s.max_aspect), s.horizontal_grid().spacing("x", at="V")
 
     h = np.ones((8, 8), dtype=bool)
@@ -38,9 +38,9 @@ CHECKS = textwrap.dedent(
     gridax.interior(gridax.diff_x_fwd_2d(h2) + gridax.avg_y_bwd_2d(h2), h2)
     gridax.smooth_clamp(h2, 3.0)
 
-    g2 = gridax.CartesianGrid2D.from_interior(4, 3, 1.0, 1.0)
+    g2 = gridax.CartesianCGrid2D.from_interior(4, 3, 1.0, 1.0)
     gridax.Difference2D(grid=g2, mask=gridax.Mask2D.from_mask(np.ones((5, 6), bool))).laplacian(h2)
-    g3 = gridax.CartesianGrid3D.from_interior(4, 3, 2, 1.0, 1.0, 1.0)
+    g3 = gridax.CartesianCGrid3D.from_interior(4, 3, 2, 1.0, 1.0, 1.0)
     gridax.Vorticity3D(grid=g3).relative_vorticity(np.stack([h2] * 4), np.stack([h2] * 4))
 
     from gridax import analysis

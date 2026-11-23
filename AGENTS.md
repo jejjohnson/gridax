@@ -20,7 +20,7 @@ The repository is a uv workspace with one package, `packages/gridax/` (`src/grid
 
 | Area | Path (under `gridax/_src/`) | Owns |
 |---|---|---|
-| Grids | `gridax/_src/grid/` | `ArakawaCGrid*` (topology) → `CurvilinearGrid*` (uniform metric) → `CartesianGrid1D/2D/3D`, `SphericalGrid2D/3D` (`base.py`, `cartesian.py`, `spherical.py`): frozen dataclasses built with NumPy, registered as JAX pytrees by `gridax/_src/pytree.py` when JAX is importable |
+| Grids | `gridax/_src/grid/` | `ArakawaCGrid*` (topology) → `CurvilinearGrid*` (uniform metric) → `CartesianCGrid1D/2D/3D`, `SphericalCGrid2D/3D` (`base.py`, `cartesian.py`, `spherical.py`): frozen dataclasses built with NumPy, registered as JAX pytrees by `gridax/_src/pytree.py` when JAX is importable |
 | Masks | `gridax/_src/mask/` | `Mask1D/2D/3D` (`cartesian.py`), frozen NumPy dataclasses like the grids: staggered wet masks, coast classification, `StencilCapability*` (`base.py`), adaptive stencil hierarchies; numpy / scipy construction helpers (`utils.py`) |
 | Analysis kernels | `gridax/_src/analysis/` (public: `gridax.analysis`) | Finite differences on collocated grids (`difference`, `adaptive_difference`, 1-D / 2-D / 3-D gradient, divergence, curl, Laplacian) and axis remapping (`remap_axis`, `remap_axis_columns`), array-API code that runs on NumPy, JAX or any backend; the kernels behind geoops' and xrops' calculus and remap operators |
 | Layer 0: coefficients | `gridax/_src/stencils/coefficients.py` (public: `gridax.stencils`) | `difference_offsets` / `difference_coeffs`: offsets and exact coefficients from the Taylor conditions, for point values or cell averages (`data=`), collocated or staggered (`method="staggered"`, `bias=`); `weno_stencils`, `optimal_weights`, `smoothness_matrix` (the linear parts of WENO); `nonuniform_coeffs` |
@@ -132,7 +132,7 @@ The long form, with figures, is in `docs/cgrid_discretization.md`,
 - All arrays have total shape `[Ny, Nx]` (`[Nx]` in 1-D, `[Nz, Ny, Nx]` in
   3-D). The physical interior is `[1:-1, 1:-1]`; one ghost ring on each side
   is reserved for boundary conditions. Grids are built with
-  `CartesianGrid2D.from_interior(nx, ny, Lx, Ly)`, which adds the ring.
+  `CartesianCGrid2D.from_interior(nx, ny, Lx, Ly)`, which adds the ring.
 - The 2-D Cartesian operators, diagnostics and BCs also take leading batch
   axes, `[*batch, Ny, Nx]` (annotated `"*batch Ny Nx"`): slice and index
   the trailing two axes with a `...` prefix (`h[..., 1:-1, 2:]`,
@@ -229,9 +229,9 @@ apply BCs to intermediate fields before chaining operators.
 - **Layer 3 classes** are `pytree_dataclass`es (in gridax) holding `grid` and `mask` (default
   `None`), with any precomputation (adaptive-stencil hierarchies, an inner
   `Interpolation2D`, …) done once in `__init__`. Cartesian operators are
-  annotated with `CartesianGrid*` (coordinate-agnostic ones such as
+  annotated with `CartesianCGrid*` (coordinate-agnostic ones such as
   `Interpolation*` and `Reconstruction*` accept any grid of their
-  dimension); spherical operators take `SphericalGrid*` and are separate
+  dimension); spherical operators take `SphericalCGrid*` and are separate
   `Spherical*` classes that share the raw stencils.
 - **Comment every stencil with its half-index formula** and track shapes in
   comments (`# [Ny, Nx]`).

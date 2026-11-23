@@ -148,9 +148,9 @@ the one whose stencil size the mask hierarchy assigns to the upwind cell:
 
 ```python
 import jax.numpy as jnp
-from gridax import CartesianGrid2D, Mask2D, Reconstruction2D, upwind_flux
+from gridax import CartesianCGrid2D, Mask2D, Reconstruction2D, upwind_flux
 
-grid = CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
+grid = CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
 recon = Reconstruction2D(grid=grid)
 mask = Mask2D.from_dimensions(grid.Ny, grid.Nx)
 hier = mask.get_adaptive_masks(direction="x", stencil_sizes=(2, 4, 6))
@@ -368,9 +368,9 @@ reuses it.
 ```python
 import jax.numpy as jnp
 import numpy as np
-from gridax import Advection2D, CartesianGrid2D, Mask2D
+from gridax import Advection2D, CartesianCGrid2D, Mask2D
 
-grid = CartesianGrid2D.from_interior(16, 16, 1.0, 1.0)
+grid = CartesianCGrid2D.from_interior(16, 16, 1.0, 1.0)
 wet = np.ones((grid.Ny, grid.Nx), dtype=bool)
 wet[:2, :] = wet[-2:, :] = wet[:, :2] = wet[:, -2:] = False  # land walls
 wet[7:11, 7:11] = False  # an island
@@ -477,13 +477,13 @@ the same axis:
 import jax.numpy as jnp
 from gridax import (
     Advection2D,
-    CartesianGrid2D,
+    CartesianCGrid2D,
     Interpolation2D,
     interior,
     rusanov_flux,
 )
 
-grid = CartesianGrid2D.from_interior(16, 16, 1.0, 1.0)
+grid = CartesianCGrid2D.from_interior(16, 16, 1.0, 1.0)
 y, x = jnp.meshgrid(jnp.arange(grid.Ny), jnp.arange(grid.Nx), indexing="ij")
 q = jnp.sin(0.4 * x) + jnp.cos(0.3 * y)  # [Ny, Nx] T-points
 u = jnp.cos(0.2 * y)  # [Ny, Nx] U-points
@@ -518,9 +518,9 @@ dhq = adv(q, U, V, method="weno5")  # -div(q U): tendency of h q
 ```python
 import jax.numpy as jnp
 import numpy as np
-from gridax import CartesianGrid2D, Advection2D, Mask2D
+from gridax import CartesianCGrid2D, Advection2D, Mask2D
 
-grid = CartesianGrid2D.from_interior(64, 64, 1e6, 1e6)
+grid = CartesianCGrid2D.from_interior(64, 64, 1e6, 1e6)
 
 # Construct once; the operator is method-agnostic.
 adv = Advection2D(grid=grid)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import gridax
-from gridax import CartesianGrid2D
+from gridax import CartesianCGrid2D
 from gridax._src.operators.difference import Difference2D
 from gridax._src.operators.divergence import Divergence2D
 import jax.numpy as jnp
@@ -13,7 +13,7 @@ import pytest
 
 @pytest.fixture
 def grid():
-    return CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
+    return CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
 
 
 @pytest.fixture
@@ -136,7 +136,7 @@ class TestDivergence2DClass:
             v =  diff_x_X_to_V(psi)
         are exactly non-divergent at interior T-points.
         """
-        grid = CartesianGrid2D.from_interior(16, 16, 2.0 * np.pi, 2.0 * np.pi)
+        grid = CartesianCGrid2D.from_interior(16, 16, 2.0 * np.pi, 2.0 * np.pi)
         diff = Difference2D(grid=grid)
         div_op = Divergence2D(grid=grid)
 

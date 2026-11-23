@@ -1,6 +1,6 @@
 """Tests for Vorticity2D and Vorticity3D."""
 
-from gridax import CartesianGrid2D, CartesianGrid3D
+from gridax import CartesianCGrid2D, CartesianCGrid3D
 from gridax._src.operators.vorticity import Vorticity2D, Vorticity3D
 import jax.numpy as jnp
 import numpy as np
@@ -9,12 +9,12 @@ import pytest
 
 @pytest.fixture
 def grid2d():
-    return CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
+    return CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
 
 
 @pytest.fixture
 def grid3d():
-    return CartesianGrid3D.from_interior(6, 6, 4, 1.0, 1.0, 1.0)
+    return CartesianCGrid3D.from_interior(6, 6, 4, 1.0, 1.0, 1.0)
 
 
 class TestVorticity2D:

@@ -27,14 +27,14 @@ import ast
 import pathlib
 
 from gridax import (
-    CartesianGrid1D,
-    CartesianGrid2D,
-    CartesianGrid3D,
+    CartesianCGrid1D,
+    CartesianCGrid2D,
+    CartesianCGrid3D,
     Mask1D,
     Mask2D,
     Mask3D,
-    SphericalGrid2D,
-    SphericalGrid3D,
+    SphericalCGrid2D,
+    SphericalCGrid3D,
 )
 from gridax._src.advection.advection import (
     Advection1D,
@@ -152,17 +152,17 @@ def smooth_field_3d(seed, shape=DEFAULT_SHAPE):
 
 
 def cartesian_grid_1d(length_factor, shape=DEFAULT_SHAPE):
-    return CartesianGrid1D.from_interior(shape[-1] - 2, LX / length_factor)
+    return CartesianCGrid1D.from_interior(shape[-1] - 2, LX / length_factor)
 
 
 def cartesian_grid(length_factor, shape=DEFAULT_SHAPE):
-    return CartesianGrid2D.from_interior(
+    return CartesianCGrid2D.from_interior(
         shape[-1] - 2, shape[-2] - 2, LX / length_factor, LY / length_factor
     )
 
 
 def cartesian_grid_3d(length_factor, shape=DEFAULT_SHAPE):
-    return CartesianGrid3D.from_interior(
+    return CartesianCGrid3D.from_interior(
         shape[-1] - 2,
         shape[-2] - 2,
         shape[-3] - 2,
@@ -174,7 +174,7 @@ def cartesian_grid_3d(length_factor, shape=DEFAULT_SHAPE):
 
 def spherical_grid(length_factor, shape=DEFAULT_SHAPE):
     """Angles are invariant under rescaling; only the radius carries length."""
-    return SphericalGrid2D.from_interior(
+    return SphericalCGrid2D.from_interior(
         shape[-1] - 2,
         shape[-2] - 2,
         lon_range=(0.0, 40.0),
@@ -185,7 +185,7 @@ def spherical_grid(length_factor, shape=DEFAULT_SHAPE):
 
 def spherical_grid_3d(length_factor, shape=DEFAULT_SHAPE):
     """As :func:`spherical_grid`; the vertical extent is a length too."""
-    return SphericalGrid3D.from_interior(
+    return SphericalCGrid3D.from_interior(
         shape[-1] - 2,
         shape[-2] - 2,
         shape[-3] - 2,
@@ -1057,7 +1057,7 @@ class TestMultilayerQGStretching:
 
     def _setup(self):
         n, length = 18, 1.0e6
-        grid = CartesianGrid2D.from_interior(n, n, Lx=length, Ly=length)
+        grid = CartesianCGrid2D.from_interior(n, n, Lx=length, Ly=length)
         x = (jnp.arange(grid.Nx) - 0.5) * grid.spacing("x")
         y1 = (jnp.arange(grid.Ny) - 0.5) * grid.spacing("y")
         yy = jnp.broadcast_to(y1[:, None], (grid.Ny, grid.Nx))

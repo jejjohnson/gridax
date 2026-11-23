@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from gridax import CartesianGrid2D, CartesianGrid3D
+from gridax import CartesianCGrid2D, CartesianCGrid3D
 from gridax._src.diffusion.momentum import MomentumAdvection2D, MomentumAdvection3D
 import jax.numpy as jnp
 import numpy as np
@@ -11,12 +11,12 @@ import pytest
 
 @pytest.fixture
 def grid2d():
-    return CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
+    return CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
 
 
 @pytest.fixture
 def grid3d():
-    return CartesianGrid3D.from_interior(6, 6, 4, 1.0, 1.0, 1.0)
+    return CartesianCGrid3D.from_interior(6, 6, 4, 1.0, 1.0, 1.0)
 
 
 class TestMomentumAdvection2D:
@@ -269,7 +269,7 @@ def _compact_nondivergent_flow(n: int = 36, seed: int = 0):
     support keeps every term of the budgets inside MomentumAdvection2D's
     [2:-2] write region, so the sums below are exact summations by parts.
     """
-    grid = CartesianGrid2D.from_interior(n - 2, n - 2, 1.0, 1.0)
+    grid = CartesianCGrid2D.from_interior(n - 2, n - 2, 1.0, 1.0)
     rng = np.random.default_rng(seed)
     window = np.zeros((n, n))
     window[6:-6, 6:-6] = 1.0

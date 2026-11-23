@@ -139,9 +139,9 @@ class TestZeroZGhosts:
 
 class TestSameValues:
     def setup_method(self):
-        self.g1 = fvx.CartesianGrid1D.from_interior(NX - 2, 3.0)
-        self.g2 = fvx.CartesianGrid2D.from_interior(NX - 2, NY - 2, 3.0, 2.0)
-        self.g3 = fvx.CartesianGrid3D.from_interior(NX - 2, NY - 2, 3, 3.0, 2.0, 1.0)
+        self.g1 = fvx.CartesianCGrid1D.from_interior(NX - 2, 3.0)
+        self.g2 = fvx.CartesianCGrid2D.from_interior(NX - 2, NY - 2, 3.0, 2.0)
+        self.g3 = fvx.CartesianCGrid3D.from_interior(NX - 2, NY - 2, 3, 3.0, 2.0, 1.0)
 
     def test_laplacian_1d(self):
         h = _field(NX)
@@ -234,7 +234,7 @@ class TestSameValues:
 
     @pytest.mark.slow
     def test_spherical_diffusion_keeps_float32_with_float64_kappa(self):
-        gs = fvx.SphericalGrid2D.from_interior(
+        gs = fvx.SphericalCGrid2D.from_interior(
             NX - 2, NY - 2, lon_range=(0.0, 30.0), lat_range=(-20.0, 20.0)
         )
         h = _field(NY, NX, seed=5).astype(jnp.float32)
@@ -269,10 +269,10 @@ class TestSameValues:
 
 class TestOnePadPerOffset:
     def setup_method(self):
-        self.g1 = fvx.CartesianGrid1D.from_interior(NX - 2, 3.0)
-        self.g2 = fvx.CartesianGrid2D.from_interior(NX - 2, NY - 2, 3.0, 2.0)
-        self.g3 = fvx.CartesianGrid3D.from_interior(NX - 2, NY - 2, 3, 3.0, 2.0, 1.0)
-        self.gs = fvx.SphericalGrid2D.from_interior(
+        self.g1 = fvx.CartesianCGrid1D.from_interior(NX - 2, 3.0)
+        self.g2 = fvx.CartesianCGrid2D.from_interior(NX - 2, NY - 2, 3.0, 2.0)
+        self.g3 = fvx.CartesianCGrid3D.from_interior(NX - 2, NY - 2, 3, 3.0, 2.0, 1.0)
+        self.gs = fvx.SphericalCGrid2D.from_interior(
             NX - 2, NY - 2, lon_range=(0.0, 30.0), lat_range=(-20.0, 20.0)
         )
 
@@ -357,7 +357,7 @@ class TestUnrolledSmoothnessIndicator:
 
     def test_no_dot_general_in_weno7_advection(self):
         """The indicators lower to elementwise code, not a stack + dot."""
-        g2 = fvx.CartesianGrid2D.from_interior(NX - 2, NY - 2, 3.0, 2.0)
+        g2 = fvx.CartesianCGrid2D.from_interior(NX - 2, NY - 2, 3.0, 2.0)
         adv = fvx.Advection2D(g2)
         h, u, v = (_field(NY, NX, seed=k) for k in range(3))
         jaxpr = jax.make_jaxpr(lambda a, b, c: adv(a, b, c, method="weno7"))(h, u, v)

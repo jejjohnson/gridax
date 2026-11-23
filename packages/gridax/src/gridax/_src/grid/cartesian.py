@@ -19,7 +19,7 @@ from gridax._src.pytree import pytree_dataclass
 
 
 @pytree_dataclass
-class CartesianGrid1D(CurvilinearGrid1D):
+class CartesianCGrid1D(CurvilinearGrid1D):
     """1-D Cartesian Arakawa C-grid (uniform spacing).
 
     All field arrays have total shape ``[Nx]``.  The physical interior
@@ -39,7 +39,7 @@ class CartesianGrid1D(CurvilinearGrid1D):
     """
 
     @classmethod
-    def from_interior(cls, nx_interior: int, Lx: float) -> CartesianGrid1D:
+    def from_interior(cls, nx_interior: int, Lx: float) -> CartesianCGrid1D:
         """Construct grid from interior cell count.
 
         Parameters
@@ -51,13 +51,13 @@ class CartesianGrid1D(CurvilinearGrid1D):
 
         Returns
         -------
-        CartesianGrid1D
+        CartesianCGrid1D
         """
         return cls(Nx=nx_interior + 2, Lx=_as_leaf(Lx))
 
 
 @pytree_dataclass
-class CartesianGrid2D(CurvilinearGrid2D):
+class CartesianCGrid2D(CurvilinearGrid2D):
     """2-D Cartesian Arakawa C-grid (uniform spacing).
 
     All field arrays have total shape ``[Ny, Nx]``.  The physical
@@ -86,7 +86,7 @@ class CartesianGrid2D(CurvilinearGrid2D):
     @classmethod
     def from_interior(
         cls, nx_interior: int, ny_interior: int, Lx: float, Ly: float
-    ) -> CartesianGrid2D:
+    ) -> CartesianCGrid2D:
         """Construct grid from interior cell counts.
 
         Parameters
@@ -102,7 +102,7 @@ class CartesianGrid2D(CurvilinearGrid2D):
 
         Returns
         -------
-        CartesianGrid2D
+        CartesianCGrid2D
         """
         return cls(
             Nx=nx_interior + 2, Ny=ny_interior + 2, Lx=_as_leaf(Lx), Ly=_as_leaf(Ly)
@@ -110,7 +110,7 @@ class CartesianGrid2D(CurvilinearGrid2D):
 
 
 @pytree_dataclass
-class CartesianGrid3D(CurvilinearGrid3D):
+class CartesianCGrid3D(CurvilinearGrid3D):
     """3-D Cartesian Arakawa C-grid (uniform spacing).
 
     All field arrays have total shape ``[Nz, Ny, Nx]``.  The physical
@@ -149,7 +149,7 @@ class CartesianGrid3D(CurvilinearGrid3D):
         Lx: float,
         Ly: float,
         Lz: float,
-    ) -> CartesianGrid3D:
+    ) -> CartesianCGrid3D:
         """Construct grid from interior cell counts.
 
         Parameters
@@ -169,7 +169,7 @@ class CartesianGrid3D(CurvilinearGrid3D):
 
         Returns
         -------
-        CartesianGrid3D
+        CartesianCGrid3D
         """
         return cls(
             Nx=nx_interior + 2,
@@ -180,14 +180,14 @@ class CartesianGrid3D(CurvilinearGrid3D):
             Lz=_as_leaf(Lz),
         )
 
-    def horizontal_grid(self) -> CartesianGrid2D:
+    def horizontal_grid(self) -> CartesianCGrid2D:
         """Extract the horizontal 2-D grid from this 3-D grid.
 
         Returns
         -------
-        CartesianGrid2D
+        CartesianCGrid2D
             A 2-D grid with the same Nx, Ny, Lx, Ly and ghost ring.
         """
-        return CartesianGrid2D(
+        return CartesianCGrid2D(
             Nx=self.Nx, Ny=self.Ny, Lx=self.Lx, Ly=self.Ly, ghost=self.ghost
         )

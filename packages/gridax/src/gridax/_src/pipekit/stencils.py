@@ -78,7 +78,7 @@ class Difference(GridOperator):
 
     Attributes
     ----------
-    grid : CartesianGrid2D
+    grid : CartesianCGrid2D
         The grid, or ``(nx_interior, ny_interior, Lx, Ly)``.
     axis : {"x", "y"}
         Difference direction.
@@ -132,7 +132,7 @@ class Interp(GridOperator):
 
     Attributes
     ----------
-    grid : CartesianGrid2D
+    grid : CartesianCGrid2D
         The grid, or ``(nx_interior, ny_interior, Lx, Ly)``.
     src, dst : {"T", "U", "V", "X"}
         Source and destination stagger; see `INTERPOLATIONS`.
@@ -158,7 +158,7 @@ class Coriolis(GridOperator):
 
     Attributes
     ----------
-    grid : CartesianGrid2D
+    grid : CartesianCGrid2D
         The grid, or ``(nx_interior, ny_interior, Lx, Ly)``.
     f0 : Array
         Reference Coriolis parameter.

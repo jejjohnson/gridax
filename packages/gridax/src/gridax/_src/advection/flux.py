@@ -18,9 +18,9 @@ which the flux is computed (the axis *perpendicular* to the face):
 Typical 2-D usage::
 
     from gridax import Mask2D, upwind_flux
-    from gridax import Reconstruction2D, CartesianGrid2D
+    from gridax import Reconstruction2D, CartesianCGrid2D
 
-    grid = CartesianGrid2D.from_interior(nx_interior, ny_interior, Lx, Ly)
+    grid = CartesianCGrid2D.from_interior(nx_interior, ny_interior, Lx, Ly)
     recon = Reconstruction2D(grid=grid)
     mask = Mask2D.from_mask(h_mask)
 
@@ -190,13 +190,13 @@ def upwind_flux(
     --------
     >>> import jax.numpy as jnp
     >>> from gridax import (
-    ...     CartesianGrid2D,
+    ...     CartesianCGrid2D,
     ...     Mask2D,
     ...     Reconstruction2D,
     ...     upwind_flux,
     ... )
     >>> Ny, Nx = 10, 10
-    >>> grid = CartesianGrid2D.from_interior(Ny - 2, Nx - 2, 1.0, 1.0)
+    >>> grid = CartesianCGrid2D.from_interior(Ny - 2, Nx - 2, 1.0, 1.0)
     >>> recon = Reconstruction2D(grid=grid)
     >>> mask = Mask2D.from_dimensions(Ny, Nx)
     >>> mask_hier = mask.get_adaptive_masks(direction="x", stencil_sizes=(2, 4, 6))

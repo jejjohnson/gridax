@@ -86,7 +86,7 @@ ALLOWED_SHARED_NAMES: dict[str, str] = {
         " gaussx through as_preconditioner(); gaussx's is CG preconditioned by"
         " one V-cycle over caller-built levels (#474)"
     ),
-    "SphericalGrid2D": (
+    "SphericalCGrid2D": (
         "gridax's is a lat-lon Arakawa C-grid container with a ghost ring;"
         " spectraldiffx's is the spectral (spherical-harmonic) grid"
     ),

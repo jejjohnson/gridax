@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from gridax import CartesianGrid2D, CartesianGrid3D
+from gridax import CartesianCGrid2D, CartesianCGrid3D
 from gridax._src.diffusion.diffusion import Diffusion2D, Diffusion3D, diffusion_2d
 import jax.numpy as jnp
 import numpy as np
@@ -11,12 +11,12 @@ import pytest
 
 @pytest.fixture
 def grid():
-    return CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
+    return CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
 
 
 @pytest.fixture
 def grid3d():
-    return CartesianGrid3D.from_interior(4, 8, 8, 1.0, 1.0, 1.0)
+    return CartesianCGrid3D.from_interior(4, 8, 8, 1.0, 1.0, 1.0)
 
 
 @pytest.fixture
@@ -422,7 +422,7 @@ class TestBiharmonicDiffusion2D:
         N_int = 64
         Lx = 2.0 * float(jnp.pi)
         Ly = 2.0 * float(jnp.pi)
-        grid = CartesianGrid2D.from_interior(N_int, N_int, Lx, Ly)
+        grid = CartesianCGrid2D.from_interior(N_int, N_int, Lx, Ly)
         op = BiharmonicDiffusion2D(grid=grid)
 
         k1, k4 = 1, 4
@@ -477,7 +477,7 @@ class TestBiharmonicDiffusion2D:
         N_int = 64
         Lx = 2.0 * float(jnp.pi)
         Ly = 2.0 * float(jnp.pi)
-        grid = CartesianGrid2D.from_interior(N_int, N_int, Lx, Ly)
+        grid = CartesianCGrid2D.from_interior(N_int, N_int, Lx, Ly)
 
         harm_op = Diffusion2D(grid=grid)
         biharm_op = BiharmonicDiffusion2D(grid=grid)
@@ -590,7 +590,7 @@ def _exact_div_kappa_grad_2d(x, y, Lx, Ly):
 def _variable_kappa_error_2d(n: int) -> float:
     import jax
 
-    grid = CartesianGrid2D.from_interior(n, n, 1.0, 1.0)
+    grid = CartesianCGrid2D.from_interior(n, n, 1.0, 1.0)
     # T[j, i] sits at (i dx, j dy); the closed walls are the faces at dx/2 and
     # (n + 1/2) dx, so shift the coordinates to put the walls at 0 and L
     ii = (jnp.arange(grid.Nx) - 0.5) * grid.spacing("x")
@@ -681,7 +681,7 @@ class TestVariableKappa:
         from gridax import Mask2D
         import jax
 
-        g = CartesianGrid2D.from_interior(6, 6, 1.0, 1.0)
+        g = CartesianCGrid2D.from_interior(6, 6, 1.0, 1.0)
         m = np.ones((g.Ny, g.Nx), dtype=bool)
         m[[0, -1], :] = False
         m[:, [0, -1]] = False

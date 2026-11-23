@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from gridax import (
-    CartesianGrid2D,
-    CartesianGrid3D,
+    CartesianCGrid2D,
+    CartesianCGrid3D,
     Mask2D,
     Mask3D,
-    SphericalGrid2D,
-    SphericalGrid3D,
+    SphericalCGrid2D,
+    SphericalCGrid3D,
 )
 from gridax._src.operators.reductions import (
     area_mean,
@@ -42,14 +42,14 @@ R = 6.371e6
 
 class TestWeights:
     def test_cartesian_area_weights_uniform(self):
-        grid = CartesianGrid2D.from_interior(
+        grid = CartesianCGrid2D.from_interior(
             nx_interior=10, ny_interior=8, Lx=20.0, Ly=16.0
         )
         w = area_weights(grid)
         np.testing.assert_allclose(w, grid.spacing("x") * grid.spacing("y"))
 
     def test_spherical_area_weights_cos_weighted(self):
-        grid = SphericalGrid2D.from_interior(
+        grid = SphericalCGrid2D.from_interior(
             nx_interior=10,
             ny_interior=8,
             lon_range=(0.0, 360.0),
@@ -68,7 +68,7 @@ class TestWeights:
     @pytest.mark.parametrize("ny", [6, 24, 45])
     def test_spherical_area_sums_to_the_sphere(self, ny):
         """#322: the interior weights of a whole-sphere grid sum to 4πR² exactly."""
-        grid = SphericalGrid2D.from_interior(
+        grid = SphericalCGrid2D.from_interior(
             nx_interior=2 * ny,
             ny_interior=ny,
             lon_range=(0.0, 360.0),
@@ -80,7 +80,7 @@ class TestWeights:
 
     def test_spherical_area_weights_are_never_negative(self):
         """Ghost rows past a pole get zero weight, in float32 and float64."""
-        grid = SphericalGrid2D.from_interior(
+        grid = SphericalCGrid2D.from_interior(
             nx_interior=8,
             ny_interior=6,
             lon_range=(0.0, 360.0),
@@ -92,7 +92,7 @@ class TestWeights:
         assert (w[0] == 0.0).all() and (w[-1] == 0.0).all()
 
     def test_volume_weights_cartesian(self):
-        grid = CartesianGrid3D.from_interior(
+        grid = CartesianCGrid3D.from_interior(
             nx_interior=8,
             ny_interior=8,
             nz_interior=4,
@@ -106,7 +106,7 @@ class TestWeights:
         )
 
     def test_volume_weights_spherical(self):
-        grid = SphericalGrid3D.from_interior(
+        grid = SphericalCGrid3D.from_interior(
             nx_interior=8,
             ny_interior=6,
             nz_interior=3,
@@ -137,7 +137,7 @@ class TestWeights:
 class TestCartesianArea:
     @pytest.fixture
     def grid(self):
-        return CartesianGrid2D.from_interior(
+        return CartesianCGrid2D.from_interior(
             nx_interior=10, ny_interior=8, Lx=10.0, Ly=8.0
         )
 
@@ -199,7 +199,7 @@ class TestSphericalArea:
     @pytest.mark.slow
     def test_full_sphere_area_sum_is_4piR2(self):
         """Integrating 1 over the full sphere gives 4πR² (exact cell areas, #322)."""
-        grid = SphericalGrid2D.from_interior(
+        grid = SphericalCGrid2D.from_interior(
             nx_interior=128,
             ny_interior=64,
             lon_range=(0.0, 360.0),
@@ -219,14 +219,14 @@ class TestSphericalArea:
         the error. The exact cell areas leave only round-off (~1e-16) at both
         resolutions, and the order of two round-off errors is not a property.
         """
-        coarse = SphericalGrid2D.from_interior(
+        coarse = SphericalCGrid2D.from_interior(
             32,
             16,
             lon_range=(0.0, 360.0),
             lat_range=(-80.0, 80.0),
             R=R,
         )
-        fine = SphericalGrid2D.from_interior(
+        fine = SphericalCGrid2D.from_interior(
             128,
             64,
             lon_range=(0.0, 360.0),
@@ -250,7 +250,7 @@ class TestSphericalArea:
         )
 
     def test_constant_mean_is_field_value(self):
-        grid = SphericalGrid2D.from_interior(
+        grid = SphericalCGrid2D.from_interior(
             32,
             16,
             lon_range=(0.0, 360.0),
@@ -265,14 +265,14 @@ class TestSphericalArea:
     def test_equatorial_limit_matches_cartesian(self):
         """Narrow lat band around equator → spherical ≈ cartesian sum."""
         nx, ny = 32, 4
-        sphere = SphericalGrid2D.from_interior(
+        sphere = SphericalCGrid2D.from_interior(
             nx,
             ny,
             lon_range=(0.0, 10.0),
             lat_range=(-0.1, 0.1),
             R=R,
         )
-        cart = CartesianGrid2D.from_interior(
+        cart = CartesianCGrid2D.from_interior(
             nx,
             ny,
             Lx=sphere.Lx,
@@ -286,7 +286,7 @@ class TestSphericalArea:
 
     @pytest.mark.slow
     def test_alias_spherical_area_sum(self):
-        grid = SphericalGrid2D.from_interior(
+        grid = SphericalCGrid2D.from_interior(
             16,
             10,
             lon_range=(0.0, 360.0),
@@ -307,7 +307,7 @@ class TestSphericalArea:
         )
 
     def test_masked_all_dry_mean_nan(self):
-        grid = SphericalGrid2D.from_interior(
+        grid = SphericalCGrid2D.from_interior(
             16,
             10,
             lon_range=(0.0, 360.0),
@@ -319,7 +319,7 @@ class TestSphericalArea:
         assert jnp.isnan(area_mean(h, grid, mask=all_dry))
 
     def test_jit_grad(self):
-        grid = SphericalGrid2D.from_interior(
+        grid = SphericalCGrid2D.from_interior(
             16,
             10,
             lon_range=(0.0, 360.0),
@@ -344,7 +344,7 @@ class TestSphericalArea:
 class TestVolume:
     @pytest.fixture
     def cart_grid(self):
-        return CartesianGrid3D.from_interior(
+        return CartesianCGrid3D.from_interior(
             nx_interior=8,
             ny_interior=6,
             nz_interior=4,
@@ -355,7 +355,7 @@ class TestVolume:
 
     @pytest.fixture
     def sph_grid(self):
-        return SphericalGrid3D.from_interior(
+        return SphericalCGrid3D.from_interior(
             nx_interior=16,
             ny_interior=10,
             nz_interior=4,
@@ -448,7 +448,7 @@ class TestVolume:
 
 class TestDryCellNaNSafety:
     def test_area_sum_dry_nan_does_not_contaminate(self):
-        grid = CartesianGrid2D.from_interior(
+        grid = CartesianCGrid2D.from_interior(
             nx_interior=10, ny_interior=8, Lx=10.0, Ly=8.0
         )
         mask_arr = np.ones((grid.Ny, grid.Nx), dtype=bool)
@@ -468,7 +468,7 @@ class TestDryCellNaNSafety:
         np.testing.assert_allclose(float(s), expected, rtol=1e-12)
 
     def test_area_mean_dry_nan_does_not_contaminate(self):
-        grid = SphericalGrid2D.from_interior(
+        grid = SphericalCGrid2D.from_interior(
             16,
             10,
             lon_range=(0.0, 360.0),
@@ -488,7 +488,7 @@ class TestDryCellNaNSafety:
         np.testing.assert_allclose(float(mean), 2.5, rtol=1e-10)
 
     def test_volume_sum_dry_nan_does_not_contaminate(self):
-        grid = CartesianGrid3D.from_interior(
+        grid = CartesianCGrid3D.from_interior(
             nx_interior=6,
             ny_interior=6,
             nz_interior=4,
@@ -512,7 +512,7 @@ class TestDryCellNaNSafety:
         np.testing.assert_allclose(float(s), expected, rtol=1e-12)
 
     def test_volume_mean_dry_nan_does_not_contaminate(self):
-        grid = SphericalGrid3D.from_interior(
+        grid = SphericalCGrid3D.from_interior(
             16,
             10,
             nz_interior=3,
@@ -556,7 +556,7 @@ class TestDtypePreservation:
     """
 
     def test_area_sum_mask_matches_unmasked_dtype_cartesian(self):
-        grid = CartesianGrid2D.from_interior(
+        grid = CartesianCGrid2D.from_interior(
             nx_interior=8,
             ny_interior=6,
             Lx=1.0,
@@ -568,7 +568,7 @@ class TestDtypePreservation:
         assert area_mean(field, grid, mask=m).dtype == area_mean(field, grid).dtype
 
     def test_area_sum_mask_matches_unmasked_dtype_spherical(self):
-        grid = SphericalGrid2D.from_interior(
+        grid = SphericalCGrid2D.from_interior(
             16,
             10,
             lon_range=(0.0, 360.0),
@@ -581,7 +581,7 @@ class TestDtypePreservation:
         assert area_mean(field, grid, mask=m).dtype == area_mean(field, grid).dtype
 
     def test_volume_mask_matches_unmasked_dtype(self):
-        grid = CartesianGrid3D.from_interior(
+        grid = CartesianCGrid3D.from_interior(
             nx_interior=4,
             ny_interior=4,
             nz_interior=3,
@@ -596,7 +596,7 @@ class TestDtypePreservation:
 
     def test_float32_sum_stays_float32(self):
         """Under JAX weak promotion, f32 field × weak-f64 weights → f32."""
-        grid = CartesianGrid2D.from_interior(
+        grid = CartesianCGrid2D.from_interior(
             nx_interior=8,
             ny_interior=6,
             Lx=1.0,

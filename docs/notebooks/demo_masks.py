@@ -63,7 +63,7 @@ import numpy as np
 
 jax.config.update("jax_enable_x64", True)
 
-from gridax import CartesianGrid2D, Mask2D
+from gridax import CartesianCGrid2D, Mask2D
 
 IMG_DIR = Path(__file__).resolve().parent.parent / "images" / "demo_masks"
 IMG_DIR.mkdir(parents=True, exist_ok=True)
@@ -366,7 +366,7 @@ print(
 
 # %%
 # Demonstrate with a grid + masks for a small basin
-grid = CartesianGrid2D.from_interior(8, 8, Lx=8e4, Ly=8e4)
+grid = CartesianCGrid2D.from_interior(8, 8, Lx=8e4, Ly=8e4)
 masks = Mask2D.from_dimensions(ny=grid.Ny, nx=grid.Nx)
 print(f"Grid: {grid.Ny}x{grid.Nx} (8 interior + 2 ghost = 10 per side)")
 print(f"  dx = {grid.spacing("x"):.0f} m, dy = {grid.spacing("y"):.0f} m")

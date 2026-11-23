@@ -34,7 +34,7 @@ from gridax._src.advection.reconstruction import (
     Reconstruction3D,
 )
 from gridax._src.backend import set_at
-from gridax._src.grid import CartesianGrid1D, CartesianGrid2D, CartesianGrid3D
+from gridax._src.grid import CartesianCGrid1D, CartesianCGrid2D, CartesianCGrid3D
 from gridax._src.mask import Mask1D, Mask2D, Mask3D
 from gridax._src.operators._ghost import interior
 from gridax._src.operators._utils import _spacing
@@ -229,7 +229,7 @@ class Advection1D:
 
     Parameters
     ----------
-    grid : CartesianGrid1D
+    grid : CartesianCGrid1D
         The underlying 1-D grid.
     mask : Mask1D or None, optional
         Optional land/ocean mask; every method is then land-safe.  Dry
@@ -243,14 +243,14 @@ class Advection1D:
         unmasked behaviour bit for bit.
     """
 
-    grid: CartesianGrid1D
+    grid: CartesianCGrid1D
     mask: Mask1D | None
     recon: Reconstruction1D
     _mask_hierarchy_x: dict[int, Bool[Array, "Nx"]] | None
 
     def __init__(
         self,
-        grid: CartesianGrid1D,
+        grid: CartesianCGrid1D,
         mask: Mask1D | None = None,
     ) -> None:
         self.grid = grid
@@ -373,7 +373,7 @@ class Advection2D:
 
     Parameters
     ----------
-    grid : CartesianGrid2D
+    grid : CartesianCGrid2D
         The underlying 2-D grid.
     mask : Mask2D or None, optional
         Optional land/ocean mask; every method is then land-safe.  The
@@ -391,7 +391,7 @@ class Advection2D:
         ``None`` (default) matches the unmasked behaviour bit for bit.
     """
 
-    grid: CartesianGrid2D
+    grid: CartesianCGrid2D
     mask: Mask2D | None
     recon: Reconstruction2D
     _mask_hierarchy_x: dict[int, Bool[Array, "Ny Nx"]] | None
@@ -399,7 +399,7 @@ class Advection2D:
 
     def __init__(
         self,
-        grid: CartesianGrid2D,
+        grid: CartesianCGrid2D,
         mask: Mask2D | None = None,
     ) -> None:
         self.grid = grid
@@ -565,7 +565,7 @@ class Advection3D:
 
     Parameters
     ----------
-    grid : CartesianGrid3D
+    grid : CartesianCGrid3D
         The underlying 3-D grid.
     mask : Mask3D or None, optional
         Optional 3-D land/ocean mask; every method is then land-safe.
@@ -585,7 +585,7 @@ class Advection3D:
         genuinely vertically-varying mask is now natively supported.
     """
 
-    grid: CartesianGrid3D
+    grid: CartesianCGrid3D
     mask: Mask3D | None
     recon: Reconstruction3D
     _mask_hierarchy_x: dict[int, Bool[Array, "Nz Ny Nx"]] | None
@@ -593,7 +593,7 @@ class Advection3D:
 
     def __init__(
         self,
-        grid: CartesianGrid3D,
+        grid: CartesianCGrid3D,
         mask: Mask3D | None = None,
     ) -> None:
         self.grid = grid

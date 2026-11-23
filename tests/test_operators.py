@@ -8,7 +8,7 @@ side.  U-points live at east faces (j, i+1/2), V-points at north faces
 from __future__ import annotations
 
 from geophysix.constants import STANDARD
-from gridax import CartesianGrid2D
+from gridax import CartesianCGrid2D
 from gridax._src.operators.diagnostics import (
     bernoulli_potential,
     kinetic_energy,
@@ -21,7 +21,7 @@ import pytest
 @pytest.fixture()
 def grid2d():
     # 8 interior cells in each direction → total shape [10, 10]
-    return CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
+    return CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
 
 
 # ---------------------------------------------------------------------------

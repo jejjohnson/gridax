@@ -79,7 +79,7 @@ the forward / backward asymmetry in contract 1 above all) and
 
 For each candidate, construct a concrete input and run it:
 `uv run python -c "..."` with a linear or trigonometric field on a small
-`CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)` against the analytic
+`CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)` against the analytic
 derivative, the area-weighted tendency sum for conservation, masked against
 unmasked output, a rescaled grid (`Lx * 1e3`) for units, a float32 input,
 `jax.jit` / `jax.grad` around the call. Report what you ran and what it

@@ -6,9 +6,9 @@ gridax holds the arrays that describe a grid: Arakawa C-grid containers (Cartesi
 
 ```python
 import numpy as np
-from gridax import CartesianGrid2D, Mask2D
+from gridax import CartesianCGrid2D, Mask2D
 
-grid = CartesianGrid2D.from_interior(64, 32, Lx=1.0e6, Ly=5.0e5)
+grid = CartesianCGrid2D.from_interior(64, 32, Lx=1.0e6, Ly=5.0e5)
 depth = np.full((grid.Ny, grid.Nx), 4000.0)
 depth[:, :3] = -10.0  # a coast on the west
 mask = Mask2D.from_bathymetry(depth, min_depth=10.0)

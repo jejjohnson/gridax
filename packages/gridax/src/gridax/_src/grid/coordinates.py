@@ -11,11 +11,11 @@ from __future__ import annotations
 from jaxtyping import Float
 import numpy as np
 
-from gridax._src.grid.cartesian import CartesianGrid1D, CartesianGrid2D
+from gridax._src.grid.cartesian import CartesianCGrid1D, CartesianCGrid2D
 
 
 def t_point_coordinates(
-    grid: CartesianGrid1D | CartesianGrid2D,
+    grid: CartesianCGrid1D | CartesianCGrid2D,
 ) -> Float[np.ndarray, "N D"]:
     """Coordinates of every T point of a Cartesian grid, one row per point.
 
@@ -28,7 +28,7 @@ def t_point_coordinates(
 
     Parameters
     ----------
-    grid : CartesianGrid1D or CartesianGrid2D
+    grid : CartesianCGrid1D or CartesianCGrid2D
         The grid.
 
     Returns
@@ -47,16 +47,16 @@ def t_point_coordinates(
     Examples
     --------
     >>> import gridax
-    >>> grid = gridax.CartesianGrid2D.from_interior(2, 1, 2.0, 0.5)
+    >>> grid = gridax.CartesianCGrid2D.from_interior(2, 1, 2.0, 0.5)
     >>> points = gridax.t_point_coordinates(grid)
     >>> points.shape
     (12, 2)
     >>> points[:5].tolist()
     [[0.0, 0.0], [0.0, 1.0], [0.0, 2.0], [0.0, 3.0], [0.5, 0.0]]
     """
-    if not isinstance(grid, CartesianGrid1D | CartesianGrid2D):
+    if not isinstance(grid, CartesianCGrid1D | CartesianCGrid2D):
         raise TypeError(
-            "t_point_coordinates takes a CartesianGrid1D or CartesianGrid2D, got"
+            "t_point_coordinates takes a CartesianCGrid1D or CartesianCGrid2D, got"
             f" {type(grid).__name__}; a spherical grid's T points are its"
             ' latitudes grid.coords("y") and longitudes grid.coords("x").'
         )
