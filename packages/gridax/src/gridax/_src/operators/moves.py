@@ -31,6 +31,9 @@ from gridax._src.grid import (
     SphericalAGrid2D,
     SphericalCGrid2D,
     SphericalCGrid3D,
+    StretchedCGrid1D,
+    StretchedCGrid2D,
+    StretchedCGrid3D,
 )
 from gridax._src.grid.points import POINT_AXES, Stagger, point_stagger
 from gridax._src.mask.utils import shifted
@@ -238,12 +241,23 @@ def _move(
     scheme: Scheme,
     derivative: int,
     edges: str = "bias",
+    lines: Any = None,
 ) -> Any:
-    """The wide stencil of one move, on the interior of every grid axis."""
+    """The wide stencil of one move, on the interior of every grid axis.
+
+    ``lines(axis)`` gives the coordinates of an irregular axis (`along`).
+    """
     out = f
     for axis, side in moved_along(src, dst):
-        position = axes.index(axis) - len(axes)
-        out = along(out, position, side, scheme, derivative=derivative, edges=edges)
+        out = along(
+            out,
+            axes.index(axis) - len(axes),
+            side,
+            scheme,
+            derivative=derivative,
+            edges=edges,
+            lines=None if lines is None else lines(axis),
+        )
     return _others(out, axes, [axis for axis, _ in moved_along(src, dst)])
 
 
@@ -273,6 +287,7 @@ def _narrowing(
     *,
     derivative: int,
     two_point: Any,
+    lines: Any = None,
 ) -> Any:
     """A move with more than two points, narrowing next to dry points."""
     xp = array_namespace(f)
@@ -280,7 +295,8 @@ def _narrowing(
     out = two_point(f)
     for rung in reversed(wider):
         fits = _reads_wet(wet, axes, src, dst, rung, derivative)
-        out = xp.where(fits, _move(f, axes, src, dst, rung, derivative), out)
+        value = _move(f, axes, src, dst, rung, derivative, lines=lines)
+        out = xp.where(fits, value, out)
     return out
 
 
@@ -332,6 +348,9 @@ def _staggered(
     two = is_two_point(scheme)
     if mask is None or (two and dry == "narrow"):
         dry = "none"
+    irregular = isinstance(grid, _STRETCHED)
+    if irregular:
+        _check_stretched(scheme, edges, dry)
     reach = max(
         abs(k)
         for _, side in moves
@@ -357,6 +376,17 @@ def _staggered(
         extra = max(reach - grid.ghost, 0)
         f = extend(f, grid, around, point_stagger(src), along_axes, extra)
 
+    lines: Any = None
+    if irregular:
+
+        def lines(axis: str) -> tuple[Any, Any]:
+            return tuple(
+                _metric_like(grid._line(axis, p, extra), f) for p in (src, dst)
+            )
+
+        def two_point(f: Any) -> Any:
+            return _move(f, axes, src, dst, CENTRED2, derivative, lines=lines)
+
     def wet(point: str) -> Any:
         out = _wet(mask, point)
         if around is None:
@@ -377,16 +407,32 @@ def _staggered(
             wet(src),
             derivative=derivative,
             two_point=two_point,
+            lines=lines,
         )
     else:
         at = edges if edges in ("bias", "narrow", "none") else "bias"
-        raw = _move(f, axes, src, dst, scheme, derivative, at)
+        raw = _move(f, axes, src, dst, scheme, derivative, at, lines)
     if edges == "none" and dry in ("narrow", "bias"):
         raw = _without_overhang(raw, axes, moves, scheme, derivative)
     if extra == 0:
         return raw
     kept = slice(extra, -extra)
     return raw[(..., *(kept if axis in along_axes else slice(None) for axis in axes))]
+
+
+_STRETCHED = (StretchedCGrid1D, StretchedCGrid2D, StretchedCGrid3D)
+
+
+def _check_stretched(scheme: Scheme, edges: str, dry: str) -> None:
+    if scheme._data == "cell" and not is_two_point(scheme):
+        raise NotImplementedError(
+            'the moves of a stretched grid read point values; data="cell" is not'
+            " available"
+        )
+    if dry == "bias":
+        raise NotImplementedError('mask="bias" is not available on a stretched grid')
+    if edges == "periodic":
+        raise NotImplementedError("a stretched axis is not periodic")
 
 
 def _without_overhang(
@@ -444,6 +490,26 @@ def _difference_cartesian(
     return _masked(out, mask, dst)
 
 
+@difference.register(StretchedCGrid1D)
+@difference.register(StretchedCGrid2D)
+@difference.register(StretchedCGrid3D)
+def _difference_stretched(
+    grid: Any,
+    f: Any,
+    *,
+    axis: str,
+    src: Any,
+    dst: Any,
+    scheme: Scheme,
+    mask: Any,
+    bc: BC | None,
+) -> Any:
+    src, dst = point_name(src), point_name(dst)
+    # the weights are solved for the distances: already per unit length
+    raw = _raw_difference(grid, f, axis, src, dst, scheme, mask, bc)
+    return _masked(interior(raw, f), mask, dst)
+
+
 @difference.register(SphericalCGrid2D)
 @difference.register(SphericalCGrid3D)
 def _difference_spherical(
@@ -474,6 +540,9 @@ def _difference_spherical(
 @interpolate.register(CartesianCGrid3D)
 @interpolate.register(SphericalCGrid2D)
 @interpolate.register(SphericalCGrid3D)
+@interpolate.register(StretchedCGrid1D)
+@interpolate.register(StretchedCGrid2D)
+@interpolate.register(StretchedCGrid3D)
 def _interpolate(
     grid: Any, f: Any, *, src: Any, dst: Any, scheme: Scheme, mask: Any, bc: BC | None
 ) -> Any:

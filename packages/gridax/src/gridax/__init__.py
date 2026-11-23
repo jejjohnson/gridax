@@ -122,6 +122,9 @@ from gridax._src.grid import (
     SphericalAGrid2D,
     SphericalCGrid2D,
     SphericalCGrid3D,
+    StretchedCGrid1D,
+    StretchedCGrid2D,
+    StretchedCGrid3D,
     agrid_from,
     t_point_coordinates,
 )
@@ -146,6 +149,11 @@ from gridax._src.operators.calculus import (
     grad_perp,
     gradient,
     laplacian,
+)
+from gridax._src.operators.conversions import (
+    LossyConversionWarning,
+    collocate,
+    stagger,
 )
 from gridax._src.operators.coriolis import (
     Coriolis2D,
@@ -286,6 +294,14 @@ __all__ = [
     "CartesianAGrid3D",
     "SphericalAGrid2D",
     "agrid_from",
+    # Irregular C-grids, from a collocated one
+    "StretchedCGrid1D",
+    "StretchedCGrid2D",
+    "StretchedCGrid3D",
+    # Fields between a collocated grid and its C-grid
+    "stagger",
+    "collocate",
+    "LossyConversionWarning",
     # Canonical moves between staggered points
     "difference",
     "interpolate",

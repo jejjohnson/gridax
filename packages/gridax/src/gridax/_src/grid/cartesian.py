@@ -2,12 +2,18 @@
 
 These are the standard uniform-spacing Cartesian grids used by the
 core finite-volume operators in finitevolX.  They are concrete
-subclasses of :class:`CurvilinearGrid1D` / ``2D`` / ``3D`` and add no
-new fields — only the constructor :meth:`from_interior` and (in 3-D)
-the :meth:`horizontal_grid` helper.
+subclasses of :class:`CurvilinearGrid1D` / ``2D`` / ``3D`` and add an
+origin, the constructor :meth:`from_interior`, the conversion
+:meth:`collocated` and (in 3-D) the :meth:`horizontal_grid` helper.
 """
 
 from __future__ import annotations
+
+import dataclasses
+from typing import TYPE_CHECKING, Any
+
+from jaxtyping import Float
+import numpy as np
 
 from gridax._src.grid.base import (
     CurvilinearGrid1D,
@@ -16,6 +22,34 @@ from gridax._src.grid.base import (
     _as_leaf,
 )
 from gridax._src.pytree import pytree_dataclass
+
+if TYPE_CHECKING:
+    from jaxtyping import Array
+
+    from gridax._src.grid.collocated import (
+        CartesianAGrid1D,
+        CartesianAGrid2D,
+        CartesianAGrid3D,
+    )
+else:
+    Array = np.ndarray
+
+
+def _origin() -> Any:
+    """The coordinate of the first interior point, ``None`` for the default."""
+    return dataclasses.field(default=None, kw_only=True)
+
+
+def _collocated(grid: Any, cls: Any) -> Any:
+    """The interior T points of a uniform C-grid."""
+    fields: dict[str, Any] = {}
+    ghost = grid.ghost
+    for axis in grid.axes:
+        coords = grid.coords(axis)
+        fields[f"N{axis}"] = grid._size(axis) - 2 * ghost
+        fields[f"_{axis}"] = coords[ghost:-ghost]
+        fields[f"_d{axis}"] = _as_leaf(grid._step(axis))
+    return cls(**fields, periodic=grid.periodic)
 
 
 @pytree_dataclass
@@ -38,6 +72,8 @@ class CartesianCGrid1D(CurvilinearGrid1D):
     neighbourhood, so ``U[i]`` is the face immediately east of ``T[i]``.
     """
 
+    x0: Float[Array, ""] | None = _origin()
+
     @classmethod
     def from_interior(cls, nx_interior: int, Lx: float) -> CartesianCGrid1D:
         """Construct grid from interior cell count.
@@ -54,6 +90,19 @@ class CartesianCGrid1D(CurvilinearGrid1D):
         CartesianCGrid1D
         """
         return cls(Nx=nx_interior + 2, Lx=_as_leaf(Lx))
+
+    def collocated(self) -> CartesianAGrid1D:
+        """The collocated grid of the interior T points.
+
+        ``agrid.staggered().collocated()`` is ``agrid``.
+
+        Returns
+        -------
+        CartesianAGrid1D
+        """
+        from gridax._src.grid.collocated import CartesianAGrid1D
+
+        return _collocated(self, CartesianAGrid1D)
 
 
 @pytree_dataclass
@@ -83,6 +132,9 @@ class CartesianCGrid2D(CurvilinearGrid2D):
           X[j-1,i]--V[j-1,i]--X[j-1,i+1]
     """
 
+    x0: Float[Array, ""] | None = _origin()
+    y0: Float[Array, ""] | None = _origin()
+
     @classmethod
     def from_interior(
         cls, nx_interior: int, ny_interior: int, Lx: float, Ly: float
@@ -107,6 +159,19 @@ class CartesianCGrid2D(CurvilinearGrid2D):
         return cls(
             Nx=nx_interior + 2, Ny=ny_interior + 2, Lx=_as_leaf(Lx), Ly=_as_leaf(Ly)
         )
+
+    def collocated(self) -> CartesianAGrid2D:
+        """The collocated grid of the interior T points.
+
+        ``agrid.staggered().collocated()`` is ``agrid``.
+
+        Returns
+        -------
+        CartesianAGrid2D
+        """
+        from gridax._src.grid.collocated import CartesianAGrid2D
+
+        return _collocated(self, CartesianAGrid2D)
 
 
 @pytree_dataclass
@@ -139,6 +204,10 @@ class CartesianCGrid3D(CurvilinearGrid3D):
     W-points at ``(k + 1/2) * dz`` (the top face of ``T[k]``) are stored
     in the same ``[Nz, Ny, Nx]`` shape.
     """
+
+    x0: Float[Array, ""] | None = _origin()
+    y0: Float[Array, ""] | None = _origin()
+    z0: Float[Array, ""] | None = _origin()
 
     @classmethod
     def from_interior(
@@ -180,14 +249,34 @@ class CartesianCGrid3D(CurvilinearGrid3D):
             Lz=_as_leaf(Lz),
         )
 
+    def collocated(self) -> CartesianAGrid3D:
+        """The collocated grid of the interior T points.
+
+        ``agrid.staggered().collocated()`` is ``agrid``.
+
+        Returns
+        -------
+        CartesianAGrid3D
+        """
+        from gridax._src.grid.collocated import CartesianAGrid3D
+
+        return _collocated(self, CartesianAGrid3D)
+
     def horizontal_grid(self) -> CartesianCGrid2D:
         """Extract the horizontal 2-D grid from this 3-D grid.
 
         Returns
         -------
         CartesianCGrid2D
-            A 2-D grid with the same Nx, Ny, Lx, Ly and ghost ring.
+            A 2-D grid with the same Nx, Ny, Lx, Ly, origin and ghost ring.
         """
         return CartesianCGrid2D(
-            Nx=self.Nx, Ny=self.Ny, Lx=self.Lx, Ly=self.Ly, ghost=self.ghost
+            Nx=self.Nx,
+            Ny=self.Ny,
+            Lx=self.Lx,
+            Ly=self.Ly,
+            x0=self.x0,
+            y0=self.y0,
+            ghost=self.ghost,
+            periodic=tuple(axis for axis in self.periodic if axis != "z"),
         )

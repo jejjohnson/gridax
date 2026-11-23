@@ -33,6 +33,8 @@ from gridax._src.pytree import array_namespace, pytree_dataclass
 # so it names the type for the type checker only.
 if TYPE_CHECKING:
     from jaxtyping import Array
+
+    from gridax._src.grid.collocated import SphericalAGrid2D
 else:
     Array = np.ndarray
 
@@ -368,6 +370,29 @@ class SphericalCGrid2D(_SphericalMetric, CurvilinearGrid2D):
             _lon=_as_leaf(lon_1d),
             _cos_lat_T=_as_leaf(cos_lat_T),
             _cos_lat_V=_as_leaf(cos_lat_V),
+        )
+
+    def collocated(self) -> SphericalAGrid2D:
+        """The collocated grid of the interior T points.
+
+        ``agrid.staggered().collocated()`` is ``agrid``.
+
+        Returns
+        -------
+        SphericalAGrid2D
+        """
+        from gridax._src.grid.collocated import SphericalAGrid2D
+
+        ghost = self.ghost
+        return SphericalAGrid2D(
+            Nx=self.Nx - 2 * ghost,
+            Ny=self.Ny - 2 * ghost,
+            _x=self._lon[ghost:-ghost],
+            _dx=self.dlon,
+            _y=self._lat[ghost:-ghost],
+            _dy=self.dlat,
+            R=self.R,
+            periodic=self.periodic,
         )
 
 

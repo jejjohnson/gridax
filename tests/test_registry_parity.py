@@ -31,6 +31,17 @@ GRIDS = {
     "SphericalAGrid2D": gridax.SphericalAGrid2D.from_interior(
         8, 6, (0.0, 360.0), (-60.0, 60.0), R=2.0, periodic=("x",)
     ),
+    "StretchedCGrid1D": gridax.CartesianAGrid1D.from_coords(
+        x=[0.0, 0.5, 1.5, 2.0, 4.0, 4.5, 6.0]
+    ).staggered(),
+    "StretchedCGrid2D": gridax.CartesianAGrid2D.from_coords(
+        y=[0.0, 1.0, 3.0, 4.5, 5.0, 7.0], x=[0.0, 0.5, 1.5, 2.0, 4.0, 4.5, 6.0]
+    ).staggered(),
+    "StretchedCGrid3D": gridax.CartesianAGrid3D.from_coords(
+        z=[0.0, 1.0, 3.0, 4.0],
+        y=[0.0, 1.0, 3.0, 4.5, 5.0, 7.0],
+        x=[0.0, 0.5, 1.5, 2.0, 4.0, 4.5, 6.0],
+    ).staggered(),
     "SphericalCGrid3D": gridax.SphericalCGrid3D.from_interior(
         6, 5, 4, (0.0, 30.0), (0.0, 30.0), 1.0
     ),
@@ -41,7 +52,7 @@ def test_every_concrete_grid_is_here():
     concrete = {
         name
         for name in gridax.__all__
-        if re.fullmatch(r"(Cartesian|Spherical)[AC]Grid\dD", name)
+        if re.fullmatch(r"(Cartesian|Spherical|Stretched)[AC]Grid\dD", name)
     }
     assert concrete == set(GRIDS)
 
