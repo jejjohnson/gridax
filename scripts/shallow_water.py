@@ -38,12 +38,12 @@ import argparse
 from dataclasses import dataclass
 from pathlib import Path
 
-import jax
-from jax import Array
-import jax.numpy as jnp
-import matplotlib
-
-matplotlib.use("Agg")
+from _common import (
+    make_preprocessing_dataset,
+    save_animation_gif,
+    shallow_water_fields,
+    to_wall_field,
+)
 from gridax import (
     CartesianCGrid2D,
     GridOps,
@@ -52,104 +52,13 @@ from gridax import (
 )
 from gridax.schemes import Upwind
 from integrix.march import heun_step
-import matplotlib.pyplot as plt
+import jax
+from jax import Array
+import jax.numpy as jnp
 import numpy as np
 import xarray as xr
 
 jax.config.update("jax_enable_x64", True)
-
-
-def to_wall_field(field: xr.DataArray) -> Array:
-    """Pad an interior ``xarray`` field with homogeneous Dirichlet (zero) ghost cells."""
-    interior = jnp.asarray(field.to_numpy())
-    return jnp.pad(interior, pad_width=1, mode="constant")
-
-
-def save_animation_gif(
-    dataset: xr.Dataset,
-    gif_path: Path,
-    variable_name: str,
-    title: str,
-    cmap: str = "RdBu_r",
-    scale_factor: float = 1.0,
-    colorbar_label: str | None = None,
-    fps: int = 3,
-) -> None:
-    """Save an animated GIF showing the time evolution of a sampled field.
-
-    Parameters
-    ----------
-    dataset : xr.Dataset
-        Sampled simulation output with ``time``, ``y``, and ``x`` dimensions.
-    gif_path : Path
-        Output path for the animated GIF.
-    variable_name : str
-        Name of the field to animate.
-    title : str
-        Figure title prefix; the simulation time in days is appended per frame.
-    cmap : str, optional
-        Matplotlib colour map.
-    scale_factor : float, optional
-        Multiplicative scale applied to the field values before display.
-    colorbar_label : str | None, optional
-        Colour-bar label.
-    fps : int, optional
-        Frames per second for the output GIF.
-
-    Examples
-    --------
-    Save an animated GIF of the free-surface anomaly::
-
-        save_animation_gif(dataset, Path("eta.gif"), "eta", "Nonlinear SWE")
-
-    Save a speed animation with a slower frame rate::
-
-        save_animation_gif(
-            dataset, Path("speed.gif"), "speed", "Speed", fps=2, cmap="viridis"
-        )
-    """
-    from matplotlib.animation import FuncAnimation, PillowWriter
-
-    if fps < 1:
-        msg = f"fps must be >= 1, got {fps}"
-        raise ValueError(msg)
-
-    gif_path.parent.mkdir(parents=True, exist_ok=True)
-
-    data = dataset[variable_name] * scale_factor
-    vmax = float(np.nanmax(np.abs(data.to_numpy())))
-    if vmax == 0.0:
-        vmax = 1.0
-
-    fig, ax = plt.subplots(figsize=(6, 5), constrained_layout=True)
-    frame0 = data.isel(time=0).to_numpy()
-    image = ax.pcolormesh(
-        dataset["x"].to_numpy(),
-        dataset["y"].to_numpy(),
-        frame0,
-        shading="auto",
-        cmap=cmap,
-        vmin=-vmax,
-        vmax=vmax,
-    )
-    ax.set_xlabel("x [m]")
-    ax.set_ylabel("y [m]")
-    colorbar = fig.colorbar(image, ax=ax, shrink=0.9)
-    if colorbar_label is not None:
-        colorbar.set_label(colorbar_label)
-    t_days = float(data["time"].isel(time=0)) / 86400.0
-    title_text = ax.set_title(f"{title} | t = {t_days:.1f} d")
-
-    def update(frame: int) -> None:
-        field = data.isel(time=frame).to_numpy()
-        image.set_array(field.ravel())
-        t = float(data["time"].isel(time=frame)) / 86400.0
-        title_text.set_text(f"{title} | t = {t:.1f} d")
-
-    n_frames = data.sizes["time"]
-    anim = FuncAnimation(fig, update, frames=n_frames, interval=1000 // fps)
-    anim.save(gif_path, writer=PillowWriter(fps=fps))
-    plt.close(fig)
 
 
 @dataclass(frozen=True)
@@ -220,74 +129,6 @@ class ShallowWaterConfig:
     figure_path: Path = Path("outputs/shallow_water_double_gyre.gif")
 
 
-def make_preprocessing_dataset(
-    config: ShallowWaterConfig, grid: CartesianCGrid2D
-) -> xr.Dataset:
-    """Build the coordinate-aware fields for the nonlinear example.
-
-    Parameters
-    ----------
-    config : ShallowWaterConfig
-        Example configuration.
-    grid : CartesianCGrid2D
-        Underlying Arakawa C-grid.
-
-    Returns
-    -------
-    xr.Dataset
-        Interior-grid ``xarray`` dataset with the initial free-surface anomaly,
-        Coriolis parameter, and wind forcing.
-
-    Examples
-    --------
-    Build the interior fields before converting them to JAX arrays::
-
-        forcing = make_preprocessing_dataset(config, grid)
-
-    The returned dataset is also suitable for exploratory plotting::
-
-        forcing["eta0"].plot()
-    """
-    x = xr.DataArray(
-        (np.arange(config.nx) + 0.5) * grid.spacing("x"),
-        dims=("x",),
-        name="x",
-        attrs={"long_name": "cell_center_x", "units": "m"},
-    )
-    y = xr.DataArray(
-        (np.arange(config.ny) + 0.5) * grid.spacing("y"),
-        dims=("y",),
-        name="y",
-        attrs={"long_name": "cell_center_y", "units": "m"},
-    )
-    x2d, y2d = xr.broadcast(x, y)
-    x2d = x2d.transpose("y", "x")
-    y2d = y2d.transpose("y", "x")
-
-    eta0 = 0.01 * np.sin(np.pi * x2d / config.Lx) * np.sin(np.pi * y2d / config.Ly)
-    coriolis = config.f0 + config.beta * (y2d - 0.5 * config.Ly)
-    # Double-gyre zonal wind body force F_x = -A * cos(2*pi*y/Ly).
-    # Westward (trade winds) at y=0, eastward (westerlies) at y=Ly/2.
-    # Vorticity source = -d(F_x)/dy = -A*(2*pi/Ly)*sin(2*pi*y/Ly):
-    #   y in (0,  Ly/2): < 0 -> anticyclonic (subtropical gyre, south) ✓
-    #   y in (Ly/2, Ly): > 0 -> cyclonic    (subpolar    gyre, north) ✓
-    wind_u = -config.wind_acceleration * np.cos(2.0 * np.pi * y2d / config.Ly)
-
-    return xr.Dataset(
-        data_vars={
-            "eta0": eta0.rename("eta0"),
-            "coriolis": coriolis.rename("coriolis"),
-            "wind_u": wind_u.rename("wind_u"),
-        },
-        coords={"x": x, "y": y},
-        attrs={
-            "model": "nonlinear shallow water",
-            "configuration": "double gyre",
-            "boundary_conditions": "closed basin (no-normal-flow solid walls)",
-        },
-    )
-
-
 def run_simulation(config: ShallowWaterConfig | None = None) -> xr.Dataset:
     """Run the nonlinear shallow-water double-gyre example.
 
@@ -314,7 +155,17 @@ def run_simulation(config: ShallowWaterConfig | None = None) -> xr.Dataset:
     config = config or ShallowWaterConfig()
     grid = CartesianCGrid2D.from_interior(config.nx, config.ny, config.Lx, config.Ly)
     ops = GridOps(grid)
-    forcing = make_preprocessing_dataset(config, grid)
+    forcing = make_preprocessing_dataset(
+        grid,
+        shallow_water_fields(
+            Lx=config.Lx,
+            Ly=config.Ly,
+            f0=config.f0,
+            beta=config.beta,
+            wind_acceleration=config.wind_acceleration,
+        ),
+        model="nonlinear shallow water",
+    )
 
     eta = to_wall_field(forcing["eta0"])
     u = jnp.zeros_like(eta)
