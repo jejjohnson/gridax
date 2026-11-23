@@ -63,6 +63,9 @@ test = [
     "matplotlib>=3.9.0",
     "pillow>=11.0.0",
     "xarray>=2025.1.0",
+    # An environment with geophysix >= 0.0.5 or radiomax has it, so the suite
+    # runs with it; the gridax-numpy-only CI job runs without it (#552).
+    "array-api-compat>=1.12",
     # The reference CField.to_xarray and the interpolations are checked against.
     "xgcm>=0.10.1",
     "zarr>=3.1.5",

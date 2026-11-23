@@ -21,6 +21,9 @@ import numpy as np
 
 _STATIC = "static"
 
+# Values that join whatever array library the others are from.
+_HOST_TYPES = (int, float, complex, np.ndarray, np.generic)
+
 
 def static_field(**kwargs: Any) -> Any:
     """A dataclass field that is pytree metadata, not a leaf.
@@ -50,7 +53,8 @@ def array_namespace(*values: Any) -> Any:
     ``array-api-compat`` installed it decides, so backends without a native
     ``__array_namespace__`` (PyTorch) work too; otherwise the first value
     that reports a namespace other than NumPy's wins. Python scalars,
-    ``None`` and NumPy arrays resolve to NumPy.
+    ``None`` and NumPy arrays join the other arrays, and resolve to NumPy on
+    their own, as does anything that is not an array (a list).
 
     Parameters
     ----------
@@ -63,21 +67,18 @@ def array_namespace(*values: Any) -> Any:
         ``numpy``, or the namespace of the arrays (``jax.numpy`` for JAX
         arrays and tracers).
     """
-    arrays = [
-        v for v in values if v is not None and not isinstance(v, int | float | complex)
-    ]
+    arrays = [v for v in values if v is not None and not isinstance(v, _HOST_TYPES)]
     try:
-        import array_api_compat  # ty: ignore[unresolved-import]  (optional)
+        import array_api_compat
     except ImportError:
-        array_api_compat = None
-    if array_api_compat is not None and arrays:
-        namespace = array_api_compat.array_namespace(*arrays)
-        if namespace.__name__.endswith("numpy") and "jax" not in namespace.__name__:
-            return np
-        return namespace
+        return _native_namespace(arrays)
+    known = [v for v in arrays if array_api_compat.is_array_api_obj(v)]
+    return array_api_compat.array_namespace(*known) if known else np
+
+
+def _native_namespace(arrays: list[Any]) -> Any:
+    """The namespace the first array reports itself, NumPy if none does."""
     for value in arrays:
-        if isinstance(value, np.ndarray | np.generic):
-            continue
         get_namespace = getattr(value, "__array_namespace__", None)
         if get_namespace is not None:
             return get_namespace()
