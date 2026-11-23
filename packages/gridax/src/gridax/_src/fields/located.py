@@ -102,6 +102,10 @@ def _call(
         raise ValueError(f"{first!r} has no dims {missing} of the grid")
     others = tuple(dim for dim in first.dims if dim not in grid.axes)
     canonical = (*others, *grid.axes)
+    if getattr(grid, "_collocated", False):
+        # a collocated grid has one point
+        points = dict.fromkeys(points, "T")
+        out = ("T",) * len(out) if isinstance(out, tuple) else out and "T"
 
     labels: dict[str, Any] = {}
     values = dict(arguments)
