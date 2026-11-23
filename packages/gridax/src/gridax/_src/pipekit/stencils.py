@@ -18,8 +18,6 @@ changes Tier B with it.
 from __future__ import annotations
 
 from collections.abc import Callable
-import inspect
-import re
 from typing import Any, ClassVar
 
 import equinox as eqx
@@ -40,7 +38,8 @@ from gridax._src.boundary.boundary import (
 )
 from gridax._src.operators.coriolis import Coriolis2D
 from gridax._src.operators.difference import Difference2D
-from gridax._src.operators.interpolation import Interpolation2D
+from gridax._src.operators.moves import difference, interpolate
+from gridax._src.operators.triples import PAIRS, TRIPLES, choose
 from gridax._src.pipekit.base import FVXOperator, GridOperator
 
 Field = Float[Array, "*batch Ny Nx"]
@@ -48,27 +47,10 @@ Field = Float[Array, "*batch Ny Nx"]
 STAGGERS = ("T", "U", "V", "X")
 
 
-def _methods(cls: type, pattern: str) -> dict[tuple[str, ...], str]:
-    """``{match groups: method name}`` for the public methods of ``cls``."""
-    rx = re.compile(pattern)
-    out = {}
-    for name, _ in inspect.getmembers(cls, inspect.isfunction):
-        m = rx.fullmatch(name)
-        if m:
-            out[m.groups()] = name
-    return out
-
-
-#: ``(axis, src, dst) -> Difference2D method``, e.g. ``("x", "T", "U")``.
-DIFFERENCES = _methods(Difference2D, r"diff_([xy])_([TUVX])_to_([TUVX])")
-#: ``(src, dst) -> Interpolation2D method``, e.g. ``("U", "T")``.
-INTERPOLATIONS = _methods(Interpolation2D, r"([TUVX])_to_([TUVX])")
-
-
-def _check_choice(what: str, got: tuple[str, ...], valid: dict) -> None:
-    if got not in valid:
-        options = ", ".join("/".join(k) for k in sorted(valid))
-        raise ValueError(f"{what} {'/'.join(got)} is not available; valid: {options}")
+#: ``(axis, src, dst)`` of the 2-D differences, e.g. ``("x", "T", "U")``.
+DIFFERENCES = frozenset(TRIPLES["y", "x"])
+#: ``(src, dst)`` of the 2-D interpolations, e.g. ``("U", "T")``.
+INTERPOLATIONS = frozenset(PAIRS["y", "x"])
 
 
 class Difference(GridOperator):
@@ -92,11 +74,10 @@ class Difference(GridOperator):
     dst: str = eqx.field(static=True, kw_only=True)
 
     def __check_init__(self) -> None:
-        _check_choice("difference", (self.axis, self.src, self.dst), DIFFERENCES)
+        choose("difference", (self.axis, self.src, self.dst), TRIPLES["y", "x"])
 
     def _apply(self, x: Field) -> Field:
-        method = DIFFERENCES[(self.axis, self.src, self.dst)]
-        return getattr(Difference2D(grid=self.grid), method)(x)
+        return difference(x, self.grid, axis=self.axis, src=self.src, dst=self.dst)
 
 
 class Divergence(GridOperator):
@@ -142,11 +123,10 @@ class Interp(GridOperator):
     dst: str = eqx.field(static=True, kw_only=True)
 
     def __check_init__(self) -> None:
-        _check_choice("interpolation", (self.src, self.dst), INTERPOLATIONS)
+        choose("interpolation", (self.src, self.dst), PAIRS["y", "x"])
 
     def _apply(self, x: Field) -> Field:
-        method = INTERPOLATIONS[(self.src, self.dst)]
-        return getattr(Interpolation2D(grid=self.grid), method)(x)
+        return interpolate(x, self.grid, src=self.src, dst=self.dst)
 
 
 class Coriolis(GridOperator):

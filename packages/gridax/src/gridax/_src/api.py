@@ -23,11 +23,14 @@ OPERATIONS: dict[str, Any] = {}
 
 _C2 = ("CartesianCGrid2D", "SphericalCGrid2D")
 _C3 = ("CartesianCGrid3D", "SphericalCGrid3D")
+_C = ("CartesianCGrid1D", *_C2, *_C3)
 
 #: ``operation -> grid types`` it is defined on.
 SUPPORT: dict[str, tuple[str, ...]] = {
     "area_mean": _C2,
     "area_sum": _C2,
+    "difference": _C,
+    "interpolate": _C,
     "volume_mean": _C3,
     "volume_sum": _C3,
 }

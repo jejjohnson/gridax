@@ -30,17 +30,11 @@ from gridax._src.mask import Mask2D, Mask3D
 from gridax._src.operators._ghost import interior, zero_z_ghosts
 from gridax._src.operators._utils import (
     _metric_like,
-    _safe_div_cos,
     _spherical_d2_lon,
     _spherical_laplacian_merid,
 )
+from gridax._src.operators.moves import difference
 from gridax._src.operators.spherical_compound import _geostrophic_velocity_sphere
-from gridax._src.operators.stencils import (
-    diff_x_bwd_2d,
-    diff_x_fwd_2d,
-    diff_y_bwd_2d,
-    diff_y_fwd_2d,
-)
 from gridax._src.pytree import array_namespace, pytree_dataclass
 
 if TYPE_CHECKING:
@@ -87,50 +81,28 @@ class SphericalDifference2D:
 
         dh/dx[j, i+½] = (h[j, i+1] − h[j, i]) / (R · cos(lat_U) · dlon)
         """
-        raw = diff_x_fwd_2d(h)
-        cos_U = _metric_like(self.grid._cos_lat("U"), h)[1:-1, 1:-1]
-        out = interior(
-            _safe_div_cos(raw, cos_U, _metric_like(self.grid.R * self.grid.dlon, h)), h
-        )
-        if self.mask is not None:
-            out = out * self.mask.wet(at="U")
-        return out
+        return difference(h, self.grid, axis="x", src="T", dst="U", mask=self.mask)
 
     def diff_lat_T_to_V(self, h: Float[Array, "Ny Nx"]) -> Float[Array, "Ny Nx"]:
         """Meridional derivative T → V on a sphere.
 
         dh/dy[j+½, i] = (h[j+1, i] − h[j, i]) / (R · dlat)
         """
-        raw = diff_y_fwd_2d(h)
-        out = interior(raw / _metric_like(self.grid.R * self.grid.dlat, h), h)
-        if self.mask is not None:
-            out = out * self.mask.wet(at="V")
-        return out
+        return difference(h, self.grid, axis="y", src="T", dst="V", mask=self.mask)
 
     def diff_lon_V_to_X(self, v: Float[Array, "Ny Nx"]) -> Float[Array, "Ny Nx"]:
         """Zonal derivative V → X (corner) on a sphere.
 
         dv/dx[j+½, i+½] = (v[j+½, i+1] − v[j+½, i]) / (R · cos(lat_X) · dlon)
         """
-        raw = diff_x_fwd_2d(v)
-        cos_X = _metric_like(self.grid._cos_lat("X"), v)[1:-1, 1:-1]
-        out = interior(
-            _safe_div_cos(raw, cos_X, _metric_like(self.grid.R * self.grid.dlon, v)), v
-        )
-        if self.mask is not None:
-            out = out * self.mask.wet(at="X", kind="strict")
-        return out
+        return difference(v, self.grid, axis="x", src="V", dst="X", mask=self.mask)
 
     def diff_lat_U_to_X(self, u: Float[Array, "Ny Nx"]) -> Float[Array, "Ny Nx"]:
         """Meridional derivative U → X (corner) on a sphere.
 
         du/dy[j+½, i+½] = (u[j+1, i+½] − u[j, i+½]) / (R · dlat)
         """
-        raw = diff_y_fwd_2d(u)
-        out = interior(raw / _metric_like(self.grid.R * self.grid.dlat, u), u)
-        if self.mask is not None:
-            out = out * self.mask.wet(at="X", kind="strict")
-        return out
+        return difference(u, self.grid, axis="y", src="U", dst="X", mask=self.mask)
 
     # ------------------------------------------------------------------
     # Backward differences (face/corner → centre/face)
@@ -141,25 +113,14 @@ class SphericalDifference2D:
 
         du/dx[j, i] = (u[j, i+½] − u[j, i−½]) / (R · cos(lat_T) · dlon)
         """
-        raw = diff_x_bwd_2d(u)
-        cos_T = _metric_like(self.grid._cos_lat("T"), u)[1:-1, 1:-1]
-        out = interior(
-            _safe_div_cos(raw, cos_T, _metric_like(self.grid.R * self.grid.dlon, u)), u
-        )
-        if self.mask is not None:
-            out = out * self.mask.wet()
-        return out
+        return difference(u, self.grid, axis="x", src="U", dst="T", mask=self.mask)
 
     def diff_lat_V_to_T(self, v: Float[Array, "Ny Nx"]) -> Float[Array, "Ny Nx"]:
         """Backward meridional derivative V → T on a sphere.
 
         dv/dy[j, i] = (v[j+½, i] − v[j−½, i]) / (R · dlat)
         """
-        raw = diff_y_bwd_2d(v)
-        out = interior(raw / _metric_like(self.grid.R * self.grid.dlat, v), v)
-        if self.mask is not None:
-            out = out * self.mask.wet()
-        return out
+        return difference(v, self.grid, axis="y", src="V", dst="T", mask=self.mask)
 
     # ------------------------------------------------------------------
     # Second-order derivatives
@@ -317,45 +278,27 @@ class SphericalDifference3D:
 
     def diff_lon_T_to_U(self, h: Float[Array, "Nz Ny Nx"]) -> Float[Array, "Nz Ny Nx"]:
         """Zonal derivative T → U over all z-levels."""
-        out = zero_z_ghosts(vmap(self._diff2d.diff_lon_T_to_U)(h))
-        if self.mask is not None:
-            out = out * self.mask.wet(at="U")
-        return out
+        return difference(h, self.grid, axis="x", src="T", dst="U", mask=self.mask)
 
     def diff_lat_T_to_V(self, h: Float[Array, "Nz Ny Nx"]) -> Float[Array, "Nz Ny Nx"]:
         """Meridional derivative T → V over all z-levels."""
-        out = zero_z_ghosts(vmap(self._diff2d.diff_lat_T_to_V)(h))
-        if self.mask is not None:
-            out = out * self.mask.wet(at="V")
-        return out
+        return difference(h, self.grid, axis="y", src="T", dst="V", mask=self.mask)
 
     def diff_lon_V_to_X(self, v: Float[Array, "Nz Ny Nx"]) -> Float[Array, "Nz Ny Nx"]:
         """Zonal derivative V → X over all z-levels."""
-        out = zero_z_ghosts(vmap(self._diff2d.diff_lon_V_to_X)(v))
-        if self.mask is not None:
-            out = out * self.mask.wet(at="X", kind="strict")
-        return out
+        return difference(v, self.grid, axis="x", src="V", dst="X", mask=self.mask)
 
     def diff_lat_U_to_X(self, u: Float[Array, "Nz Ny Nx"]) -> Float[Array, "Nz Ny Nx"]:
         """Meridional derivative U → X over all z-levels."""
-        out = zero_z_ghosts(vmap(self._diff2d.diff_lat_U_to_X)(u))
-        if self.mask is not None:
-            out = out * self.mask.wet(at="X", kind="strict")
-        return out
+        return difference(u, self.grid, axis="y", src="U", dst="X", mask=self.mask)
 
     def diff_lon_U_to_T(self, u: Float[Array, "Nz Ny Nx"]) -> Float[Array, "Nz Ny Nx"]:
         """Backward zonal derivative U → T over all z-levels."""
-        out = zero_z_ghosts(vmap(self._diff2d.diff_lon_U_to_T)(u))
-        if self.mask is not None:
-            out = out * self.mask.wet()
-        return out
+        return difference(u, self.grid, axis="x", src="U", dst="T", mask=self.mask)
 
     def diff_lat_V_to_T(self, v: Float[Array, "Nz Ny Nx"]) -> Float[Array, "Nz Ny Nx"]:
         """Backward meridional derivative V → T over all z-levels."""
-        out = zero_z_ghosts(vmap(self._diff2d.diff_lat_V_to_T)(v))
-        if self.mask is not None:
-            out = out * self.mask.wet()
-        return out
+        return difference(v, self.grid, axis="y", src="V", dst="T", mask=self.mask)
 
     def diff2_lon(self, h: Float[Array, "Nz Ny Nx"]) -> Float[Array, "Nz Ny Nx"]:
         """Second zonal derivative at T-points over all z-levels."""

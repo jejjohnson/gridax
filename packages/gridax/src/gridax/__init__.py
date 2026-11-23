@@ -212,6 +212,7 @@ from gridax._src.operators.jacobian import (
     ArakawaJacobian2D,
     arakawa_jacobian,
 )
+from gridax._src.operators.moves import difference, interpolate
 from gridax._src.operators.reductions import (
     area_mean,
     area_sum,
@@ -295,6 +296,9 @@ __all__ = [
     "CartesianCGrid3D",
     "SphericalCGrid2D",
     "SphericalCGrid3D",
+    # Canonical moves between staggered points
+    "difference",
+    "interpolate",
     # Located fields (element-wise functions in gridax.fields)
     "CField",
     "combine",
