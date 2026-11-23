@@ -28,6 +28,12 @@ def _side(axis: str, dst: str) -> str:
     return "fwd" if axis in POINT_AXES[dst] else "bwd"
 
 
+def moved_along(src: str, dst: str) -> tuple[tuple[str, str], ...]:
+    """The axes of a move, each with the side its stencil writes on."""
+    along = set(POINT_AXES[src]) ^ set(POINT_AXES[dst])
+    return tuple((axis, _side(axis, dst)) for axis in sorted(along))
+
+
 def _moves(axes: tuple[str, ...]) -> list[tuple[tuple[str, ...], str, str]]:
     """``(axes moved along, src, dst)`` for every two points."""
     return [

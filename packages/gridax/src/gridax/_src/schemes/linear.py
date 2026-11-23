@@ -106,6 +106,9 @@ class Centred(Scheme):
     def tiers(self) -> tuple[Tier, ...]:
         return tuple(_centred_tier(k, self.data) for k in range(self.order, 0, -2))
 
+    def _ladder(self) -> tuple[Scheme, ...]:
+        return tuple(Centred(k, self.data) for k in range(self.order, 0, -2))
+
 
 @functools.lru_cache(maxsize=64)
 def _centred_tier(order: int, data: Data | None) -> Tier:
@@ -186,6 +189,11 @@ class Biased(Scheme):
         side: Side = "left" if self.side == "left" else "right"
         data = self.data or "cell"
         return tuple(_biased_tier(k, side, data) for k in range(self.order, 0, -1))
+
+    def _ladder(self) -> tuple[Scheme, ...]:
+        # the two-point stencil fits wherever the output has a wet cell on either side
+        narrower = (Biased(k, self.side, self.data) for k in range(self.order, 0, -1))
+        return (*narrower, Centred(2, self.data))
 
 
 @functools.lru_cache(maxsize=64)

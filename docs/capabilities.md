@@ -354,8 +354,8 @@ Every public name in gridax (432 entries), listed per public module (`gridax`, i
 
 | Name | Kind | What it does |
 |---|---|---|
-| `difference` | function | The centred difference of a staggered field along an axis, at ``dst``. |
-| `interpolate` | function | The mean of the points of ``src`` around each point of ``dst``. |
+| `difference` | function | The difference of a field along an axis, at ``dst``. |
+| `interpolate` | function | The value at each point of ``dst``, from the points of ``src`` around it. |
 
 #### Area- and volume-weighted reduction helpers for Arakawa C-grids (`gridax._src.operators.reductions`)
 

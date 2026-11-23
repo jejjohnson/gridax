@@ -54,7 +54,7 @@ def test_weights_are_the_ones_of_the_stencils_they_replace() -> None:
     assert Upwind(2).weights(**face) == (F(-1, 2), F(3, 2))
     # the linear part of weno_5pts, as hand-typed in Shu (1998)
     assert WENO(5).weights(**face) == tuple(F(n, 60) for n in (2, -13, 47, 27, -3))
-    # staggered_difference(accuracy=3)
+    # the fourth-order staggered difference
     slope = Centred(4, "point").weights(derivative=1, staggered=True)
     assert slope == tuple(F(n, 24) for n in (1, -27, 27, -1))
 
@@ -107,6 +107,25 @@ def test_biased_is_the_forward_and_the_backward_difference(order: int) -> None:
         assert scheme.offsets(derivative=derivative, staggered=False) == offsets
         got = scheme.weights(derivative=derivative, staggered=False)
         assert tuple(map(float, got)) == gs.difference_coeffs(offsets, derivative)
+
+
+@pytest.mark.parametrize("accuracy", [1, 2, 3, 4, 5, 6, 7])
+def test_the_old_accuracies_are_orders(accuracy: int) -> None:
+    # the table of #496: what accuracy= meant, as the formal order
+    def same(scheme: Scheme, derivative: int, method) -> None:
+        old = gs.difference_offsets(
+            derivative=derivative, accuracy=accuracy, method=method
+        )
+        staggered = method == "staggered"
+        assert scheme.offsets(derivative=derivative, staggered=staggered) == old
+        weights = scheme.weights(derivative=derivative, staggered=staggered)
+        assert tuple(map(float, weights)) == gs.difference_coeffs(old, derivative)
+
+    same(Centred(2 * ((accuracy + 1) // 2)), 1, "central")
+    same(Biased(accuracy, "right"), 1, "forward")
+    same(Biased(accuracy, "left"), 1, "backward")
+    same(Centred(2 * ((accuracy + 2) // 2), "point"), 1, "staggered")
+    same(Centred(2 * ((accuracy + 1) // 2), "point"), 0, "staggered")
 
 
 @pytest.mark.parametrize("order", [1, 2, 3, 5, 7])

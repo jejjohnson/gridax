@@ -34,12 +34,9 @@ _DIRECTIONS = {-1: "x", -2: "y", -3: "z"}
 def reconstruct(
     q: Float[Array, "*spatial"],
     u: Float[Array, "*spatial"],
-    dim: int | None = None,
-    method: str | None = None,
-    num_pts: int | None = None,
     *,
-    axis: int | None = None,
-    scheme: Scheme | None = None,
+    axis: int,
+    scheme: Scheme,
     mask: Any = None,
 ) -> Float[Array, "*spatial"]:
     """The upwind advective flux ``q_face * u`` on the faces along ``axis``.
@@ -50,6 +47,8 @@ def reconstruct(
     lo]``. Each face takes the widest tier whose cells are inside the array
     and, when ``mask`` is given, wet (``mask.get_adaptive_masks``, as
     ``Advection*D`` uses it); the last tier, first-order upwind, always fits.
+    A scheme that is not upwinded (``Centred``, ``Biased``) reads the same
+    cells for either sign, and a face between two wet cells always has a flux.
 
         F[i+1/2] = u[i+1/2] * R+(q[i+lo .. i+hi])        u[i+1/2] >= 0
                  = u[i+1/2] * R-(q[i+1-hi .. i+1-lo])    u[i+1/2] <  0
@@ -69,14 +68,6 @@ def reconstruct(
         ``Biased(order, side)``, ``WENO(order, variant)`` or ``TVD(limiter)``.
     mask : Mask1D, Mask2D or Mask3D, optional
         A wet mask of ``q``'s rank; the tiers then also stop at the coast.
-    dim, method, num_pts
-        Deprecated: the old 2-D call ``reconstruct(q, u, dim, method="weno",
-        num_pts=5)`` still works for one release and warns. ``dim=1`` is
-        ``axis=-1`` and ``dim=0`` is ``axis=-2``; ``method="weno"`` /
-        ``"wenoz"`` / ``"linear"`` with ``num_pts`` 1, 3 or 5 is
-        ``WENO(num_pts)``, ``WENO(num_pts, "z")`` or ``Upwind(num_pts)``
-        (``Upwind(1)`` for ``num_pts=1``). The results are bit for bit the
-        same.
 
     Returns
     -------
@@ -94,14 +85,10 @@ def reconstruct(
     >>> flux.shape, float(flux[2, 3])
     ((6, 8), 1.0)
     """
-    if scheme is None:
-        axis, scheme = _legacy(dim, method, num_pts, axis)
-    elif dim is not None or method is not None or num_pts is not None:
+    if not isinstance(scheme, Scheme):
         raise TypeError(
-            "pass either axis= and scheme=, or the deprecated dim, method, num_pts"
+            f"scheme must be one of gridax.schemes, e.g. WENO(5); got {scheme!r}"
         )
-    if axis is None:
-        raise TypeError("reconstruct needs axis= with scheme=")
     position = axis % q.ndim
     if mask is not None:
         return _masked(q, u, position, scheme, mask)
@@ -119,41 +106,6 @@ def reconstruct(
     else:
         face = positive
     return interior(xp.moveaxis(face * velocity, -1, position), q)
-
-
-def _legacy(
-    dim: int | None, method: str | None, num_pts: int | None, axis: int | None
-) -> tuple[int, Scheme]:
-    """Map the old ``reconstruct(q, u, dim, method, num_pts)`` call, with a warning."""
-    import warnings
-
-    from gridax._src.schemes.linear import Upwind
-    from gridax._src.schemes.nonlinear import WENO
-
-    method = "weno" if method is None else method
-    num_pts = 5 if num_pts is None else num_pts
-    if dim not in (0, 1) or axis is not None:
-        raise ValueError(f"dim must be 0 (y) or 1 (x), got {dim!r}")
-    if num_pts not in (1, 3, 5):
-        raise ValueError(f"num_pts must be 1, 3, or 5, got {num_pts!r}")
-    if method not in ("weno", "wenoz", "linear"):
-        raise ValueError(
-            f"method must be one of ('weno', 'wenoz', 'linear'), got {method!r}"
-        )
-    if num_pts == 1:
-        scheme: Scheme = Upwind(1)
-    elif method == "linear":
-        scheme = Upwind(num_pts)
-    else:
-        scheme = WENO(num_pts, "z" if method == "wenoz" else "js")  # type: ignore[arg-type]
-    warnings.warn(
-        "reconstruct(q, u, dim, method, num_pts) is deprecated and will be removed in"
-        f" the next release: use reconstruct(q, u, axis={-1 if dim == 1 else -2},"
-        f" scheme={type(scheme).__name__}({scheme.order})) from gridax.advection.",
-        DeprecationWarning,
-        stacklevel=3,
-    )
-    return (-1 if dim == 1 else -2), scheme
 
 
 def _faces(xp: Any, q: Array, tiers: tuple[Tier, ...], *, upwind: str) -> Array:

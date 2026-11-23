@@ -1,14 +1,12 @@
 """One axis-generic upwind reconstruction (#464).
 
 Every ``Reconstruction1D/2D/3D`` method (including the masked ones and the four
-TVD limiters) and the old ``reconstruct(q, u, dim, method, num_pts)`` call were
-recorded before the rewrite in ``data/reconstruction_frozen.npz``; they must
+TVD limiters) and the old ``reconstruct(q, u, dim, method, num_pts)`` call,
+now ``reconstruct(q, u, axis=, scheme=)``, were recorded before the rewrite in ``data/reconstruction_frozen.npz``; they must
 still return the recorded arrays bit for bit.
 """
 
 from __future__ import annotations
-
-import warnings
 
 import _reconstruction_cases as cases
 import gridax
@@ -35,9 +33,7 @@ def test_every_recorded_call_still_exists() -> None:
 
 @pytest.mark.parametrize("name", RECORDED)
 def test_calls_equal_the_record(name: str) -> None:
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecationWarning)
-        got = np.asarray(CALLS[name]())
+    got = np.asarray(CALLS[name]())
     np.testing.assert_array_equal(got, FROZEN[name])
 
 
@@ -109,21 +105,12 @@ def test_orders_away_from_the_walls(scheme, order: int) -> None:
     assert np.log2(error(66) / error(130)) == pytest.approx(order, abs=0.3)
 
 
-def test_old_signature_warns_and_matches() -> None:
-    q, u = np.random.default_rng(1).standard_normal((2, 10, 12))
-    with pytest.warns(DeprecationWarning, match="axis=-1"):
-        old = gridax.reconstruct(q, u, 1, "wenoz", 5)
-    np.testing.assert_array_equal(
-        old, gadv.reconstruct(q, u, axis=-1, scheme=WENO(5, "z"))
-    )
-
-
 def test_argument_errors() -> None:
     q = np.zeros((6, 6))
-    with pytest.raises(TypeError, match="either"):
-        gadv.reconstruct(q, q, 1, axis=-1, scheme=WENO(5))
-    with pytest.raises(TypeError, match="axis"):
-        gadv.reconstruct(q, q, scheme=WENO(5))
+    with pytest.raises(TypeError, match="scheme"):
+        gadv.reconstruct(q, q, axis=-1)  # type: ignore[call-arg]
+    with pytest.raises(TypeError, match=r"gridax\.schemes"):
+        gadv.reconstruct(q, q, axis=-1, scheme="weno5")  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="WENO"):
         WENO(7, "z")
     with pytest.raises(ValueError, match="limiter"):
