@@ -143,7 +143,8 @@ def laplacian(
     """The horizontal Laplacian of a scalar, at its own points.
 
     ``δₓδₓf + δᵧδᵧf``; on a sphere ``1/(R² cos² φ) ∂λλ f
-    + 1/(R² cos φ) ∂φ (cos φ ∂φ f)``.
+    + 1/(R² cos φ) ∂φ (cos φ ∂φ f)``, the last
+    as a difference of fluxes, so the area-weighted sum telescopes.
 
     Parameters
     ----------
@@ -563,10 +564,16 @@ def _laplacian_collocated_sphere(grid: Any, f: Any, *, at: Any, mask: Any) -> An
     _only_t("laplacian", at)
     cos, R = _sphere(grid, f)
     xp = array_namespace(f)
-    sin = _metric_like(xp.sin(xp.asarray(grid.coords("y")))[:, None], f)
-    # 1/(R² cos² φ) ∂²f/∂λ² + 1/R² (∂²f/∂φ² - tan φ ∂f/∂φ)
+    # cos φ where f is valid, so the three differences take one stencil
+    weight = xp.where(xp.isfinite(f), cos, xp.nan)
+
+    def d2(x: Any) -> Any:
+        return _d(grid, x, "y", mask, 2)
+
+    # 1/(R² cos² φ) ∂²f/∂λ² + 1/(R² cos φ) ∂/∂φ (cos φ ∂f/∂φ), the last as fluxes:
+    # ∂(c ∂f)[j] = (c[j+1/2] (f[j+1] - f[j]) - c[j-1/2] (f[j] - f[j-1])) / Δφ²
+    #            = ½ (δ²(c f) + c δ²f - f δ²c)[j],  c[j+1/2] = ½ (c[j] + c[j+1])
     lon = _safe_div_cos(_d(grid, f, "x", mask, 2), cos, cos)
-    lat = _d(grid, f, "y", mask, 2) - _safe_div_cos(
-        sin * _d(grid, f, "y", mask), cos, xp.ones_like(cos)
-    )
+    flux = 0.5 * (d2(weight * f) + cos * d2(f) - f * d2(weight))
+    lat = _safe_div_cos(flux, cos, xp.ones_like(cos))
     return (lon + lat) / R**2

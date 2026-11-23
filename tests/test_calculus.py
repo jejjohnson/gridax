@@ -11,6 +11,8 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+RNG = np.random.default_rng(447)
+
 C2 = g.CartesianCGrid2D.from_interior(16, 14, 2.0, 3.0)
 C3 = g.CartesianCGrid3D.from_interior(10, 8, 4, 2.0, 3.0, 5.0)
 S2 = g.SphericalCGrid2D.from_interior(16, 14, (0.0, 40.0), (-60.0, 60.0), R=2.0)
@@ -245,7 +247,7 @@ class TestCollocated:
                     -(cos**2) * np.sin(lam) + 2.0 * cos * np.sin(phi) * np.sin(lam)
                 )
                 / (R * cos),
-                # 1/(R² cos²φ) ∂λλ f + 1/R² (∂φφ f - tan φ ∂φ f)
+                # 1/(R² cos²φ) ∂λλ f + 1/(R² cos φ) ∂φ(cos φ ∂φ f)
                 "lap": (-f / cos**2 - f - np.tan(phi) * cos * np.cos(lam)) / R**2,
             }
             got = {
@@ -259,6 +261,71 @@ class TestCollocated:
         for k in errors[0]:
             order = np.log2(errors[0][k] / errors[1][k])
             assert order > 1.8, (k, order)
+
+    @pytest.mark.parametrize("irregular", [False, True])
+    def test_the_laplacian_is_a_difference_of_fluxes(self, irregular):
+        """∂φ(cos φ ∂φ f) from the two faces of a row, with the mean cosine (#447)."""
+        lat = np.linspace(-60.0, 60.0, 13)
+        if irregular:
+            lat = lat + np.asarray(RNG.uniform(-2.0, 2.0, lat.size))
+        grid = g.SphericalAGrid2D.from_coords(
+            lat=lat, lon=np.arange(0.0, 360.0, 10.0), R=2.0
+        )
+        f = np.asarray(RNG.normal(size=grid.shape))
+        phi, cos = np.deg2rad(lat)[:, None], np.cos(np.deg2rad(lat))[:, None]
+        face = 0.5 * (cos[1:] + cos[:-1]) * np.diff(f, axis=0) / np.diff(phi, axis=0)
+        width = 0.5 * (phi[2:] - phi[:-2])
+        lat_part = np.diff(face, axis=0) / (width * cos[1:-1])
+        step = np.deg2rad(10.0)
+        lon_part = (np.roll(f, -1, 1) - 2.0 * f + np.roll(f, 1, 1)) / step**2
+        want = (lat_part + lon_part[1:-1] / cos[1:-1] ** 2) / 2.0**2
+        inner = (slice(1, -1), slice(1, -1))  # away from the one-sided edges
+        np.testing.assert_allclose(
+            g.laplacian(f, grid)[inner], want[:, 1:-1], rtol=1e-9
+        )
+
+    def test_the_spherical_budgets_close(self):
+        """The area-weighted sum is what crosses the edges: none, here (#447)."""
+        grid = g.SphericalAGrid2D.from_interior(
+            36, 30, (0.0, 360.0), (-60.0, 60.0), R=2.0, periodic=("x",)
+        )
+        f, u, v = np.asarray(RNG.normal(size=(3, *grid.shape)))
+        inside = np.zeros(grid.shape)
+        inside[5:-5] = 1.0
+        cos = np.cos(grid.coords("y"))[:, None]
+        for out in (
+            g.laplacian(inside * f, grid),
+            g.divergence(inside * u, inside * v, grid),
+            g.curl(inside * u, inside * v, grid),
+        ):
+            assert abs((out * cos).sum()) < 1e-13 * np.abs(out * cos).sum()
+
+    def test_the_spherical_laplacian_next_to_land(self):
+        """A dry cell is not read: its value, NaN or not, changes nothing."""
+        grid = g.SphericalAGrid2D.from_interior(
+            16, 14, (0.0, 160.0), (-60.0, 60.0), R=2.0
+        )
+        wet = np.asarray(RNG.random(grid.shape) > 0.1)
+        mask = g.Mask2D.from_grid(grid, wet)
+        f = np.sin(grid.coords("y"))[:, None] * np.cos(grid.coords("x"))[None, :]
+        out = g.laplacian(np.where(wet, f, np.nan), grid, mask=mask)
+        np.testing.assert_array_equal(
+            out, g.laplacian(np.where(wet, f, 1e3), grid, mask=mask)
+        )
+        kept = wet & np.isfinite(out)
+        assert kept.sum() > 0.8 * wet.sum()
+        # with no land, or away from it, the flux form
+        whole = g.laplacian(f, grid)
+        far = wet.copy()
+        for axis in (0, 1):
+            for shift in (-1, 1):
+                far &= np.roll(wet, shift, axis)
+        far[[0, -1]] = far[:, [0, -1]] = False
+        np.testing.assert_allclose(out[far], whole[far], rtol=1e-12, atol=1e-12)
+        all_wet = g.Mask2D.from_grid(grid, np.ones(grid.shape, bool))
+        np.testing.assert_allclose(
+            g.laplacian(f, grid, mask=all_wet), whole, rtol=1e-12, atol=1e-12
+        )
 
     def test_a_pole_is_nan(self):
         grid = g.SphericalAGrid2D.from_coords(
