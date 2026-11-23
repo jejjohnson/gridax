@@ -50,6 +50,25 @@ forcing = u.like(jnp.zeros(u.shape))
 combine(jnp.add, u, forcing)
 ```
 
+## Operators
+
+The canonical functions accept fields: they read the point of each operand, check it, and put the result on its own point. `src` is inferred, and a `src` that contradicts the field raises, at trace time under `jit`.
+
+```python
+# T → U: src is read from h
+h_u = gridax.interpolate(h, grid, dst="U")
+# u and h now sit on one point
+flux = combine(jnp.multiply, u, h_u)
+# U → T
+div_x = gridax.difference(flux, grid, axis="x", dst="T")
+
+gridax.difference(h, grid, axis="x", src="U", dst="T")  # raises StaggerMismatchError
+```
+
+The grid axes are found by name, in any order, and the other dims are kept. A reduction over the grid returns a plain array, or a `pipekit_array.DimArray` over the dims that are left (`area_sum` of an ensemble gives one value per member). Boundary conditions read the point too ([`fill_ghosts`](xref:api#gridax.fill_ghosts)).
+
+## Element-wise functions
+
 `gridax.fields` holds `combine` with the array namespace's functions: `abs`, `clip`, `cos`, `exp`, `log`, `maximum`, `minimum`, `sign`, `sin`, `sqrt`, `tanh` and `where`.
 
 ## With pipekit

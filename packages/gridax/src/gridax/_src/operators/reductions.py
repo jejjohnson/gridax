@@ -32,6 +32,7 @@ from jaxtyping import Bool, Float
 import numpy as np
 
 from gridax._src.api import grid_dispatch
+from gridax._src.fields.located import located
 from gridax._src.grid import (
     CartesianCGrid2D,
     CartesianCGrid3D,
@@ -128,28 +129,40 @@ def _weighted(
     return xp.where(wet, x, 0.0), xp.where(wet, weights, 0.0)
 
 
+def _interior_axes(x: Any, weights: Any) -> tuple[Any, tuple[int, ...] | None]:
+    """The interior of the grid axes, which are the last, and those axes.
+
+    ``None`` (all of them) when there are no others, where NumPy sums in
+    another order than over a tuple of axes.
+    """
+    rank = weights.ndim
+    axes = None if x.ndim == rank else tuple(range(-rank, 0))
+    return (..., *(slice(1, -1),) * rank), axes
+
+
 def _sum(x: Any, weights: Any, mask: Any) -> Any:
     """∑ w x over the interior."""
     xp = array_namespace(x)
     x, weights = _weighted(x, weights, mask)
-    inner = (slice(1, -1),) * x.ndim
-    return xp.sum((weights * x)[inner])
+    inner, axes = _interior_axes(x, weights)
+    return xp.sum((weights * x)[inner], axis=axes)
 
 
 def _mean(x: Any, weights: Any, mask: Any) -> Any:
     """∑ w x / ∑ w over the interior, NaN where there is no wet cell."""
     xp = array_namespace(x)
     x, weights = _weighted(x, weights, mask)
-    inner = (slice(1, -1),) * x.ndim
-    num = xp.sum(weights[inner] * x[inner])
+    inner, axes = _interior_axes(x, weights)
+    num = xp.sum(weights[inner] * x[inner], axis=axes)
     den = xp.sum(weights[inner])
     return xp.where(den == 0.0, xp.nan, num / xp.where(den == 0.0, 1.0, den))
 
 
 @grid_dispatch
+@located(None, x="T")
 def area_sum(
-    x: Float[Array, "Ny Nx"], grid: Any, *, mask: Mask2D | None = None
-) -> Float[Array, ""]:
+    x: Float[Array, "*batch Ny Nx"], grid: Any, *, mask: Mask2D | None = None
+) -> Float[Array, "*batch"]:
     """Area-weighted sum over the interior T cells.
 
     ``∑ⱼᵢ A[j, i] x[j, i]`` over ``[1:-1, 1:-1]``. With a mask the dry cells
@@ -158,7 +171,7 @@ def area_sum(
 
     Parameters
     ----------
-    x : Float[Array, "Ny Nx"]
+    x : CField or Float[Array, "*batch Ny Nx"]
         T-point field.
     grid : CartesianCGrid2D or SphericalCGrid2D
     mask : Mask2D, optional
@@ -166,8 +179,8 @@ def area_sum(
 
     Returns
     -------
-    Float[Array, ""]
-        In the dtype of ``x``.
+    Float[Array, "*batch"]
+        One value per leading index, in the dtype of ``x``.
 
     Examples
     --------
@@ -180,9 +193,10 @@ def area_sum(
 
 
 @grid_dispatch
+@located(None, x="T")
 def area_mean(
-    x: Float[Array, "Ny Nx"], grid: Any, *, mask: Mask2D | None = None
-) -> Float[Array, ""]:
+    x: Float[Array, "*batch Ny Nx"], grid: Any, *, mask: Mask2D | None = None
+) -> Float[Array, "*batch"]:
     """Area-weighted mean over the interior T cells.
 
     ``(∑ A x) / (∑ A)`` over the wet T cells; a NaN or Inf on land does not
@@ -190,7 +204,7 @@ def area_mean(
 
     Parameters
     ----------
-    x : Float[Array, "Ny Nx"]
+    x : CField or Float[Array, "*batch Ny Nx"]
         T-point field.
     grid : CartesianCGrid2D or SphericalCGrid2D
     mask : Mask2D, optional
@@ -198,7 +212,7 @@ def area_mean(
 
     Returns
     -------
-    Float[Array, ""]
+    Float[Array, "*batch"]
         NaN if the total wet area is zero.
 
     Examples
@@ -212,9 +226,10 @@ def area_mean(
 
 
 @grid_dispatch
+@located(None, x="T")
 def volume_sum(
-    x: Float[Array, "Nz Ny Nx"], grid: Any, *, mask: Mask3D | None = None
-) -> Float[Array, ""]:
+    x: Float[Array, "*batch Nz Ny Nx"], grid: Any, *, mask: Mask3D | None = None
+) -> Float[Array, "*batch"]:
     """Volume-weighted sum over the interior T cells.
 
     :func:`area_sum` with the volumes ``V[k, j, i] = A[j, i] dz`` and the
@@ -222,7 +237,7 @@ def volume_sum(
 
     Parameters
     ----------
-    x : Float[Array, "Nz Ny Nx"]
+    x : CField or Float[Array, "*batch Nz Ny Nx"]
         T-point field.
     grid : CartesianCGrid3D or SphericalCGrid3D
     mask : Mask3D, optional
@@ -236,14 +251,15 @@ def volume_sum(
 
 
 @grid_dispatch
+@located(None, x="T")
 def volume_mean(
-    x: Float[Array, "Nz Ny Nx"], grid: Any, *, mask: Mask3D | None = None
-) -> Float[Array, ""]:
+    x: Float[Array, "*batch Nz Ny Nx"], grid: Any, *, mask: Mask3D | None = None
+) -> Float[Array, "*batch"]:
     """Volume-weighted mean over the interior T cells, ``(∑ V x) / (∑ V)``.
 
     Parameters
     ----------
-    x : Float[Array, "Nz Ny Nx"]
+    x : CField or Float[Array, "*batch Nz Ny Nx"]
         T-point field.
     grid : CartesianCGrid3D or SphericalCGrid3D
     mask : Mask3D, optional
@@ -251,7 +267,7 @@ def volume_mean(
 
     Returns
     -------
-    Float[Array, ""]
+    Float[Array, "*batch"]
         NaN if the total wet volume is zero.
     """
     return volume_mean._impl(grid, x, mask=mask)

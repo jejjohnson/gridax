@@ -71,6 +71,18 @@ def from_xarray(array: Any) -> CField:
     return CField(array.data, dims, labels, stagger)
 
 
+def dimarray(data: Any, dims: Any, labels: Any) -> Any:
+    """A ``pipekit_array.DimArray``, or an error that names the extra."""
+    try:
+        from pipekit_array import DimArray
+    except ImportError as exc:
+        raise ImportError(
+            'a DimArray needs pipekit-array: pip install "gridax[pipekit]"'
+        ) from exc
+
+    return DimArray(data, dims, labels)
+
+
 def to_dimarray(field: CField) -> Any:
     """The data, dims and labels of a field as a ``pipekit_array.DimArray``.
 
@@ -96,14 +108,7 @@ def to_dimarray(field: CField) -> Any:
     >>> to_dimarray(CField(np.zeros((2, 3)), ("y", "x"), loc="U")).dims
     ('y', 'x')
     """
-    try:
-        from pipekit_array import DimArray
-    except ImportError as exc:
-        raise ImportError(
-            'to_dimarray needs pipekit-array: pip install "gridax[pipekit]"'
-        ) from exc
-
-    return DimArray(field.data, field.dims, field.labels)
+    return dimarray(field.data, field.dims, field.labels)
 
 
 def to_right(field: CField, grid: Any, bc: BC) -> CField:

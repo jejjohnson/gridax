@@ -8,6 +8,7 @@ from jaxtyping import Float
 import numpy as np
 
 from gridax._src.api import grid_dispatch
+from gridax._src.fields.located import located
 from gridax._src.grid import (
     CartesianCGrid1D,
     CartesianCGrid2D,
@@ -27,6 +28,7 @@ else:
 
 
 @grid_dispatch
+@located("dst", f="src")
 def difference(
     f: Float[Array, "..."],
     grid: Any,
@@ -45,7 +47,7 @@ def difference(
 
     Parameters
     ----------
-    f : Float[Array, "*batch *grid"]
+    f : CField or Float[Array, "*batch *grid"]
         A field at ``src``, with its ghost ring.
     grid : grid
         A Cartesian or spherical C-grid, 1-D, 2-D or 3-D.
@@ -53,14 +55,15 @@ def difference(
         One of ``grid.axes``.
     src, dst : str or Stagger
         The points: ``"T"``, ``"U"``, ``"V"``, ``"X"``, ``"W"``, or their
-        staggers. They differ by half a step along ``axis``.
+        staggers. They differ by half a step along ``axis``. A `CField` has
+        its own ``src``.
     mask : Mask1D, Mask2D or Mask3D, optional
         Zeroes the dry points of ``dst`` (at X, those without four wet
         cells).
 
     Returns
     -------
-    Float[Array, "*batch *grid"]
+    CField or Float[Array, "*batch *grid"]
         At ``dst``, with a zero ghost ring. ``NaN`` next to a pole, where a
         zonal difference is not defined.
 
@@ -83,6 +86,7 @@ def difference(
 
 
 @grid_dispatch
+@located("dst", f="src")
 def interpolate(
     f: Float[Array, "..."],
     grid: Any,
@@ -98,20 +102,20 @@ def interpolate(
 
     Parameters
     ----------
-    f : Float[Array, "*batch *grid"]
+    f : CField or Float[Array, "*batch *grid"]
         A field at ``src``, with its ghost ring.
     grid : grid
         A Cartesian or spherical C-grid, 1-D, 2-D or 3-D.
     src, dst : str or Stagger
         The points: ``"T"``, ``"U"``, ``"V"``, ``"X"``, ``"W"``, or their
-        staggers.
+        staggers. A `CField` has its own ``src``.
     mask : Mask1D, Mask2D or Mask3D, optional
         Zeroes the dry points of ``dst`` (at X, those without four wet
         cells). The mean is over all the neighbours, wet or dry.
 
     Returns
     -------
-    Float[Array, "*batch *grid"]
+    CField or Float[Array, "*batch *grid"]
         At ``dst``, with a zero ghost ring.
 
     Raises
