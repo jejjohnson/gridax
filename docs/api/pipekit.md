@@ -17,7 +17,7 @@ call on `[*batch, Ny, Nx]` fields. Requires the `pipekit` extra:
 | `GradPerp` | `grad_perp` | T → (U, V) |
 | `Interp(src, dst, scheme)` | `interpolate` | 1 → 1 |
 | `Coriolis(f0, beta, y0)` | `geophysix.rotation.beta_plane` + `coriolis` | (U, V) → (U, V) |
-| `FillGhosts(kind)` | `enforce_periodic`, `zero_boundaries`, …, `wall_boundaries` | 1 → 1 |
+| `FillGhosts(kind, stagger)` | `fill_ghosts` with `BC.periodic()`, `BC.no_flux()`, … | 1 → 1 |
 | `ApplyMask(mask, stagger)` | `jnp.where(mask.{h,u,v,xy_corner_strict}, x, 0)` | 1 → 1 |
 | `RelativeVorticity` | `curl` | (U, V) → X |
 | `PotentialVorticity` | `Vorticity2D.potential_vorticity` | (U, V, T, T) → X |

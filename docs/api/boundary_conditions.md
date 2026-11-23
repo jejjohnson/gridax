@@ -28,9 +28,7 @@ Boundary conditions and the ghost-ring fill for staggered C-grid fields.
 
 ::: gridax.Sponge
 
-## Helpers
-
-::: gridax.enforce_periodic
+::: gridax.Wall
 
 ## Regions
 

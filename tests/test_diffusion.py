@@ -372,11 +372,12 @@ class TestBiharmonicDiffusion2D:
         field is periodic so ghost cells are filled before calling the
         operator; results are compared in the deep interior [2:-2, 2:-2].
         """
-        from gridax._src.boundary.boundary import enforce_periodic
         from gridax._src.diffusion.diffusion import (
             BiharmonicDiffusion2D,
             Diffusion2D,
         )
+
+        from tests.fixtures._helpers import periodic
 
         op = BiharmonicDiffusion2D(grid=grid)
         harm = Diffusion2D(grid=grid)
@@ -385,7 +386,7 @@ class TestBiharmonicDiffusion2D:
         jy = jnp.arange(grid.Ny, dtype=float) * grid.spacing("y")
         # sin(x)*sin(y): nabla^2 h = -2*sin(x)*sin(y) != const, so nabla^4 h != 0
         h = jnp.sin(ix[None, :]) * jnp.sin(jy[:, None])
-        h = enforce_periodic(h)
+        h = periodic(h)
 
         # nabla^4 h = nabla^2(nabla^2 h); compute independently
         lap1 = harm(h, kappa=1.0)
@@ -416,8 +417,9 @@ class TestBiharmonicDiffusion2D:
         The eigenvalue ratio mu_k4^2 / mu_k1^2 approx (k4/k1)^4 for well-resolved
         modes (k*dx << 1), demonstrating scale-selective dissipation.
         """
-        from gridax._src.boundary.boundary import enforce_periodic
         from gridax._src.diffusion.diffusion import BiharmonicDiffusion2D
+
+        from tests.fixtures._helpers import periodic
 
         N_int = 64
         Lx = 2.0 * float(jnp.pi)
@@ -437,7 +439,7 @@ class TestBiharmonicDiffusion2D:
 
         for k in [k1, k4]:
             h = jnp.tile(jnp.sin(k * x), (grid.Ny, 1))
-            h = enforce_periodic(h)
+            h = periodic(h)
 
             tend = op(h, kappa=kappa)
 
@@ -468,11 +470,12 @@ class TestBiharmonicDiffusion2D:
         For k*dx << 1: |mu_k| approx k^2 and mu_k^2 approx k^4, so with
         kappa_h = kappa_bi and k > 1/dx, biharmonic damps more (k^4 > k^2).
         """
-        from gridax._src.boundary.boundary import enforce_periodic
         from gridax._src.diffusion.diffusion import (
             BiharmonicDiffusion2D,
             Diffusion2D,
         )
+
+        from tests.fixtures._helpers import periodic
 
         N_int = 64
         Lx = 2.0 * float(jnp.pi)
@@ -486,7 +489,7 @@ class TestBiharmonicDiffusion2D:
         k = 8
         x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
         h = jnp.tile(jnp.sin(k * x), (grid.Ny, 1))
-        h = enforce_periodic(h)
+        h = periodic(h)
 
         tend_harm = harm_op(h, kappa=1.0)
         tend_biharm = biharm_op(h, kappa=1.0)
@@ -650,13 +653,11 @@ class TestVariableKappa:
     def test_open_wall_face_reads_kappa_ghost(self, grid):
         """wall="open": the wall-face κ is (κ_edge + κ_ghost) / 2, so a
         zero-gradient κ halo gives the wall face the edge-cell κ."""
-        from gridax._src.boundary.boundary import zero_gradient_boundaries
+        from tests.fixtures._helpers import copied
 
         rng = np.random.default_rng(6)
         h = jnp.asarray(rng.normal(size=(grid.Ny, grid.Nx)))
-        k = zero_gradient_boundaries(
-            jnp.asarray(rng.uniform(0.5, 1.5, size=(grid.Ny, grid.Nx)))
-        )
+        k = copied(jnp.asarray(rng.uniform(0.5, 1.5, size=(grid.Ny, grid.Nx))))
         fx, fy = Diffusion2D(grid=grid).fluxes(h, k, wall="open")
         # west wall face (j, 1/2) and east wall face (j, Nx-3/2)
         np.testing.assert_allclose(

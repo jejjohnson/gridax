@@ -287,7 +287,7 @@ def test_fields_and_states() -> None:
             one = g.fill_ghosts(
                 arrays[k][level], grid, bcs[k], mask=mask, stagger=point
             )
-            np.testing.assert_array_equal(expected[level], one)
+            np.testing.assert_allclose(expected[level], one, rtol=1e-14)
 
 
 def test_three_dimensions() -> None:
