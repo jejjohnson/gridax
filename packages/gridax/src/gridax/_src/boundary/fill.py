@@ -253,12 +253,26 @@ def _as_stagger(stagger: str | Stagger) -> Stagger:
 
 def _filled(f: Any, grid: Any, bc: BC, mask: Any, width: int, stagger: Stagger) -> Any:
     """The faces and, with a mask, the coasts."""
-    out = _fill(f, grid, bc, width, stagger)
     if mask is None:
-        return out
+        return _fill(f, grid, bc, width, stagger)
+    return fill_coasts(f, grid, bc, mask, stagger, width=width, layers=width)
+
+
+def fill_coasts(
+    f: Any,
+    grid: Any,
+    bc: BC,
+    mask: Any,
+    stagger: Stagger,
+    *,
+    width: int,
+    layers: int,
+) -> Any:
+    """Fill ``width`` ghost layers, and ``layers`` dry points behind the coasts."""
     # the coasts read the ring (a periodic image of the water), and the ring
     # then wraps or mirrors the coasts
-    out = _fill_coasts(out, grid, bc, mask, stagger, layers=width)
+    out = _fill(f, grid, bc, width, stagger)
+    out = _fill_coasts(out, grid, bc, mask, stagger, layers=layers)
     return _fill(out, grid, bc, width, stagger)
 
 
@@ -331,6 +345,12 @@ def _apply(
     # corners every order agrees, and the value stays exact.
     first, *rest = (apply(order) for order in itertools.permutations(axes))
     return first + sum(out - first for out in rest) / (len(rest) + 1)
+
+
+def wrapping(axes: list[str]) -> BC:
+    """Periodic faces along ``axes``."""
+    faces: dict[str, Any] = {axis: Periodic() for axis in axes}
+    return BC(**faces)
 
 
 def extend(

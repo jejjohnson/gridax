@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from jaxtyping import Float
 import numpy as np
 
-from gridax._src.advection.reconstruct import axis_flux, check_scheme
+from gridax._src.advection.reconstruct import axis_flux, check_scheme, extends
 from gridax._src.api import grid_dispatch
 from gridax._src.backend import set_at
 from gridax._src.boundary.fill import BC
@@ -29,6 +29,7 @@ from gridax._src.grid import (
 )
 from gridax._src.operators._utils import _metric_like, _safe_div_cos, _spacing
 from gridax._src.pytree import array_namespace
+from gridax._src.schemes.adaptive import policies
 from gridax._src.schemes.base import Scheme
 
 if TYPE_CHECKING:
@@ -112,8 +113,8 @@ def advect(
     """
     check_scheme(scheme)
     check_wall(wall, mask)
-    if bc is not None and wall != "closed":
-        raise ValueError("bc= says what the walls are: leave wall= out")
+    if extends(scheme, bc) and wall != "closed":
+        raise ValueError("bc= (or periodic edges) says what the walls are: drop wall=")
     return advect._impl(grid, q, u, v, scheme=scheme, mask=mask, wall=wall, bc=bc)
 
 
@@ -147,7 +148,8 @@ def _fluxes(
         wet = {axis: mask.wet(at=points[axis]) for axis in velocities}
         # zero the dry inputs before any stencil reads them, so land values
         # (even NaN) reach neither the output nor its gradient
-        q = xp.where(mask.wet(), q, 0.0)
+        if policies(scheme, bc, edges="narrow", dry="narrow")[2] != "none":
+            q = xp.where(mask.wet(), q, 0.0)
         velocities = {a: xp.where(wet[a], c, 0.0) for a, c in velocities.items()}
     out = {}
     for axis, velocity in velocities.items():
@@ -230,7 +232,7 @@ def _advect_cartesian(
         wall=wall,
         bc=bc,
     )
-    here = _written(grid, "closed" if bc is None and wall == "closed" else "open")
+    here = _written(grid, "open" if extends(scheme, bc) else wall)
     terms = []
     for axis, flux in fluxes.items():
         position = grid.axes.index(axis) - len(grid.axes)
@@ -266,7 +268,7 @@ def _advect_spherical(
         bc=bc,
     )
     fe, fn = fluxes["x"], fluxes["y"]
-    here = _written(grid, "closed" if bc is None and wall == "closed" else "open")
+    here = _written(grid, "open" if extends(scheme, bc) else wall)
     plane = here[-2:]  # the cos(lat) arrays are 2-D
     cos_t = _metric_like(grid._cos_lat("T"), fe)[plane]
     cos_v = _metric_like(grid._cos_lat("V"), fn)

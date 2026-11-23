@@ -34,8 +34,10 @@ from typing import TYPE_CHECKING, Any, Literal
 from jaxtyping import Float
 import numpy as np
 
+from gridax._src.mask.utils import shifted
 from gridax._src.operators import stencils as _named
 from gridax._src.pytree import array_namespace
+from gridax._src.schemes.adaptive import Adaptive, policies
 from gridax._src.schemes.base import Scheme
 from gridax._src.schemes.linear import Centred
 from gridax._src.stencils.coefficients import difference_coeffs
@@ -164,6 +166,8 @@ def staggered_average(
 
 def check_linear(scheme: Scheme) -> None:
     """Raise unless ``scheme`` is linear and the same for either flow direction."""
+    if isinstance(scheme, Adaptive):
+        scheme = scheme.scheme
     if not isinstance(scheme, Scheme):
         raise TypeError(
             f"scheme must be one of gridax.schemes, e.g. Centred(4); got {scheme!r}"
@@ -198,11 +202,14 @@ def _staggered(
     if h.ndim < ndim:
         raise ValueError(f"h has {h.ndim} axes; ndim={ndim} spatial axes expected")
     check_linear(scheme)
+    scheme, edges, _ = policies(scheme, None, edges="bias", dry="none")
+    if edges == "periodic":
+        raise ValueError('edges="periodic" needs a grid: use gridax.difference')
     if is_two_point(scheme):
         # the named two-point stencil, bit for bit
         op = "diff" if derivative else "avg"
         return getattr(_named, f"{op}_{axis}_{side}_{ndim}d")(h)
-    out = along(h, _AXIS_INDEX[axis], side, scheme, derivative=derivative)
+    out = along(h, _AXIS_INDEX[axis], side, scheme, derivative=derivative, edges=edges)
     # the other spatial axes lose their ghost cells, as in the named stencils
     return out[crop(h.ndim, [a for a in range(-ndim, 0) if a != _AXIS_INDEX[axis]])]
 
@@ -215,40 +222,145 @@ def crop(ndim: int, axes: Sequence[int]) -> tuple[slice, ...]:
 
 
 def along(
-    h: Array, position: int, side: str, scheme: Scheme, *, derivative: int
+    h: Array,
+    position: int,
+    side: str,
+    scheme: Scheme,
+    *,
+    derivative: int,
+    edges: str = "bias",
 ) -> Array:
     """The stencil of ``scheme`` along one axis, on the interior of that axis only.
 
     Where the stencil would leave the array it shifts inwards, with the
-    weights of its shifted offsets.
+    weights of its shifted offsets (``edges="bias"``), the next rung of its
+    ladder takes over (``"narrow"``), or the result is zero (``"none"``).
     """
-    offsets = scheme.offsets(derivative=derivative, staggered=True)
     xp = array_namespace(h)
     size = h.shape[position]
-    if size < len(offsets):
-        raise ValueError(
-            f"an axis of length {size} is shorter than the {len(offsets)}-point "
-            "staggered stencil"
-        )
-    # output index i = 1 .. N-2 writes the face i + delta; sample k is the cell
-    # i + delta + s_k + t, with t the inward shift that keeps it in the array
-    delta = 0.5 if side == "fwd" else -0.5
-    lowest, highest = int(delta + offsets[0]), int(delta + offsets[-1])
-    data: Any = scheme._data or "point"
     pieces = []
-    for shift, start, stop in _shift_runs(size, lowest, highest):
+    for rung, shift, start, stop in _runs(size, side, scheme, derivative, edges):
+        if rung is None:
+            shape = list(h.shape)
+            shape[position] = stop - start
+            pieces.append(xp.zeros(tuple(shape), dtype=h.dtype))
+            continue
+        offsets, cells = reads(rung, side, derivative)
+        data: Any = rung._data or "point"
         coeffs = difference_coeffs(
             tuple(s + shift for s in offsets), derivative, data=data
         )
         total = None
-        for s, c in zip(offsets, coeffs, strict=True):
-            first = start + int(delta + s) + shift
+        for k, c in zip(cells, coeffs, strict=True):
+            first = start + k + shift
             index = [slice(None)] * h.ndim
             index[position] = slice(first, first + stop - start)
             term = c * h[tuple(index)]
             total = term if total is None else total + term
         pieces.append(total)
     return pieces[0] if len(pieces) == 1 else xp.concat(pieces, axis=position)
+
+
+def reads(
+    scheme: Scheme, side: str, derivative: int
+) -> tuple[tuple[float, ...], list[int]]:
+    """The offsets of a staggered stencil, and the cells it reads.
+
+    Output ``i`` writes the face ``i + delta``, so sample ``k`` is the cell
+    ``i + delta + s_k``.
+    """
+    offsets = scheme.offsets(derivative=derivative, staggered=True)
+    delta = 0.5 if side == "fwd" else -0.5
+    return offsets, [int(delta + s) for s in offsets]
+
+
+def along_wet(
+    h: Array,
+    wet: Array,
+    position: int,
+    side: str,
+    scheme: Scheme,
+    *,
+    derivative: int,
+) -> Array:
+    """As :func:`along`, with the stencil shifted onto wet points.
+
+    Each output takes the stencil of ``scheme`` if its points are wet; then the
+    least shifted one of the same order that has wet points only and still
+    holds the two on either side of the output (a difference needs one point
+    more than the symmetric stencil for that); then those of the next rung of
+    its ladder; and at last the two points, wet or dry. ``wet`` holds the
+    points of the last axes of ``h``.
+    """
+    xp = array_namespace(h, wet)
+    core = (0, 1) if side == "fwd" else (-1, 0)
+    delta = 0.5 if side == "fwd" else -0.5
+
+    def inner(x: Array) -> Array:
+        index = [slice(None)] * x.ndim
+        index[position] = slice(1, -1)
+        return x[tuple(index)]
+
+    def stencil(cells: Sequence[int], data: Any) -> Array:
+        offsets = tuple(k - delta for k in cells)
+        coeffs = difference_coeffs(offsets, derivative, data=data)
+        total = None
+        for k, c in zip(cells, coeffs, strict=True):
+            term = c * inner(shifted(h, position, k))
+            total = term if total is None else total + term
+        return total
+
+    out = stencil(core, "point")
+    for rung in reversed(scheme._ladder()):
+        # the last one that fits is kept: the least shifted, and at last its own
+        for cells in wet_windows(rung, side, derivative):
+            fits = shifted(wet, position, cells[0])
+            for k in cells[1:]:
+                fits = fits & shifted(wet, position, k)
+            out = xp.where(inner(fits), stencil(cells, rung._data or "point"), out)
+    return out
+
+
+def wet_windows(scheme: Scheme, side: str, derivative: int) -> list[list[int]]:
+    """The stencils of a scheme on wet points, the most shifted first."""
+    core = (0, 1) if side == "fwd" else (-1, 0)
+    _, own = reads(scheme, side, derivative)
+    n = scheme.order + derivative
+    starts = range(core[1] - n + 1, core[0] + 1)
+    windows = [list(range(first, first + n)) for first in starts]
+    centre = sum(core) / 2
+    windows.sort(key=lambda cells: -abs(sum(cells) / n - centre))
+    return [*(w for w in windows if w != own), own]
+
+
+def _runs(
+    size: int, side: str, scheme: Scheme, derivative: int, edges: str
+) -> list[tuple[Scheme | None, int, int, int]]:
+    """``(rung, shift, start, stop)`` runs of the output indices 1 .. size-2."""
+    _, cells = reads(scheme, side, derivative)
+    if edges == "bias":
+        if size < len(cells):
+            raise ValueError(
+                f"an axis of length {size} is shorter than the {len(cells)}-point "
+                "staggered stencil"
+            )
+        shifts = _shift_runs(size, cells[0], cells[-1])
+        return [(scheme, shift, start, stop) for shift, start, stop in shifts]
+    rungs: list[Scheme] = [scheme]
+    if edges == "narrow":
+        rungs = list(scheme._ladder())
+    spans = [reads(rung, side, derivative)[1] for rung in rungs]
+    runs: list[tuple[int | None, int, int]] = []
+    for i in range(1, size - 1):
+        fits = [i + cells[0] >= 0 and i + cells[-1] <= size - 1 for cells in spans]
+        k = fits.index(True) if any(fits) else None
+        if runs and runs[-1][0] == k:
+            runs[-1] = (k, runs[-1][1], i + 1)
+        else:
+            runs.append((k, i, i + 1))
+    return [
+        (None if k is None else rungs[k], 0, start, stop) for k, start, stop in runs
+    ]
 
 
 def _shift_runs(size: int, lowest: int, highest: int) -> list[tuple[int, int, int]]:

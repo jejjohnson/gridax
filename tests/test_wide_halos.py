@@ -268,7 +268,7 @@ class TestErrors:
             g.interpolate(np.zeros(8), grid, bc=g.BC(x=g.Neumann()))
 
     def test_an_open_wall(self) -> None:
-        with pytest.raises(ValueError, match="leave wall= out"):
+        with pytest.raises(ValueError, match="drop wall="):
             g.advect(
                 self.F,
                 self.F,

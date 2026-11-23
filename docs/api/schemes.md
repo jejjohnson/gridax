@@ -12,6 +12,8 @@ Which values an operation reads around its output, and with what weights.
 
 ::: gridax.schemes.TVD
 
+::: gridax.schemes.Adaptive
+
 ## The base class
 
 ::: gridax.schemes.Scheme

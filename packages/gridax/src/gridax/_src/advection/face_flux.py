@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING
 from jaxtyping import Float
 import numpy as np
 
-from gridax._src.advection.reconstruct import check_scheme, face_flux, hierarchy_of
+from gridax._src.advection.reconstruct import axis_flux, check_scheme
 from gridax._src.grid import CartesianCGrid2D
 from gridax._src.mask import Mask2D
 from gridax._src.operators.differentiable import smooth_abs
@@ -88,7 +88,7 @@ def uv_center_flux(
     fn : Float[Array, "Ny Nx"]
         North-face flux (h * v reconstructed at north faces).
     """
-    return _face_fluxes(h, u, v, scheme, mask)
+    return _face_fluxes(h, u, v, grid, scheme, mask)
 
 
 def uv_node_flux(
@@ -128,7 +128,7 @@ def uv_node_flux(
     vq_flux : Float[Array, "Ny Nx"]
         North-face flux (q * v reconstructed at north faces).
     """
-    return _face_fluxes(q, u, v, scheme, mask)
+    return _face_fluxes(q, u, v, grid, scheme, mask)
 
 
 def rusanov_flux(
@@ -212,21 +212,14 @@ def _face_fluxes(
     q: Float[Array, "*batch Ny Nx"],
     u: Float[Array, "*batch Ny Nx"],
     v: Float[Array, "*batch Ny Nx"],
+    grid: CartesianCGrid2D,
     scheme: Scheme,
     mask: Mask2D | None,
 ) -> tuple[Float[Array, "*batch Ny Nx"], Float[Array, "*batch Ny Nx"]]:
     """The flux along x and along y."""
     check_scheme(scheme)
     fe, fn = (
-        face_flux(
-            q,
-            velocity,
-            axis=position,
-            scheme=scheme,
-            rank=2,
-            hierarchy=None if mask is None else hierarchy_of(mask, axis, scheme),
-            wet=None if mask is None else mask.wet(),
-        )
-        for axis, position, velocity in (("x", -1, u), ("y", -2, v))
+        axis_flux(grid, q, velocity, axis=axis, scheme=scheme, mask=mask, bc=None)
+        for axis, velocity in (("x", u), ("y", v))
     )
     return fe, fn

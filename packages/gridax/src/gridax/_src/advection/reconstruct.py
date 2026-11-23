@@ -11,6 +11,7 @@ cell downwind of the face. Every ``Reconstruction1D/2D/3D`` method, and
 
 from __future__ import annotations
 
+import dataclasses
 from typing import TYPE_CHECKING, Any
 
 from jaxtyping import Float
@@ -18,8 +19,14 @@ import numpy as np
 
 from gridax._src.advection.flux import upwind_flux
 from gridax._src.api import grid_dispatch
-from gridax._src.backend import pad
-from gridax._src.boundary.fill import BC, extend, extend_wet
+from gridax._src.backend import pad, set_at
+from gridax._src.boundary.fill import (
+    BC,
+    extend,
+    extend_wet,
+    fill_coasts,
+    wrapping,
+)
 from gridax._src.fields.located import located
 from gridax._src.grid import (
     CartesianCGrid1D,
@@ -32,7 +39,9 @@ from gridax._src.grid.points import point_stagger
 from gridax._src.mask.base import tiers_of
 from gridax._src.operators._ghost import interior
 from gridax._src.pytree import array_namespace
+from gridax._src.schemes.adaptive import policies
 from gridax._src.schemes.base import Ladder, Scheme, Tier
+from gridax._src.stencils.staggered import along, along_wet, crop, wet_windows
 
 if TYPE_CHECKING:
     from jaxtyping import Array
@@ -124,11 +133,20 @@ def _reconstruct_staggered(
     if axis not in grid.axes:
         raise ValueError(f"axis must be one of {grid.axes}; got {axis!r}")
     flux = axis_flux(grid, q, u, axis=axis, scheme=scheme, mask=mask, bc=bc)
-    if bc is None:
+    if not extends(scheme, bc):
         return flux
     position = grid.axes.index(axis) - len(grid.axes)
     ring = (..., slice(1, -1), *(slice(None),) * (-position - 1))
     return interior(flux[ring], flux)
+
+
+def extends(scheme: Scheme, bc: BC | None) -> bool:
+    """Whether the fluxes read ghost layers that are filled for them."""
+    _, edges, _ = policies(scheme, bc, edges="narrow", dry="narrow")
+    return edges in ("extend", "periodic")
+
+
+_FACES = {"x": "U", "y": "V", "z": "W"}
 
 
 def axis_flux(
@@ -143,48 +161,102 @@ def axis_flux(
 ) -> Array:
     """The flux through the faces along ``axis``.
 
-    With a zero ghost ring; with ``bc`` the first face (the wall on the low
-    side) has its flux too.
+    With a zero ghost ring; where ghost layers are filled for it (`extends`)
+    the first face (the wall on the low side) has its flux too.
     """
     rank = len(grid.axes)
     position = grid.axes.index(axis) - rank
-    if bc is None:
-        return face_flux(
+    scheme, edges, dry = policies(scheme, bc, edges="narrow", dry="narrow")
+    halo = scheme.halo(staggered=True)
+    if mask is not None and dry == "bias":
+        windows = wet_windows(scheme, "fwd", 0)
+        halo = max(abs(k) for cells in windows for k in cells)
+    if mask is not None and dry == "fill":
+        assert bc is not None  # policies() asked for it
+        stagger = point_stagger("T")
+        q = fill_coasts(q, grid, bc, mask, stagger, width=grid.ghost, layers=halo)
+
+    wet = None
+    tiers: Hierarchy | None = None
+    if mask is not None and dry in ("narrow", "bias"):
+        wet = mask.wet()
+    around: BC | None = None
+    extra = 0
+    size = q.shape[position]
+    if edges in ("extend", "periodic"):
+        around = wrapping([axis]) if edges == "periodic" else bc
+        assert around is not None  # policies() asked for it
+        # at least one layer, so the wall on the low side is an interior face
+        extra = max(halo - grid.ghost, 1)
+        q = extend(q, grid, around, point_stagger("T"), [axis], extra)
+        widths = [(0, 0)] * u.ndim
+        widths[position] = (extra, extra)
+        u = pad(u, tuple(widths))
+        wet = None if wet is None else extend_wet(wet, grid, around, [axis], extra)
+    if wet is not None and scheme.upwinded:
+        if around is None:
+            tiers = hierarchy_of(mask, axis, scheme)
+        else:
+            tiers = tiers_of(wet, position, [tier.size for tier in scheme.tiers()])
+
+    if dry == "bias" and wet is not None:
+        flux = _shifted_flux(q, u, position, rank, scheme, wet)
+    elif edges == "bias" and wet is None:
+        flux = _shifted_flux(q, u, position, rank, scheme, None)
+    else:
+        flux = face_flux(
             q,
             u,
             axis=position,
             scheme=scheme,
             rank=rank,
-            hierarchy=None if mask is None else hierarchy_of(mask, axis, scheme),
-            wet=None if mask is None else mask.wet(),
+            hierarchy=tiers,
+            wet=wet,
         )
-    # at least one layer, so the wall on the low side is an interior face
-    extra = max(scheme.halo(staggered=True) - grid.ghost, 1)
-    wet = hierarchy = None
-    if mask is not None:
-        wet = extend_wet(mask.wet(), grid, bc, [axis], extra)
-        if scheme.upwinded:
-            hierarchy = tiers_of(wet, position, [t.size for t in scheme.tiers()])
-    widths = [(0, 0)] * q.ndim
-    widths[position] = (extra, extra)
-    flux = face_flux(
-        extend(q, grid, bc, point_stagger("T"), [axis], extra),
-        pad(u, tuple(widths)),
-        axis=position,
-        scheme=scheme,
-        rank=rank,
-        hierarchy=hierarchy,
-        wet=wet,
-    )
+    if edges == "none":
+        flux = _without_overhang(flux, position, scheme)
+    if mask is not None and dry in ("fill", "none", "bias"):
+        # these read across the coast, or leave a value on it
+        on_faces = mask.wet(at=_FACES[axis])
+        if around is not None:
+            on_faces = extend_wet(on_faces, grid, around, [axis], extra)
+        flux = array_namespace(flux).where(on_faces, flux, 0.0)
+    if around is None:
+        return flux
 
     def faces(start: int, stop: int) -> tuple[Any, ...]:
         return (..., slice(start, stop), *(slice(None),) * (-position - 1))
 
     # the last index has no face of the grid
-    size = q.shape[position]
     kept = flux[faces(extra, extra + size - 1)]
     xp = array_namespace(flux)
     return xp.concat([kept, xp.zeros_like(flux[faces(0, 1)])], axis=position)
+
+
+def _shifted_flux(
+    q: Array, u: Array, position: int, rank: int, scheme: Any, wet: Array | None
+) -> Array:
+    """The flux with the stencil shifted into the array, or onto wet cells."""
+    others = [a for a in range(-rank, 0) if a != position]
+    cells: Scheme = scheme
+    if scheme.data is None:
+        cells = dataclasses.replace(scheme, data="cell")
+    if wet is None:
+        face = along(q, position, "fwd", cells, derivative=0)
+    else:
+        face = along_wet(q, wet, position, "fwd", cells, derivative=0)
+    inner = crop(q.ndim, range(-rank, 0))
+    return interior(face[crop(q.ndim, others)] * u[inner], q)
+
+
+def _without_overhang(flux: Array, position: int, scheme: Scheme) -> Array:
+    """Zero on the faces whose widest stencil would leave the array."""
+    lo, hi = scheme.footprint(staggered=True)
+    n = flux.shape[position]
+    for i in range(1, n - 1):
+        if i + lo < 0 or i + hi > n - 1:
+            flux = set_at(flux, (..., i, *(slice(None),) * (-position - 1)), 0.0)
+    return flux
 
 
 def check_scheme(scheme: Any) -> None:
