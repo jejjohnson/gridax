@@ -45,6 +45,7 @@ from gridax._src.advection.limiters import (
     van_leer,
 )
 from gridax._src.advection.reconstruct import reconstruct
+from gridax._src.advection.vertical import advect_vertical, diffuse_vertical
 from gridax._src.boundary.atoms import (
     Dirichlet,
     Extrapolation,
@@ -240,6 +241,8 @@ __all__ = [
     "pv_flux",
     "diffuse",
     "diffusive_fluxes",
+    "advect_vertical",
+    "diffuse_vertical",
     "biharmonic",
     "coriolis",
     "arakawa_jacobian",

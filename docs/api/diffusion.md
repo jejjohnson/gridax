@@ -6,4 +6,6 @@ Harmonic (∇²) and biharmonic (∇⁴) diffusion on staggered C-grids.
 
 ::: gridax.diffusive_fluxes
 
+::: gridax.diffuse_vertical
+
 ::: gridax.biharmonic

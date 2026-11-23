@@ -40,6 +40,7 @@ Poisson solver or an RK loop, look it up:
 | Gradients, divergence, curl, Laplacian | `fvx.difference(h, grid, axis="x", src="T", dst="U")`, `fvx.gradient`, `fvx.divergence`, `fvx.curl`, `fvx.laplacian`, `fvx.grad_perp`, on any grid (1-D to 3-D, Cartesian or spherical); `fvx.GridOps(grid, mask)` has them as methods |
 | Moving fields between T / U / V / X points | `fvx.interpolate(f, grid, src="T", dst="U")` |
 | Tracer advection | `fvx.advect(q, u, v, grid, scheme=WENO(5), mask=mask)`, with a scheme of `gridax.schemes`: `Upwind(k)`, `Centred(k)`, `WENO(k)`, `TVD(limiter)` |
+| Vertical advection and diffusion of a 3-D tracer | `fvx.advect_vertical(q, w, grid, scheme=...)` (`w` at W), `fvx.diffuse_vertical(q, grid, kappa=...)` |
 | Diffusion, momentum advection, Coriolis | `fvx.diffuse`, `fvx.biharmonic`, `fvx.advect_momentum`, `fvx.coriolis` (the grid positional, `mask=`) |
 | Land and coasts | `fvx.Mask2D.from_mask(wet)` → `mask.wet(at="T" / "U" / "V" / "X")`; pass `mask=` to an operator |
 | Ghost cells | `fvx.fill_ghosts(u, grid, fvx.BC(x=fvx.Dirichlet(0.0), y=fvx.Neumann()), stagger="U")`, with the presets `fvx.BC.periodic()`, `fvx.BC.no_flux()`, `fvx.BC.zero()`, `fvx.BC.wall_normal()`, `fvx.BC.wall_tangential(slip="no")` (joined with `\|`) |

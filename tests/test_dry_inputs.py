@@ -60,6 +60,8 @@ CALLS: dict[str, tuple[str, dict[str, Any]]] = {
     "diffusive_fluxes": ("T", {"kappa": 1.0}),
     "biharmonic": ("T", {"kappa4": 1.0}),
     "advect": ("TUV", {"scheme": Upwind(3)}),
+    "advect_vertical": ("TW", {"scheme": Upwind(3)}),
+    "diffuse_vertical": ("T", {"kappa": 1.0}),
     "area_sum": ("T", {}),
     "volume_sum": ("T", {}),
 }

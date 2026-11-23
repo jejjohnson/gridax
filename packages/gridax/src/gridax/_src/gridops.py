@@ -7,7 +7,7 @@ import functools
 import inspect
 from typing import TYPE_CHECKING, Any
 
-from gridax._src.advection import advect, reconstruct
+from gridax._src.advection import advect, reconstruct, vertical
 from gridax._src.api import OPERATIONS
 from gridax._src.diffusion import diffuse
 from gridax._src.operators import (
@@ -26,6 +26,7 @@ from gridax._src.pytree import pytree_dataclass
 _DECLARED_IN = (
     advect,
     reconstruct,
+    vertical,
     diffuse,
     calculus,
     coriolis,
