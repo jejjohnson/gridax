@@ -15,9 +15,6 @@ from typing import ClassVar
 
 import equinox as eqx
 from gridax import (
-    Advection1D,
-    Advection2D,
-    Advection3D,
     CartesianCGrid1D,
     CartesianCGrid2D,
     CartesianCGrid3D,
@@ -33,6 +30,7 @@ import numpy as np
 import pytest
 
 from tests.fixtures import inputs
+from tests.fixtures.bindings import Advection1D, Advection2D, Advection3D
 
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCE = ROOT / "tests" / "fixtures" / "mask_fields_pre_419.npz"

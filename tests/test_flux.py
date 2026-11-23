@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from gridax import CartesianCGrid2D, CartesianCGrid3D, Mask2D, Mask3D
-from gridax._src.advection.advection import Advection2D, Advection3D
 from gridax._src.advection.flux import upwind_flux
-from gridax._src.advection.reconstruction import Reconstruction2D
 from gridax.schemes import TVD, WENO
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
+from tests.fixtures.bindings import Advection2D, Advection3D, Reconstruction2D
 
 # ── fixtures ──────────────────────────────────────────────────────────────────
 

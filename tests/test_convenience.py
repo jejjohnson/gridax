@@ -7,19 +7,22 @@ Covers: streamfn_to_ssh, ssh_to_streamfn,
 from geophysix.constants import STANDARD
 from gridax import CartesianCGrid2D
 from gridax._src.operators.diagnostics import (
-    potential_vorticity_multilayer,
-    qg_potential_vorticity,
     ssh_to_streamfn,
     streamfn_to_ssh,
     stretching_term,
-    sw_potential_vorticity,
-    sw_potential_vorticity_multilayer,
 )
-from gridax._src.operators.difference import Difference2D
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
+from tests.fixtures.bindings import (
+    Difference2D,
+    potential_vorticity_multilayer,
+    qg_potential_vorticity,
+    sw_potential_vorticity,
+    sw_potential_vorticity_multilayer,
+)
 
 
 @pytest.fixture

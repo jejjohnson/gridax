@@ -14,6 +14,7 @@ import numpy as np
 import pytest
 
 from tests._schemes import SCHEMES
+from tests.fixtures import bindings
 
 C2 = g.CartesianCGrid2D.from_interior(16, 14, 4.0, 3.0)
 S2 = g.SphericalCGrid2D.from_interior(16, 14, (0.0, 40.0), (-60.0, 60.0), R=2.0)
@@ -175,7 +176,7 @@ class TestAdvect:
     def test_a_class_takes_fields(self, masked):
         q, u, v = fields(C2, 3)
         dims = ("y", "x")
-        op = g.Advection2D(C2, mask=island(C2) if masked else None)
+        op = bindings.Advection2D(C2, mask=island(C2) if masked else None)
         out = op(
             g.CField(q, dims, loc="T"),
             g.CField(u, dims, loc="U"),

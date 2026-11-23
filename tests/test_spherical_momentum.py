@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 from gridax import CartesianCGrid2D, Mask2D, Mask3D, SphericalCGrid2D, SphericalCGrid3D
-from gridax._src.diffusion.momentum import MomentumAdvection2D
-from gridax._src.diffusion.spherical_momentum import (
-    SphericalMomentumAdvection2D,
-    SphericalMomentumAdvection3D,
-)
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
+from tests.fixtures.bindings import (
+    MomentumAdvection2D,
+    SphericalMomentumAdvection2D,
+    SphericalMomentumAdvection3D,
+)
 
 R = 6.371e6
 NX_INT, NY_INT = 14, 10

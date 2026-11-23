@@ -7,13 +7,11 @@ from gridax import (
     CartesianCGrid2D,
     CartesianCGrid3D,
     Dirichlet,
-    Interpolation2D,
     Mask2D,
     Mask3D,
     fill_ghosts,
 )
 from gridax._src.operators._ghost import interior
-from gridax._src.operators.coriolis import Coriolis2D, Coriolis3D
 from gridax._src.operators.stencils import diff_x_bwd_2d, diff_y_bwd_2d
 import jax
 import jax.numpy as jnp
@@ -21,6 +19,7 @@ import numpy as np
 import pytest
 
 from tests.fixtures._helpers import periodic
+from tests.fixtures.bindings import Coriolis2D, Coriolis3D, Interpolation2D
 
 
 @pytest.fixture

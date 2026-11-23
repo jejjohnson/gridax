@@ -30,17 +30,18 @@ from __future__ import annotations
 
 import typing
 
-from gridax._src.operators.divergence import Divergence2D
-from gridax._src.operators.interpolation import (
-    Interpolation1D,
-    Interpolation2D,
-    Interpolation3D,
-)
-from gridax._src.operators.vorticity import Vorticity2D, Vorticity3D
 import numpy as np
 import pytest
 
 from tests.fixtures._helpers import assert_matches_golden
+from tests.fixtures.bindings import (
+    Divergence2D,
+    Interpolation1D,
+    Interpolation2D,
+    Interpolation3D,
+    Vorticity2D,
+    Vorticity3D,
+)
 from tests.fixtures.inputs import (
     make_f_field_2d,
     make_grid_1d,

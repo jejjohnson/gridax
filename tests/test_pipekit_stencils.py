@@ -15,13 +15,14 @@ import jax.numpy as jnp
 import numpy as np
 from pipekit_ops import Graph, Input
 
+from tests.fixtures import bindings
 from tests.fixtures._helpers import periodic
 from tests.fixtures.inputs import make_grid_2d, make_mask_2d
 
 GRID = make_grid_2d()
 MASK = make_mask_2d()
-D = fvx.Difference2D(grid=GRID)
-I = fvx.Interpolation2D(grid=GRID)
+D = bindings.Difference2D(grid=GRID)
+I = bindings.Interpolation2D(grid=GRID)
 
 
 def _field(seed: int) -> jax.Array:
@@ -61,7 +62,7 @@ CASES = [
     (
         "Coriolis",
         fp.Coriolis(grid=GRID, f0=2.0, beta=0.3),
-        lambda u, v: fvx.Coriolis2D(grid=GRID)(u, v, _f_beta(2.0, 0.3)),
+        lambda u, v: bindings.Coriolis2D(grid=GRID)(u, v, _f_beta(2.0, 0.3)),
         2,
     ),
     *[
@@ -110,13 +111,13 @@ def test_equals_tier_a(name, op, ref, n):
 def test_tables_cover_every_tier_a_method():
     methods = {
         tuple(name.removeprefix("diff_").replace("_to_", "_").split("_"))
-        for name in dir(fvx.Difference2D)
+        for name in dir(bindings.Difference2D)
         if name.startswith("diff_")
     }
     assert methods == set(fp.DIFFERENCES)
     pairs = {
         tuple(name.split("_to_"))
-        for name in dir(fvx.Interpolation2D)
+        for name in dir(bindings.Interpolation2D)
         if "_to_" in name and not name.startswith("_")
     }
     assert pairs == set(fp.INTERPOLATIONS)
@@ -185,7 +186,7 @@ def sw_tendency() -> Graph:
 
 def sw_tendency_tier_a(h, u, v):
     h, u, v = (periodic(x) for x in (h, u, v))
-    cu, cv = fvx.Coriolis2D(grid=GRID)(u, v, _f_beta(F0, 0.0))
+    cu, cv = bindings.Coriolis2D(grid=GRID)(u, v, _f_beta(F0, 0.0))
     return {
         "h": -H * D.divergence(u, v),
         "u": cu - G * D.diff_x_T_to_U(h),

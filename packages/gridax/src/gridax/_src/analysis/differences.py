@@ -17,6 +17,8 @@ staggered C-grid field goes through the Layer 1 stencils of
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 from jaxtyping import Bool, Float
 import numpy as np
 
@@ -24,6 +26,9 @@ from gridax._src.pytree import array_namespace
 from gridax._src.stencils.coefficients import (
     METHODS,
     Method,
+    difference_coeffs,
+    difference_offsets,
+    nonuniform_coeffs,
 )
 
 
@@ -197,6 +202,16 @@ def adaptive_difference(
     return xp.where(dropped, xp.nan, out)
 
 
+def _collocated_offsets(
+    *, derivative: int, accuracy: int, method: Method
+) -> tuple[int, ...]:
+    """Integer offsets: `difference` rejects ``"staggered"`` before it gets here."""
+    return cast(
+        "tuple[int, ...]",
+        difference_offsets(derivative=derivative, accuracy=accuracy, method=method),
+    )
+
+
 def _bounded(
     xp: Any,
     f: Any,
@@ -259,6 +274,41 @@ def _bounded(
         for start, stop, offsets in regions
     ]
     return xp.concat(parts, axis=axis)
+
+
+def _apply_stencil(
+    f: Any,
+    axis: int,
+    start: int,
+    stop: int,
+    offsets: tuple[int, ...],
+    derivative: int,
+    coords: Any = None,
+) -> Any:
+    """``Σ c_k f[i + s_k]`` for ``i`` in ``[start, stop)`` along ``axis``."""
+    if coords is None:
+        coeffs: Any = difference_coeffs(offsets, derivative)
+    else:
+        xp = array_namespace(coords)
+        centres = coords[start:stop]
+        dz = xp.stack(
+            [coords[start + o : stop + o] - centres for o in offsets], axis=-1
+        )
+        # one coefficient per point, laid along `axis` to broadcast against f
+        shape = [1] * f.ndim
+        shape[axis] = stop - start
+        weights = nonuniform_coeffs(xp.astype(dz, xp.float64), derivative)
+        if xp.isdtype(f.dtype, "real floating"):
+            # solved in float64, applied in the field's precision (#421)
+            weights = xp.astype(weights, f.dtype)
+        coeffs = [xp.reshape(weights[:, k], shape) for k in range(len(offsets))]
+    out = None
+    for offset, coeff in zip(offsets, coeffs, strict=True):
+        index = [slice(None)] * f.ndim
+        index[axis] = slice(start + offset, stop + offset)
+        term = coeff * f[tuple(index)]  # zero coefficients too: 0 * nan is nan
+        out = term if out is None else out + term
+    return out
 
 
 def _periodic(

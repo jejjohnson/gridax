@@ -7,11 +7,12 @@ full-shape T-point output with a zero ghost ring, dry T-cells zeroed via
 
 from __future__ import annotations
 
-from gridax import ArakawaJacobian2D, Mask2D, arakawa_jacobian
+from gridax import Mask2D, arakawa_jacobian
 import jax.numpy as jnp
 import numpy as np
 
 from tests.fixtures._helpers import assert_matches_golden
+from tests.fixtures.bindings import ArakawaJacobian2D
 from tests.fixtures.inputs import (
     make_grid_2d,
     make_h_field_2d,

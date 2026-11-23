@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from gridax import CartesianCGrid2D
-from gridax._src.operators.difference import Difference2D
-from gridax._src.operators.divergence import Divergence2D
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
+from tests.fixtures.bindings import Difference2D, Divergence2D
 
 
 @pytest.fixture

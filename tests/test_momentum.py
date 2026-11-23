@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from gridax import CartesianCGrid2D, CartesianCGrid3D
-from gridax._src.diffusion.momentum import MomentumAdvection2D, MomentumAdvection3D
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
+from tests.fixtures.bindings import MomentumAdvection2D, MomentumAdvection3D
 
 
 @pytest.fixture

@@ -20,20 +20,18 @@ API on ``Mask2D`` / ``Mask3D`` class fields:
 from __future__ import annotations
 
 import equinox as eqx
-from gridax._src.diffusion.diffusion import (
-    BiharmonicDiffusion2D,
-    BiharmonicDiffusion3D,
-    Diffusion2D,
-    Diffusion3D,
-)
-from gridax._src.diffusion.momentum import (
-    MomentumAdvection2D,
-    MomentumAdvection3D,
-)
 import numpy as np
 import pytest
 
 from tests.fixtures._helpers import assert_matches_golden
+from tests.fixtures.bindings import (
+    BiharmonicDiffusion2D,
+    BiharmonicDiffusion3D,
+    Diffusion2D,
+    Diffusion3D,
+    MomentumAdvection2D,
+    MomentumAdvection3D,
+)
 from tests.fixtures.inputs import (
     make_grid_2d,
     make_grid_3d,

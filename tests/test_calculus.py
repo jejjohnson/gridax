@@ -10,6 +10,8 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from tests.fixtures import bindings
+
 C2 = g.CartesianCGrid2D.from_interior(16, 14, 2.0, 3.0)
 C3 = g.CartesianCGrid3D.from_interior(10, 8, 4, 2.0, 3.0, 5.0)
 S2 = g.SphericalCGrid2D.from_interior(16, 14, (0.0, 40.0), (-60.0, 60.0), R=2.0)
@@ -167,7 +169,7 @@ class TestBindings:
                 np.testing.assert_array_equal(method(*args), out, err_msg=name)
 
     def test_the_rest_of_difference_2d(self):
-        diff = g.Difference2D(C2, wet_mask(C2))
+        diff = bindings.Difference2D(C2, wet_mask(C2))
         f, u, v = (field(C2, seed) for seed in range(3))
         np.testing.assert_array_equal(
             diff.curl(u, v), g.curl(u, v, C2, mask=wet_mask(C2))
@@ -180,7 +182,8 @@ class TestBindings:
             np.testing.assert_array_equal(a, b)
         one = g.CartesianCGrid1D.from_interior(8, 1.0)
         np.testing.assert_array_equal(
-            g.Difference1D(one).laplacian(field(one)), g.laplacian(field(one), one)
+            bindings.Difference1D(one).laplacian(field(one)),
+            g.laplacian(field(one), one),
         )
 
     @pytest.mark.parametrize("name", sorted(CGRIDS))

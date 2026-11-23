@@ -5,15 +5,16 @@ from gridax import (
     CartesianCGrid2D,
     CartesianCGrid3D,
 )
-from gridax._src.operators.difference import (
-    Difference1D,
-    Difference2D,
-    Difference3D,
-)
-from gridax._src.operators.interpolation import Interpolation2D
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
+from tests.fixtures.bindings import (
+    Difference1D,
+    Difference2D,
+    Difference3D,
+    Interpolation2D,
+)
 
 
 @pytest.fixture

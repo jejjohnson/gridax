@@ -13,6 +13,8 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from tests.fixtures import bindings
+
 GRIDS = {
     "c1": g.CartesianCGrid1D.from_interior(8, 4.0),
     "c2": g.CartesianCGrid2D.from_interior(8, 6, 4.0, 3.0),
@@ -72,18 +74,18 @@ class TestTables:
     def test_every_method_of_the_bindings_is_a_move(self):
         """Nothing the classes offer is missing from the tables."""
         for cls, axes in (
-            (g.Difference1D, ("x",)),
-            (g.Difference2D, ("y", "x")),
-            (g.Difference3D, ("z", "y", "x")),
+            (bindings.Difference1D, ("x",)),
+            (bindings.Difference2D, ("y", "x")),
+            (bindings.Difference3D, ("z", "y", "x")),
         ):
             for name in dir(cls):
                 if name.startswith("diff_"):
                     _, axis, src, _, dst = name.split("_")
                     assert (axis, src, dst) in TRIPLES[axes]
         for cls, axes in (
-            (g.Interpolation1D, ("x",)),
-            (g.Interpolation2D, ("y", "x")),
-            (g.Interpolation3D, ("z", "y", "x")),
+            (bindings.Interpolation1D, ("x",)),
+            (bindings.Interpolation2D, ("y", "x")),
+            (bindings.Interpolation3D, ("z", "y", "x")),
         ):
             for name in dir(cls):
                 if "_to_" in name and not name.startswith("_"):
@@ -402,10 +404,17 @@ class TestBindings:
         mask = wet_mask(grid) if masked else None
         if name.startswith("s"):
             axis_name = {"x": "lon", "y": "lat"}.get(axis, axis)
-            cls = {2: g.SphericalDifference2D, 3: g.SphericalDifference3D}[rank]
+            cls = {
+                2: bindings.SphericalDifference2D,
+                3: bindings.SphericalDifference3D,
+            }[rank]
         else:
             axis_name = axis
-            cls = {1: g.Difference1D, 2: g.Difference2D, 3: g.Difference3D}[rank]
+            cls = {
+                1: bindings.Difference1D,
+                2: bindings.Difference2D,
+                3: bindings.Difference3D,
+            }[rank]
         method = getattr(
             cls(grid=grid, mask=mask), f"diff_{axis_name}_{src}_to_{dst}", None
         )
@@ -419,7 +428,11 @@ class TestBindings:
     @pytest.mark.parametrize(("name", "src", "dst"), AVERAGES)
     def test_an_interpolation_method_is_the_function(self, name, src, dst):
         grid = GRIDS[name]
-        cls = {1: g.Interpolation1D, 2: g.Interpolation2D, 3: g.Interpolation3D}
+        cls = {
+            1: bindings.Interpolation1D,
+            2: bindings.Interpolation2D,
+            3: bindings.Interpolation3D,
+        }
         mask = wet_mask(grid)
         binding = cls[len(grid.axes)](grid=grid, mask=mask)
         method = getattr(binding, f"{src}_to_{dst}", None)

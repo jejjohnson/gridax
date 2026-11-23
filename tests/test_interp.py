@@ -7,14 +7,11 @@ from gridax import (
     CartesianCGrid2D,
     CartesianCGrid3D,
 )
-from gridax._src.operators.interpolation import (
-    Interpolation1D,
-    Interpolation2D,
-    Interpolation3D,
-)
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
+from tests.fixtures.bindings import Interpolation1D, Interpolation2D, Interpolation3D
 
 
 @pytest.fixture

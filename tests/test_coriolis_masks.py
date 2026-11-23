@@ -11,11 +11,11 @@ all-ocean invariant), plus a dry-cell-zero pin per velocity stagger.
 
 from __future__ import annotations
 
-from gridax._src.operators.coriolis import Coriolis2D, Coriolis3D
 import numpy as np
 import pytest
 
 from tests.fixtures._helpers import assert_matches_golden
+from tests.fixtures.bindings import Coriolis2D, Coriolis3D
 from tests.fixtures.inputs import (
     make_f_field_2d,
     make_grid_2d,

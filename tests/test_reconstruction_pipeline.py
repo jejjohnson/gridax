@@ -10,10 +10,8 @@ Covers:
 from __future__ import annotations
 
 from gridax import (
-    Advection2D,
     CartesianCGrid2D,
     Mask2D,
-    Reconstruction2D,
     reconstruct,
     upwind_flux,
 )
@@ -35,6 +33,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
+from tests.fixtures.bindings import Advection2D, Reconstruction2D
 
 # ---------------------------------------------------------------------------
 # Helpers

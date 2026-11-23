@@ -11,7 +11,7 @@ Covers:
 
 from __future__ import annotations
 
-from gridax import Advection2D, CartesianCGrid2D, Mask2D, uv_center_flux, uv_node_flux
+from gridax import CartesianCGrid2D, Mask2D
 from gridax._src.operators._ghost import interior
 from gridax.schemes import WENO, Upwind
 import jax
@@ -20,6 +20,7 @@ import numpy as np
 import pytest
 
 from tests._schemes import SCHEMES
+from tests.fixtures.bindings import Advection2D, uv_center_flux, uv_node_flux
 
 # ---------------------------------------------------------------------------
 # Fixtures

@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from gridax import CartesianCGrid2D, CartesianCGrid3D, diffuse
-from gridax._src.diffusion.diffusion import Diffusion2D, Diffusion3D
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
+from tests.fixtures.bindings import Diffusion2D, Diffusion3D
 
 
 @pytest.fixture

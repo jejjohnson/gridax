@@ -10,11 +10,6 @@ from gridax import (
     SphericalCGrid2D,
     SphericalCGrid3D,
 )
-from gridax._src.advection.advection import Advection2D, Advection3D
-from gridax._src.advection.spherical_advection import (
-    SphericalAdvection2D,
-    SphericalAdvection3D,
-)
 from gridax._src.operators.reductions import area_weights
 from gridax.schemes import WENO, Upwind
 import jax
@@ -23,6 +18,12 @@ import numpy as np
 import pytest
 
 from tests._schemes import SCHEMES
+from tests.fixtures.bindings import (
+    Advection2D,
+    Advection3D,
+    SphericalAdvection2D,
+    SphericalAdvection3D,
+)
 
 R = 6.371e6
 NX_INT, NY_INT = 16, 10

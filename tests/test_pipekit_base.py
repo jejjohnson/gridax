@@ -22,6 +22,8 @@ import jax.numpy as jnp
 import numpy as np
 from pipekit_ops import Operator
 
+from tests.fixtures import bindings
+
 SPEC = (8, 6, 2.0, 1.5)
 GRID = fvx.CartesianCGrid2D.from_interior(*SPEC)
 
@@ -32,7 +34,7 @@ class ScaledLaplacian(GridOperator):
     kappa: jax.Array = eqx.field(converter=jnp.asarray, default=1.0)
 
     def _apply(self, h):
-        return self.kappa * fvx.Difference2D(grid=self.grid).laplacian(h)
+        return self.kappa * bindings.Difference2D(grid=self.grid).laplacian(h)
 
 
 def _field(seed: int = 0) -> jax.Array:
@@ -105,7 +107,7 @@ class TestCheckOperator:
     def test_matches_tier_a(self):
         h = _field(2)
         out = ScaledLaplacian(grid=SPEC, kappa=0.5)(h)
-        ref = 0.5 * fvx.Difference2D(grid=GRID).laplacian(h)
+        ref = 0.5 * bindings.Difference2D(grid=GRID).laplacian(h)
         np.testing.assert_array_equal(out, ref)
 
     @pytest.mark.slow  # compiles the operator several times (~2 s)

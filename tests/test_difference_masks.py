@@ -21,15 +21,11 @@ See ``tests/fixtures/`` for the shared inputs and golden helpers.
 
 from __future__ import annotations
 
-from gridax._src.operators.difference import (
-    Difference1D,
-    Difference2D,
-    Difference3D,
-)
 import numpy as np
 import pytest
 
 from tests.fixtures._helpers import assert_matches_golden
+from tests.fixtures.bindings import Difference1D, Difference2D, Difference3D
 from tests.fixtures.inputs import (
     make_grid_1d,
     make_grid_2d,

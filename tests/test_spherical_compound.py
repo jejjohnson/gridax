@@ -6,21 +6,22 @@ from gridax import (
     SphericalCGrid3D,
 )
 from gridax._src.operators.reductions import area_weights
-from gridax._src.operators.spherical_compound import (
+from gridax._src.operators.spherical_compound import geostrophic_velocity_sphere
+import jax
+import jax.numpy as jnp
+import numpy as np
+import pytest
+
+from tests.fixtures.bindings import (
+    SphericalDifference2D,
     SphericalDivergence2D,
     SphericalDivergence3D,
     SphericalLaplacian2D,
     SphericalLaplacian3D,
     SphericalVorticity2D,
     SphericalVorticity3D,
-    geostrophic_velocity_sphere,
+    Vorticity2D,
 )
-from gridax._src.operators.spherical_difference import SphericalDifference2D
-from gridax._src.operators.vorticity import Vorticity2D
-import jax
-import jax.numpy as jnp
-import numpy as np
-import pytest
 
 R = 1.0
 NX_INT, NY_INT = 10, 8

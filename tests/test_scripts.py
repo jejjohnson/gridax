@@ -4,10 +4,12 @@ import importlib.util
 from pathlib import Path
 import sys
 
-from gridax import CartesianCGrid2D, Difference2D, Interpolation2D
+from gridax import CartesianCGrid2D
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
+from tests.fixtures.bindings import Difference2D, Interpolation2D
 
 xr = pytest.importorskip("xarray")
 pytest.importorskip("zarr")

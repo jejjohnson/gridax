@@ -12,20 +12,11 @@ functional form (or documented composition) when ``mask=None``.
 from __future__ import annotations
 
 from gridax import (
-    Difference2D,
-    Energetics2D,
-    Interpolation2D,
     Mask2D,
-    QGPotentialVorticity2D,
-    Strain2D,
-    Vorticity2D,
     available_potential_energy,
-    bernoulli_potential,
     enstrophy,
     kinetic_energy,
     potential_enstrophy,
-    potential_vorticity_multilayer,
-    qg_potential_vorticity,
     shear_strain,
     stretching_term,
     tensor_strain,
@@ -36,6 +27,17 @@ import numpy as np
 import pytest
 
 from tests.fixtures._helpers import assert_matches_golden
+from tests.fixtures.bindings import (
+    Difference2D,
+    Energetics2D,
+    Interpolation2D,
+    QGPotentialVorticity2D,
+    Strain2D,
+    Vorticity2D,
+    bernoulli_potential,
+    potential_vorticity_multilayer,
+    qg_potential_vorticity,
+)
 from tests.fixtures.inputs import (
     make_f_field_2d,
     make_grid_2d,

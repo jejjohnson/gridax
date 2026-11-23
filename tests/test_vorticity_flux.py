@@ -9,10 +9,7 @@ from __future__ import annotations
 from gridax import (
     CartesianCGrid2D,
     SphericalCGrid2D,
-    SphericalVorticity2D,
-    Vorticity2D,
     pv_flux_arakawa_lamb,
-    pv_flux_blend,
     vorticity_flux_upwind,
 )
 from gridax._src.operators._ghost import interior
@@ -21,6 +18,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
+from tests.fixtures.bindings import SphericalVorticity2D, Vorticity2D, pv_flux_blend
 
 
 @pytest.fixture()

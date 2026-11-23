@@ -43,6 +43,8 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from tests.fixtures import bindings
+
 NY, NX = 9, 12  # total shape incl. ghost ring; deliberately non-square
 
 
@@ -147,14 +149,14 @@ class TestSameValues:
         ref = interior(
             (diff_x_fwd_1d(h) - diff_x_bwd_1d(h)) / self.g1.spacing("x") ** 2, h
         )
-        np.testing.assert_array_equal(fvx.Difference1D(self.g1).laplacian(h), ref)
+        np.testing.assert_array_equal(bindings.Difference1D(self.g1).laplacian(h), ref)
 
     def test_laplacian_2d(self):
         h = _field(NY, NX)
         d2x = (diff_x_fwd_2d(h) - diff_x_bwd_2d(h)) / self.g2.spacing("x") ** 2
         d2y = (diff_y_fwd_2d(h) - diff_y_bwd_2d(h)) / self.g2.spacing("y") ** 2
         ref = interior(d2x + d2y, h)
-        np.testing.assert_array_equal(fvx.Difference2D(self.g2).laplacian(h), ref)
+        np.testing.assert_array_equal(bindings.Difference2D(self.g2).laplacian(h), ref)
 
     @pytest.mark.slow
     def test_laplacian_3d(self):
@@ -162,11 +164,11 @@ class TestSameValues:
         d2x = (diff_x_fwd_3d(h) - diff_x_bwd_3d(h)) / self.g3.spacing("x") ** 2
         d2y = (diff_y_fwd_3d(h) - diff_y_bwd_3d(h)) / self.g3.spacing("y") ** 2
         ref = interior(d2x + d2y, h)
-        np.testing.assert_array_equal(fvx.Difference3D(self.g3).laplacian(h), ref)
+        np.testing.assert_array_equal(bindings.Difference3D(self.g3).laplacian(h), ref)
 
     def test_divergence_3d(self):
         u, v = _field(5, NY, NX, seed=1), _field(5, NY, NX, seed=2)
-        op = fvx.Difference3D(self.g3)
+        op = bindings.Difference3D(self.g3)
         ref = op.diff_x_U_to_T(u) + op.diff_y_V_to_T(v)
         np.testing.assert_array_equal(op.divergence(u, v), ref)
 
@@ -200,11 +202,11 @@ class TestSameValues:
         h = _field(NY, NX, seed=5)
         kappa = jnp.abs(_field(NY, NX, seed=6)) if kappa_field else 0.7
         dx, dy = self.g2.spacing("x"), self.g2.spacing("y")
-        fx, fy = fvx.Diffusion2D(self.g2).fluxes(h, kappa, wall=wall)
+        fx, fy = bindings.Diffusion2D(self.g2).fluxes(h, kappa, wall=wall)
         du = (fx[1:-1, 1:-1] - fx[1:-1, :-2]) / dx
         dv = (fy[1:-1, 1:-1] - fy[:-2, 1:-1]) / dy
         ref = interior(du + dv, h)
-        out = fvx.Diffusion2D(self.g2)(h, kappa, wall=wall)
+        out = bindings.Diffusion2D(self.g2)(h, kappa, wall=wall)
         np.testing.assert_array_equal(out, ref)
 
     @pytest.mark.slow
@@ -219,11 +221,11 @@ class TestSameValues:
             kappa = np.float64(0.7)
         # the operators cast the metric to the field's dtype
         dx, dy = (jnp.float32(self.g2.spacing(axis)) for axis in "xy")
-        fx, fy = fvx.Diffusion2D(self.g2).fluxes(h, kappa, wall=wall)
+        fx, fy = bindings.Diffusion2D(self.g2).fluxes(h, kappa, wall=wall)
         du = (fx[1:-1, 1:-1] - fx[1:-1, :-2]) / dx
         dv = (fy[1:-1, 1:-1] - fy[:-2, 1:-1]) / dy
         ref = interior(du + dv, h)
-        out = fvx.Diffusion2D(self.g2)(h, kappa, wall=wall)
+        out = bindings.Diffusion2D(self.g2)(h, kappa, wall=wall)
         assert out.dtype == jnp.float32
         np.testing.assert_array_equal(out, ref)
 
@@ -234,7 +236,7 @@ class TestSameValues:
         )
         h = _field(NY, NX, seed=5).astype(jnp.float32)
         kappa = jnp.abs(_field(NY, NX, seed=6))  # float64 field
-        assert fvx.SphericalDiffusion2D(gs)(h, kappa).dtype == jnp.float32
+        assert bindings.SphericalDiffusion2D(gs)(h, kappa).dtype == jnp.float32
 
     def test_masked_diffusion_2d_matches_flux_divergence(self):
         h = _field(NY, NX, seed=7)
@@ -242,18 +244,18 @@ class TestSameValues:
         wet[3:5, 4:7] = False
         mask = fvx.Mask2D.from_mask(wet)
         dx, dy = self.g2.spacing("x"), self.g2.spacing("y")
-        fx, fy = fvx.Diffusion2D(self.g2, mask=mask).fluxes(h, 0.7)
+        fx, fy = bindings.Diffusion2D(self.g2, mask=mask).fluxes(h, 0.7)
         du = (fx[1:-1, 1:-1] - fx[1:-1, :-2]) / dx
         dv = (fy[1:-1, 1:-1] - fy[:-2, 1:-1]) / dy
         ref = interior(du + dv, h) * mask.wet()
-        out = fvx.Diffusion2D(self.g2, mask=mask)(h, 0.7)
+        out = bindings.Diffusion2D(self.g2, mask=mask)(h, 0.7)
         np.testing.assert_array_equal(out, ref)
 
     def test_biharmonic_is_two_harmonic_passes(self):
         h = _field(NY, NX, seed=8)
-        harm = fvx.Diffusion2D(self.g2)
+        harm = bindings.Diffusion2D(self.g2)
         ref = -0.3 * harm(harm(h, 1.0), 1.0)
-        out = fvx.BiharmonicDiffusion2D(self.g2)(h, 0.3)
+        out = bindings.BiharmonicDiffusion2D(self.g2)(h, 0.3)
         np.testing.assert_array_equal(out, ref)
 
 
@@ -273,31 +275,33 @@ class TestOnePadPerOffset:
 
     def test_laplacian_1d(self):
         # h[i-1], h[i], h[i+1]
-        op = fvx.Difference1D(self.g1)
+        op = bindings.Difference1D(self.g1)
         assert _vjp_pads(op.laplacian, _field(NX)) == 3
 
     def test_laplacian_2d(self):
         # c, e, w, n, s
-        op = fvx.Difference2D(self.g2)
+        op = bindings.Difference2D(self.g2)
         assert _vjp_pads(op.laplacian, _field(NY, NX)) == 5
 
     def test_qg_potential_vorticity(self):
         # the Laplacian of Difference2D.laplacian: c, e, w, n, s
         y = _field(NY, NX, seed=3)
         pads = _vjp_pads(
-            lambda psi: fvx.qg_potential_vorticity(psi, 1e-4, 2e-11, 3.0, 2.0, y, 0.5),
+            lambda psi: bindings.qg_potential_vorticity(
+                psi, 1e-4, 2e-11, 3.0, 2.0, y, 0.5
+            ),
             _field(NY, NX),
         )
         assert pads == 5
 
     def test_laplacian_3d(self):
-        op = fvx.Difference3D(self.g3)
+        op = bindings.Difference3D(self.g3)
         # 5 horizontal offsets on the z-interior, plus the z-interior slice
         assert _vjp_pads(op.laplacian, _field(5, NY, NX)) == 6
 
     def test_spherical_laplacian(self):
         h = _field(NY, NX)
-        assert _vjp_pads(fvx.SphericalLaplacian2D(self.gs), h) == 5
+        assert _vjp_pads(bindings.SphericalLaplacian2D(self.gs), h) == 5
 
     def test_arakawa_jacobian(self):
         # eight off-centre neighbours of f and of g
@@ -307,7 +311,7 @@ class TestOnePadPerOffset:
 
     def test_diffusion_2d(self):
         # h[i+1] - h[i] for x faces and h[j+1] - h[j] for y faces
-        op = fvx.Diffusion2D(self.g2)
+        op = bindings.Diffusion2D(self.g2)
         assert _vjp_pads(lambda x: op(x, 1.0), _field(NY, NX)) == 4
 
 
@@ -353,7 +357,7 @@ class TestUnrolledSmoothnessIndicator:
     def test_no_dot_general_in_weno7_advection(self):
         """The indicators lower to elementwise code, not a stack + dot."""
         g2 = fvx.CartesianCGrid2D.from_interior(NX - 2, NY - 2, 3.0, 2.0)
-        adv = fvx.Advection2D(g2)
+        adv = bindings.Advection2D(g2)
         h, u, v = (_field(NY, NX, seed=k) for k in range(3))
         jaxpr = jax.make_jaxpr(lambda a, b, c: adv(a, b, c, scheme=WENO(7)))(h, u, v)
         assert "dot_general" not in _primitives(jaxpr.jaxpr)

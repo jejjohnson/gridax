@@ -17,13 +17,14 @@ import numpy as np
 from pipekit_jax import Rollout
 from pipekit_ops import Graph, Input
 
+from tests.fixtures import bindings
 from tests.fixtures._helpers import periodic
 from tests.fixtures.inputs import make_grid_2d
 
 GRID = make_grid_2d()
-V2 = fvx.Vorticity2D(grid=GRID)
-E2 = fvx.Energetics2D(grid=GRID)
-S2 = fvx.Strain2D(grid=GRID)
+V2 = bindings.Vorticity2D(grid=GRID)
+E2 = bindings.Energetics2D(grid=GRID)
+S2 = bindings.Strain2D(grid=GRID)
 
 
 def _field(seed: int, lead: tuple[int, ...] = ()) -> jax.Array:
@@ -52,7 +53,7 @@ CASES = [
     (
         "QGPotentialVorticity",
         fp.QGPotentialVorticity(grid=GRID, f0=1.5, beta=0.2),
-        lambda psi: fvx.QGPotentialVorticity2D(grid=GRID)(
+        lambda psi: bindings.QGPotentialVorticity2D(grid=GRID)(
             psi, 1.5, 0.2, _y(), (GRID.Ny - 1) * GRID.spacing("y") / 2
         ),
         1,
@@ -170,7 +171,7 @@ def test_energy_graph_equals_tier_a_on_a_trajectory():
     got = energy_graph()(**traj)["E"]
     g = fvx.CartesianCGrid2D.from_interior(*SW_SPEC)
     filled = {k: periodic(traj[k]) for k in "huv"}
-    ke = fvx.Energetics2D(grid=g).kinetic_energy(filled["u"], filled["v"])
+    ke = bindings.Energetics2D(grid=g).kinetic_energy(filled["u"], filled["v"])
     ape = 0.5 * G * filled["h"] ** 2
     want = fvx.area_sum(H * ke + ape, g)
     assert got.shape == (4,)

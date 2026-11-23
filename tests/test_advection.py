@@ -7,7 +7,6 @@ from gridax import (
     Mask2D,
     Mask3D,
 )
-from gridax._src.advection.advection import Advection1D, Advection2D, Advection3D
 from gridax.schemes import WENO, Centred, Upwind
 import jax
 import jax.numpy as jnp
@@ -15,6 +14,7 @@ import numpy as np
 import pytest
 
 from tests._schemes import SCHEMES
+from tests.fixtures.bindings import Advection1D, Advection2D, Advection3D
 
 
 @pytest.fixture

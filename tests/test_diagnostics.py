@@ -3,25 +3,28 @@
 from gridax import CartesianCGrid2D, CartesianCGrid3D, Mask3D, area_sum
 from gridax._src.operators.diagnostics import (
     available_potential_energy,
-    bernoulli_potential,
     enstrophy,
     kinetic_energy,
     okubo_weiss,
     potential_enstrophy,
     potential_vorticity,
-    qg_potential_vorticity,
     shear_strain,
     strain_magnitude_squared,
     stretching_term,
     tensor_strain,
-    vertical_velocity,
 )
-from gridax._src.operators.difference import Difference2D
 from gridax._src.operators.jacobian import arakawa_jacobian
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
+from tests.fixtures.bindings import (
+    Difference2D,
+    bernoulli_potential,
+    qg_potential_vorticity,
+    vertical_velocity,
+)
 
 
 @pytest.fixture

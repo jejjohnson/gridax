@@ -9,13 +9,12 @@ from __future__ import annotations
 
 from geophysix.constants import STANDARD
 from gridax import CartesianCGrid2D
-from gridax._src.operators.diagnostics import (
-    bernoulli_potential,
-    kinetic_energy,
-)
+from gridax._src.operators.diagnostics import kinetic_energy
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
+from tests.fixtures.bindings import bernoulli_potential
 
 
 @pytest.fixture()
