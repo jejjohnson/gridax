@@ -139,16 +139,17 @@ def vortex_force(
 
     ``form="energy"`` multiplies at the corners and averages to the faces,
     ``"enstrophy"`` averages to the faces and multiplies there (Sadourny 1975).
-    ``"arakawa_lamb"`` (Arakawa and Lamb 1981) takes the twelve products around a
-    face, with weights that are sums of ``q``::
+    ``"arakawa_lamb"`` (Arakawa and Lamb 1981) takes six products for a face,
+    with weights that are sums of ``q``::
 
         du[j, i+1/2] = α V[j+1/2, i+1] + β V[j+1/2, i] + γ V[j-1/2, i]
                      + δ V[j-1/2, i+1] - ε[j, i+1] U[j, i+3/2] + ε[j, i] U[j, i-1/2]
 
     and so for ``dv``. It conserves the total energy and the potential
-    enstrophy, for divergent flow too, with ``U = ū_h``: the mass flux
-    ``h‾ u`` of the thickness averaged to the faces, the kinetic energy of
-    :func:`kinetic_energy` and ``q = (ζ + f)/h‾`` with the four-cell mean.
+    enstrophy, for divergent flow too, if ``u`` and ``v`` are mass fluxes with
+    the thickness averaged to the faces, the kinetic energy is that of
+    :func:`kinetic_energy`, and ``q`` is ``ζ + f`` over the mean thickness of
+    the four cells.
 
     Parameters
     ----------
@@ -342,7 +343,7 @@ def _vortex_force(
 
 
 def _arakawa_lamb(grid: Any, q: Any, u: Any, v: Any) -> tuple[Any, Any]:
-    """Equations (3.5), (3.6) and (3.34) of Arakawa and Lamb (1981), on the interior.
+    """The scheme of Arakawa and Lamb (1981), on the interior.
 
     With the transports ``U Δy`` and ``V Δx``, and ``du Δx`` and ``dv Δy`` for the
     tendencies, the identities hold on a sphere too.

@@ -320,7 +320,7 @@ the vorticity-flux product is evaluated.  Four forms are available:
 | `"energy"` (default) | $\overline{\zeta\,\overline{v}^{xy}}^{y}$: product at the corners, then average | Conserves total KE for non-divergent flow | Sadourny (1975) E-scheme |
 | `"enstrophy"` | $\overline{\zeta}^{y}\,\overline{v}^{xy}$: average to the face, then multiply | Conserves potential enstrophy | Sadourny (1975) Z-scheme |
 | `"blend"` | $\tfrac13 E + \tfrac23 Z$ | Conserves neither exactly | linear blend, **not** Arakawa & Lamb (1981) |
-| `"arakawa_lamb"` | twelve products around the face, with $K = \tfrac12(\overline{u^2}^x + \overline{v^2}^y)$ | Conserves energy and potential enstrophy | Arakawa & Lamb (1981) |
+| `"arakawa_lamb"` | six products for a face, with $K = \tfrac12(\overline{u^2}^x + \overline{v^2}^y)$ | Conserves energy and potential enstrophy | Arakawa & Lamb (1981) |
 
 :::{tip} When to use each form
 - **`"energy"`**: energy-conserving vortex force, the usual choice for
