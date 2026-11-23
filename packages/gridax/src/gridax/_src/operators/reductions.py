@@ -92,6 +92,10 @@ def volume_weights(
     grid: CurvilinearGrid3D, *, xp: Any = None
 ) -> Float[Array, "Nz Ny Nx"]:
     """The T-cell volumes of a 3-D grid, area times ``dz`` (``xp`` as in :func:`area_weights`)."""
+    if isinstance(grid, CartesianCGrid3D):
+        cell = grid.spacing("x") * grid.spacing("y") * grid.spacing("z")
+        xp = array_namespace(cell) if xp is None else xp
+        return xp.full(grid.shape, cell)
     if isinstance(grid, CurvilinearGrid3D):
         area = grid._area(xp=xp)
         xp = array_namespace(area) if xp is None else xp
