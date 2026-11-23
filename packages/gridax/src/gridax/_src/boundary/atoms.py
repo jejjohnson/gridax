@@ -122,6 +122,65 @@ class _Atom:
             f = set_at(f, at(i), values)
         return f
 
+    def coast(
+        self,
+        f: Float[Array, "..."],
+        grid: Any,
+        axis: str,
+        side: int,
+        point: str | Stagger,
+        width: int,
+        layer: int,
+    ) -> Float[Array, "..."]:
+        """What every point would hold as layer ``layer`` behind a coast.
+
+        The rules of :meth:`fill`, with the wall wherever the water ends
+        instead of at the edge of the array.
+
+        Parameters
+        ----------
+        f : array
+            A field whose last axes are ``grid.axes``, with ``width`` ghost
+            layers on each side.
+        grid : grid
+            Gives the axes and the spacing at the coast.
+        axis : str
+            The axis normal to the coast.
+        side : {0, 1}
+            The side of the water the coast is on, low or high.
+        point : str or Stagger
+            The point of the field.
+        width : int
+            Number of ghost layers.
+        layer : int
+            The dry points between the point and the water, plus one. Where
+            the field has a node on the wall, that is layer 1.
+
+        Returns
+        -------
+        array
+            The shape of ``f``; it means something on the dry points of the
+            layer only.
+        """
+        xp = array_namespace(f)
+        pos = grid.axes.index(axis) - len(grid.axes)
+        inwards = 1 if side == 0 else -1
+        # the axis normal to the coast first, so face values and spacings
+        # broadcast along the coast as they do along a face
+        lines = xp.moveaxis(f, pos, 0)
+
+        def phi(k: int) -> Any:
+            return xp.roll(lines, -inwards * (layer + k - 1), axis=0)
+
+        step = _face_spacing(grid, axis, point, f, width)
+        if axis not in point_axes(point, grid.axes):
+            values = self._ghost(phi, layer, step)
+        else:
+            values = self._wall(phi, step)
+            if layer > 1:
+                values = self._outside(values, phi, layer - 1, step)
+        return xp.moveaxis(xp.broadcast_to(values, lines.shape), 0, pos)
+
 
 def _face_spacing(
     grid: Any, axis: str, point: str | Stagger, f: Float[Array, "..."], width: int

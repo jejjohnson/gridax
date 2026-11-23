@@ -9,8 +9,14 @@ import numpy as np
 
 from gridax._src.boundary.atoms import Atom, Periodic, _Atom
 from gridax._src.fields.cfield import CField, StaggerMismatchError
-from gridax._src.grid.points import GRID_AXES, Stagger, as_stagger, point_stagger
-from gridax._src.pytree import pytree_dataclass, static_field
+from gridax._src.grid.points import (
+    GRID_AXES,
+    Stagger,
+    as_stagger,
+    point_axes,
+    point_stagger,
+)
+from gridax._src.pytree import array_namespace, pytree_dataclass, static_field
 
 #: Face names, as the axis and the side (0 low, 1 high).
 FACES: dict[str, tuple[str, int]] = {
@@ -41,6 +47,11 @@ class BC:
         What a ghost corner holds, where two faces meet. ``"average"``: the
         mean over the orders the faces can be applied in. ``"priority"``: the
         later axis of the grid wins (x over y over z).
+    coast : BC, optional
+        The conditions at the coasts inside the domain, where they differ from
+        those of the faces (`fill_ghosts` with ``mask=``). A coast on the east
+        side of the water takes the condition of the east face by default, and
+        none if that face is periodic or left alone.
     **faces
         ``x=``, ``y=``, ``z=``: a condition or a ``(low, high)`` pair; or a
         face name with one condition.
@@ -63,9 +74,18 @@ class BC:
     """
 
     faces: dict[str, tuple[Atom | None, Atom | None]]
+    coast: BC | None
     corners: Corners = static_field()
 
-    def __init__(self, *, corners: Corners = "average", **faces: Any) -> None:
+    def __init__(
+        self,
+        *,
+        corners: Corners = "average",
+        coast: BC | None = None,
+        **faces: Any,
+    ) -> None:
+        if not (coast is None or isinstance(coast, BC)):
+            raise TypeError(f"coast must be a BC, got {type(coast).__name__}")
         if corners not in ("average", "priority"):
             raise ValueError(
                 f"corners must be 'average' or 'priority', got {corners!r}"
@@ -98,7 +118,16 @@ class BC:
             if sum(isinstance(atom, Periodic) for atom in pair) == 1:
                 raise ValueError(f"both {axis} faces must be periodic, or neither")
         self.faces = {axis: (low, high) for axis, (low, high) in sides.items()}
+        self.coast = coast
         self.corners = corners
+
+    def at_coast(self, axis: str, side: int) -> Atom | None:
+        """The condition of the coasts on a side of the water, ``None`` for none."""
+        for bc in (self.coast, self):
+            atom = None if bc is None else bc.faces.get(axis, (None, None))[side]
+            if atom is not None and not isinstance(atom, Periodic):
+                return atom
+        return None
 
 
 def fill_ghosts(
@@ -106,13 +135,16 @@ def fill_ghosts(
     grid: Any,
     bc: Any,
     *,
+    mask: Any = None,
     width: int | None = None,
     stagger: Any = None,
 ) -> Any:
     """Fill the ghost ring of a field, or of every field of a state.
 
     The point of the field says where the wall is (`gridax.BC` conditions
-    hold at the wall) and the grid gives the spacing on each face.
+    hold at the wall) and the grid gives the spacing on each face. With a
+    mask, the dry points behind the coasts are filled by the same rules, so a
+    coast and a face with the same condition give the same values.
 
     Parameters
     ----------
@@ -126,6 +158,11 @@ def fill_ghosts(
         The condition of each face. Faces it leaves out are not written. For
         a state, a pytree of its structure with one `BC` per field, or
         ``None`` to leave the field alone.
+    mask : Mask1D, Mask2D or Mask3D, optional
+        The wet cells. ``width`` layers of dry points behind each coast are
+        written too (and the nodes on it), with the wet points they mirror
+        (``mask.coast_ghosts``). A dry point with water on several sides holds
+        the mean over them. No wet point is written.
     width : int, optional
         Number of ghost layers on each side: the grid's by default.
     stagger : str or Stagger, optional
@@ -164,7 +201,7 @@ def fill_ghosts(
     (0.0, 1.0)
     """
     if isinstance(bc, BC):
-        return _fill_field(f, grid, bc, width, stagger)
+        return _fill_field(f, grid, bc, mask, width, stagger)
     if isinstance(f, CField) or hasattr(f, "shape"):
         raise TypeError(f"bc for one field must be a BC, got {type(bc).__name__}")
     import jax
@@ -179,7 +216,7 @@ def fill_ghosts(
         if condition is None:
             filled.append(leaf)
         elif isinstance(condition, BC):
-            filled.append(_fill_field(leaf, grid, condition, width, point))
+            filled.append(_fill_field(leaf, grid, condition, mask, width, point))
         else:
             raise TypeError(
                 f"each field takes a BC or None, got {type(condition).__name__}"
@@ -187,10 +224,13 @@ def fill_ghosts(
     return structure.unflatten(filled)
 
 
-def _fill_field(f: Any, grid: Any, bc: BC, width: int | None, stagger: Any) -> Any:
+def _fill_field(
+    f: Any, grid: Any, bc: BC, mask: Any, width: int | None, stagger: Any
+) -> Any:
     """`fill_ghosts` of one field."""
     width = grid.ghost if width is None else width
-    unknown = [axis for axis in bc.faces if axis not in grid.axes]
+    coast = {} if bc.coast is None else bc.coast.faces
+    unknown = [axis for axis in (*bc.faces, *coast) if axis not in grid.axes]
     if unknown:
         raise ValueError(f"bc has the axes {unknown}, not in grid axes {grid.axes}")
     if isinstance(f, CField):
@@ -201,13 +241,65 @@ def _fill_field(f: Any, grid: Any, bc: BC, width: int | None, stagger: Any) -> A
             raise ValueError(f"{f!r} has no dims {missing}")
         others = tuple(dim for dim in f.dims if dim not in grid.axes)
         canonical = f.transpose((*others, *grid.axes))
-        data = _fill(canonical.data, grid, bc, width, f.stagger)
+        data = _filled(canonical.data, grid, bc, mask, width, f.stagger)
         return canonical.with_data(data).transpose(f.dims)
-    return _fill(f, grid, bc, width, _as_stagger("T" if stagger is None else stagger))
+    point = _as_stagger("T" if stagger is None else stagger)
+    return _filled(f, grid, bc, mask, width, point)
 
 
 def _as_stagger(stagger: str | Stagger) -> Stagger:
     return point_stagger(stagger) if isinstance(stagger, str) else as_stagger(stagger)
+
+
+def _filled(f: Any, grid: Any, bc: BC, mask: Any, width: int, stagger: Stagger) -> Any:
+    """The faces and, with a mask, the coasts."""
+    out = _fill(f, grid, bc, width, stagger)
+    if mask is None:
+        return out
+    # the coasts read the ring (a periodic image of the water), and the ring
+    # then wraps or mirrors the coasts
+    out = _fill_coasts(out, grid, bc, mask, width, stagger, layers=width)
+    return _fill(out, grid, bc, width, stagger)
+
+
+def _fill_coasts(
+    f: Any,
+    grid: Any,
+    bc: BC,
+    mask: Any,
+    width: int,
+    stagger: Stagger,
+    *,
+    layers: int,
+) -> Any:
+    """Write ``layers`` dry points behind the coasts, the nearest first."""
+    xp = array_namespace(f)
+    along = point_axes(stagger, grid.axes)
+    kind = "strict" if len(along) == 2 else "default"
+    coasts = [
+        (axis, side, atom)
+        for axis in grid.axes
+        for side in (0, 1)
+        if (atom := bc.at_coast(axis, side)) is not None
+    ]
+    written: Any = False
+    for layer in range(1, layers + 2):
+        total: Any = 0.0
+        count: Any = 0
+        for axis, side, atom in coasts:
+            if layer > layers and axis not in along:
+                continue  # only a node on the wall comes before the layers
+            points = mask.coast_ghosts(
+                axis, ("low", "high")[side], at=stagger, kind=kind, layer=layer
+            ).points
+            values = atom.coast(f, grid, axis, side, stagger, width, layer)
+            total = total + xp.where(points, values, xp.zeros_like(values))
+            count = count + xp.asarray(points, dtype=xp.int8)
+        here = (count > 0) & ~written
+        mean = total / xp.asarray(xp.where(count > 0, count, 1), dtype=f.dtype)
+        f = xp.where(here, mean, f)
+        written = written | here
+    return f
 
 
 def _fill(f: Any, grid: Any, bc: BC, width: int, stagger: Stagger) -> Any:

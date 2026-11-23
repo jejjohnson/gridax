@@ -319,6 +319,31 @@ print(gridax.fill_ghosts(x, grid, gridax.BC(x=gridax.Neumann())))
 
 ---
 
+### Coasts inside the domain: `mask`
+
+A coastline is a wall too. With `mask=`, `fill_ghosts` also writes the dry points behind every coast with the mirror rules above: the nearest wet point is $\phi_1$, and a coast on the east side of the water takes the condition of the east face. A straight coast inside the domain and a domain edge with the same condition therefore hold the same values.
+
+```python
+import gridax
+import numpy as np
+
+grid = gridax.CartesianCGrid2D.from_interior(4, 4, 4.0, 4.0)
+wet = np.ones(grid.shape, dtype=bool)
+wet[2:4, 3:5] = False  # an island
+mask = gridax.Mask2D.from_grid(grid, wet)
+
+bc = gridax.BC(x=gridax.Periodic(), y=gridax.Neumann(), coast=gridax.BC(x=gridax.Neumann()))
+h = np.arange(36.0).reshape(grid.shape)
+h = gridax.fill_ghosts(h, grid, bc, mask=mask)
+print(h[2, 3])  # the mean of the copies of h[2, 2] and h[1, 3]
+# 11.5
+```
+
+- `width` layers of dry points are written behind each coast, and the nodes on it.
+- A dry point with water on several sides holds the mean over them, and the nearest water wins over water further away.
+- A periodic face says nothing about a coast, and neither does a face left out. `coast=` gives the conditions of the coasts, axis by axis, where the faces do not.
+- No wet point is written. The first layer reads wet points only, so land may hold `NaN`; layer $k$ reads $\phi_k$, and `Extrapolation` `order + 1` points, which a narrow strait may not have.
+
 ## Helpers
 
 ### `pad_interior`
