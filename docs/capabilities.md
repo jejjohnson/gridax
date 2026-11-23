@@ -186,9 +186,9 @@ Every public name in gridax (408 entries), listed per public module (`gridax`, i
 
 | Name | Kind | What it does |
 |---|---|---|
-| `CartesianGrid1D` | class | 1-D Cartesian Arakawa C-grid (uniform spacing). |
-| `CartesianGrid2D` | class | 2-D Cartesian Arakawa C-grid (uniform spacing). |
-| `CartesianGrid3D` | class | 3-D Cartesian Arakawa C-grid (uniform spacing). |
+| `CartesianCGrid1D` | class | 1-D Cartesian Arakawa C-grid (uniform spacing). |
+| `CartesianCGrid2D` | class | 2-D Cartesian Arakawa C-grid (uniform spacing). |
+| `CartesianCGrid3D` | class | 3-D Cartesian Arakawa C-grid (uniform spacing). |
 
 #### The coordinates of a Cartesian grid's T points, as an (N, D) point array (`gridax._src.grid.coordinates`)
 
@@ -200,8 +200,8 @@ Every public name in gridax (408 entries), listed per public module (`gridax`, i
 
 | Name | Kind | What it does |
 |---|---|---|
-| `SphericalGrid2D` | class | 2-D Arakawa C-grid on a sphere. |
-| `SphericalGrid3D` | class | 3-D Arakawa C-grid on a sphere. |
+| `SphericalCGrid2D` | class | 2-D Arakawa C-grid on a sphere. |
+| `SphericalCGrid3D` | class | 3-D Arakawa C-grid on a sphere. |
 
 #### Shared mask infrastructure: StencilCapability1D / 2D / 3D classes (`gridax._src.mask.base`)
 

@@ -164,7 +164,7 @@ IMG_DIR.mkdir(parents=True, exist_ok=True)
 nx, ny = 32, 32
 Lx, Ly = 5.12e6, 5.12e6  # 5120 km square basin
 
-grid = fvx.CartesianGrid2D.from_interior(nx, ny, Lx, Ly)
+grid = fvx.CartesianCGrid2D.from_interior(nx, ny, Lx, Ly)
 dx, dy = grid.spacing("x"), grid.spacing("y")
 Ny, Nx = ny + 2, nx + 2
 
@@ -648,7 +648,7 @@ plt.show()
 #
 # | Component | gridax API | Purpose |
 # |-----------|---------------|---------|
-# | **Grid** | `CartesianGrid2D.from_interior(nx, ny, Lx, Ly)` | C-grid with ghost ring |
+# | **Grid** | `CartesianCGrid2D.from_interior(nx, ny, Lx, Ly)` | C-grid with ghost ring |
 # | **Helmholtz inversion** | `solve_helmholtz_dst(rhs, dx, dy, lambda_)` | $(\\nabla^2 - \\lambda)\\psi = q_a$ |
 # | **Differences** | `Difference2D(grid)` | Finite differences, Laplacian |
 # | **Interpolation** | `Interpolation2D(grid)` | T-to-X, V-to-T, U-to-T, X-to-T |

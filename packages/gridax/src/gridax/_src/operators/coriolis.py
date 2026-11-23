@@ -34,7 +34,7 @@ from jaxtyping import Float
 import numpy as np
 
 from gridax._src.backend import vmap
-from gridax._src.grid import CartesianGrid2D, CartesianGrid3D
+from gridax._src.grid import CartesianCGrid2D, CartesianCGrid3D
 from gridax._src.mask import Mask2D, Mask3D
 from gridax._src.operators._ghost import interior, zero_z_ghosts
 from gridax._src.pytree import array_namespace, pytree_dataclass
@@ -69,7 +69,7 @@ class Coriolis2D:
 
     Parameters
     ----------
-    grid : CartesianGrid2D
+    grid : CartesianCGrid2D
         The underlying 2-D grid.
     mask : Mask2D or None, optional
         Optional land/ocean mask.  When provided, ``u`` / ``v`` are zeroed
@@ -89,8 +89,8 @@ class Coriolis2D:
     Examples
     --------
     >>> import jax.numpy as jnp
-    >>> from gridax import CartesianGrid2D, Coriolis2D
-    >>> grid = CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
+    >>> from gridax import CartesianCGrid2D, Coriolis2D
+    >>> grid = CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
     >>> cor = Coriolis2D(grid=grid)
     >>> u = jnp.zeros((grid.Ny, grid.Nx))
     >>> v = jnp.ones((grid.Ny, grid.Nx))
@@ -98,7 +98,7 @@ class Coriolis2D:
     >>> du_cor, dv_cor = cor(u, v, f)
     """
 
-    grid: CartesianGrid2D
+    grid: CartesianCGrid2D
     mask: Mask2D | None = None
 
     def __call__(
@@ -167,7 +167,7 @@ class Coriolis3D:
 
     Parameters
     ----------
-    grid : CartesianGrid3D
+    grid : CartesianCGrid3D
         The underlying 3-D grid.
     mask : Mask3D or None, optional
         Optional land/ocean mask.  Pattern A (post-compute) — the
@@ -185,8 +185,8 @@ class Coriolis3D:
     Examples
     --------
     >>> import jax.numpy as jnp
-    >>> from gridax import CartesianGrid3D, Coriolis3D
-    >>> grid = CartesianGrid3D.from_interior(6, 6, 4, 1.0, 1.0, 1.0)
+    >>> from gridax import CartesianCGrid3D, Coriolis3D
+    >>> grid = CartesianCGrid3D.from_interior(6, 6, 4, 1.0, 1.0, 1.0)
     >>> cor = Coriolis3D(grid=grid)
     >>> u = jnp.zeros((grid.Nz, grid.Ny, grid.Nx))
     >>> v = jnp.ones((grid.Nz, grid.Ny, grid.Nx))
@@ -194,13 +194,13 @@ class Coriolis3D:
     >>> du_cor, dv_cor = cor(u, v, f)
     """
 
-    grid: CartesianGrid3D
+    grid: CartesianCGrid3D
     mask: Mask3D | None
     _cor2d: Coriolis2D
 
     def __init__(
         self,
-        grid: CartesianGrid3D,
+        grid: CartesianCGrid3D,
         mask: Mask3D | None = None,
     ) -> None:
         self.grid = grid

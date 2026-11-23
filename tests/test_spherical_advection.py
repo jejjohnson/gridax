@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from gridax import (
-    CartesianGrid2D,
-    CartesianGrid3D,
+    CartesianCGrid2D,
+    CartesianCGrid3D,
     Mask2D,
     Mask3D,
-    SphericalGrid2D,
-    SphericalGrid3D,
+    SphericalCGrid2D,
+    SphericalCGrid3D,
 )
 from gridax._src.advection.advection import Advection2D, Advection3D
 from gridax._src.advection.spherical_advection import (
@@ -27,7 +27,7 @@ NX_INT, NY_INT = 16, 10
 
 @pytest.fixture
 def grid():
-    return SphericalGrid2D.from_interior(
+    return SphericalCGrid2D.from_interior(
         nx_interior=NX_INT,
         ny_interior=NY_INT,
         lon_range=(0.0, 360.0),
@@ -38,7 +38,7 @@ def grid():
 
 @pytest.fixture
 def grid3d():
-    return SphericalGrid3D.from_interior(
+    return SphericalCGrid3D.from_interior(
         nx_interior=NX_INT,
         ny_interior=NY_INT,
         nz_interior=3,
@@ -122,14 +122,14 @@ class TestSphericalAdvection2D:
         nx, ny = 24, 6
         lon_range = (0.0, 30.0)
         lat_range = (-0.5, 0.5)
-        sphere = SphericalGrid2D.from_interior(
+        sphere = SphericalCGrid2D.from_interior(
             nx_interior=nx,
             ny_interior=ny,
             lon_range=lon_range,
             lat_range=lat_range,
             R=R,
         )
-        cart = CartesianGrid2D.from_interior(
+        cart = CartesianCGrid2D.from_interior(
             nx_interior=nx,
             ny_interior=ny,
             Lx=sphere.Lx,
@@ -329,7 +329,7 @@ class TestSphericalAdvection3D:
     def test_matches_cartesian_at_narrow_equatorial_band(self):
         """Narrow lat band around equator → spherical 3D ≈ Cartesian 3D."""
         nx, ny, nz = 16, 6, 3
-        sphere = SphericalGrid3D.from_interior(
+        sphere = SphericalCGrid3D.from_interior(
             nx_interior=nx,
             ny_interior=ny,
             nz_interior=nz,
@@ -338,7 +338,7 @@ class TestSphericalAdvection3D:
             Lz=100.0,
             R=R,
         )
-        cart = CartesianGrid3D.from_interior(
+        cart = CartesianCGrid3D.from_interior(
             nx_interior=nx,
             ny_interior=ny,
             nz_interior=nz,
@@ -421,7 +421,7 @@ def _periodic_setup(halo, seed=0):
     """
     dl = 360.0 / NP_LON
     pad = (halo - 1) * dl
-    grid = SphericalGrid2D.from_interior(
+    grid = SphericalCGrid2D.from_interior(
         nx_interior=NP_LON + 2 * (halo - 1),
         ny_interior=NY_LAT,
         lon_range=(-pad, 360.0 + pad),
@@ -478,7 +478,7 @@ class TestSphericalTelescoping:
     def test_issue_247_script(self, method):
         """The #247 reproduction (48x24, ±80°, one wrapped ghost column):
         -5.0e-3 with the default wall="closed", rounding with "open"."""
-        grid = SphericalGrid2D.from_interior(48, 24, (0.0, 360.0), (-80.0, 80.0), R=R)
+        grid = SphericalCGrid2D.from_interior(48, 24, (0.0, 360.0), (-80.0, 80.0), R=R)
         rng = np.random.RandomState(0)
 
         def wrap(a):
@@ -545,14 +545,14 @@ class TestSphericalOpenWall:
     @pytest.mark.slow
     def test_matches_cartesian_open_wall_at_the_equator(self):
         """Mirrors Advection2D(wall="open"), ring included, where cos ~ 1."""
-        sphere = SphericalGrid2D.from_interior(
+        sphere = SphericalCGrid2D.from_interior(
             nx_interior=24,
             ny_interior=6,
             lon_range=(0.0, 30.0),
             lat_range=(-0.5, 0.5),
             R=R,
         )
-        cart = CartesianGrid2D.from_interior(
+        cart = CartesianCGrid2D.from_interior(
             nx_interior=24, ny_interior=6, Lx=sphere.Lx, Ly=sphere.Ly
         )
         k1, k2, k3 = jax.random.split(jax.random.PRNGKey(22), 3)

@@ -31,7 +31,7 @@ where $F^x = u \hat{q}$ and $F^y = v \hat{q}$ are the fluxes through the east an
 
 ### The grid and the mask
 
-`CartesianGrid2D.from_interior` takes the interior size and the domain lengths and adds one ghost ring, so a 32 × 32 interior gives arrays of shape $(34, 34)$. We put the origin on the south-west corner of the walls, so T point $(j, i)$ sits at $x_i = (i - 1/2) \Delta x$, $y_j = (j - 1/2) \Delta y$, and the walls at $x = 0, 1$ and $y = 0, 1$ (`gridax.t_point_coordinates` measures from T point $(0, 0)$ instead, half a cell further out). The mask starts from a boolean array of wet T points, and `Mask2D.from_mask` derives the wet U, V and X points from it, with the coast classification and the stencil capability that `Advection2D` reads near land.
+`CartesianCGrid2D.from_interior` takes the interior size and the domain lengths and adds one ghost ring, so a 32 × 32 interior gives arrays of shape $(34, 34)$. We put the origin on the south-west corner of the walls, so T point $(j, i)$ sits at $x_i = (i - 1/2) \Delta x$, $y_j = (j - 1/2) \Delta y$, and the walls at $x = 0, 1$ and $y = 0, 1$ (`gridax.t_point_coordinates` measures from T point $(0, 0)$ instead, half a cell further out). The mask starts from a boolean array of wet T points, and `Mask2D.from_mask` derives the wet U, V and X points from it, with the coast classification and the stencil capability that `Advection2D` reads near land.
 
 ```python
 import gridax
@@ -40,7 +40,7 @@ import numpy as np
 # Shapes: N_y = N_x = 34, a 32 × 32 interior and one ghost ring
 
 # today (gridax)
-grid = gridax.CartesianGrid2D.from_interior(32, 32, Lx=1.0, Ly=1.0)
+grid = gridax.CartesianCGrid2D.from_interior(32, 32, Lx=1.0, Ly=1.0)
 # (x_i, y_j), the T-point coordinates
 x, y = np.meshgrid(
     (np.arange(grid.Nx) - 0.5) * grid.spacing("x"), (np.arange(grid.Ny) - 0.5) * grid.spacing("y")

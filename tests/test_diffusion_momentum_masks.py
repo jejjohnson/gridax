@@ -321,18 +321,18 @@ def _basin_mask_2d(n: int = 12) -> np.ndarray:
 def _biharmonic_cases():
     """(name, op, area weight [Ny, Nx], wet [Ny, Nx]) for the 2-D operators."""
     from gridax import (
-        CartesianGrid2D,
+        CartesianCGrid2D,
         Mask2D,
         SphericalBiharmonicDiffusion2D,
-        SphericalGrid2D,
+        SphericalCGrid2D,
     )
 
     m = _basin_mask_2d()
     mask = Mask2D.from_mask(m)
-    cart = CartesianGrid2D.from_interior(10, 10, 1.0, 1.0)
+    cart = CartesianCGrid2D.from_interior(10, 10, 1.0, 1.0)
     # R = 1 keeps the spherical operator O(1) so absolute tolerances mean
     # the same thing as for the unit-square Cartesian grid
-    sph = SphericalGrid2D.from_interior(
+    sph = SphericalCGrid2D.from_interior(
         10, 10, lon_range=(0.0, 60.0), lat_range=(-30.0, 30.0), R=1.0
     )
     return [
@@ -416,18 +416,18 @@ class TestMaskedBiharmonicNoFlux:
 def test_masked_biharmonic_3d_constant_and_conservation():
     """The 3-D operators apply the same masked ``Dm(Dm(h))`` per level."""
     from gridax import (
-        CartesianGrid3D,
+        CartesianCGrid3D,
         Mask3D,
         SphericalBiharmonicDiffusion3D,
-        SphericalGrid3D,
+        SphericalCGrid3D,
     )
     import jax.numpy as jnp
 
     m2 = _basin_mask_2d()
     m3 = np.stack([np.zeros_like(m2), m2, m2, m2, np.zeros_like(m2)])  # [Nz, Ny, Nx]
     mask = Mask3D.from_mask(m3)
-    cart = CartesianGrid3D.from_interior(10, 10, 3, 1.0, 1.0, 1.0)
-    sph = SphericalGrid3D.from_interior(
+    cart = CartesianCGrid3D.from_interior(10, 10, 3, 1.0, 1.0, 1.0)
+    sph = SphericalCGrid3D.from_interior(
         10, 10, 3, lon_range=(0.0, 60.0), lat_range=(-30.0, 30.0), Lz=1.0, R=1.0
     )
     rng = np.random.default_rng(2)

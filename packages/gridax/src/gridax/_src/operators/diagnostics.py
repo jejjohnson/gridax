@@ -628,7 +628,7 @@ def vertical_velocity(
 
     Examples
     --------
-    >>> grid = CartesianGrid3D.from_interior(6, 4, 3, Lx=1.0, Ly=1.0, Lz=1.0)
+    >>> grid = CartesianCGrid3D.from_interior(6, 4, 3, Lx=1.0, Ly=1.0, Lz=1.0)
     >>> u = jnp.broadcast_to(jnp.asarray(grid.coords("x")), (grid.Nz, grid.Ny, grid.Nx))
     >>> w = vertical_velocity(
     ...     u,

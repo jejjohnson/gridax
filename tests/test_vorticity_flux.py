@@ -7,8 +7,8 @@ Covers the public ``pv_flux_blend`` free function (parity with the
 from __future__ import annotations
 
 from gridax import (
-    CartesianGrid2D,
-    SphericalGrid2D,
+    CartesianCGrid2D,
+    SphericalCGrid2D,
     SphericalVorticity2D,
     Vorticity2D,
     pv_flux_arakawa_lamb,
@@ -25,7 +25,7 @@ import pytest
 
 @pytest.fixture()
 def grid():
-    return CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
+    return CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
 
 
 def _rand(seed, shape):
@@ -138,7 +138,7 @@ class TestPVFluxForms:
     @pytest.fixture()
     def fields(self):
         n = 16
-        g = CartesianGrid2D.from_interior(n - 2, n - 2, 1.0, 1.0)
+        g = CartesianCGrid2D.from_interior(n - 2, n - 2, 1.0, 1.0)
         key = jax.random.key(0)
         q, u, v = (
             _periodic(jax.random.normal(jax.random.fold_in(key, k), (n, n)))
@@ -212,7 +212,7 @@ class TestArakawaLambDeprecatedAliases:
 
     def test_methods(self, grid):
         q, u, v = (_rand(s, (grid.Ny, grid.Nx)) for s in (12, 13, 14))
-        sgrid = SphericalGrid2D.from_interior(8, 8, (0.0, 40.0), (-20.0, 20.0))
+        sgrid = SphericalCGrid2D.from_interior(8, 8, (0.0, 40.0), (-20.0, 20.0))
         for op in (Vorticity2D(grid=grid), SphericalVorticity2D(grid=sgrid)):
             with pytest.warns(DeprecationWarning, match="not the Arakawa-Lamb"):
                 old = op.pv_flux_arakawa_lamb(q, u, v)

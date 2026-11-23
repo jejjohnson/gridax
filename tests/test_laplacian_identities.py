@@ -43,14 +43,14 @@ def _backends(fn):
 
 @pytest.fixture
 def cartesian():
-    grid = gridax.CartesianGrid2D.from_interior(30, 20, 60.0e3, 20.0e3)
+    grid = gridax.CartesianCGrid2D.from_interior(30, 20, 60.0e3, 20.0e3)
     h = np.random.default_rng(1).standard_normal((grid.Ny, grid.Nx))
     return grid, h
 
 
 @pytest.fixture
 def spherical():
-    grid = gridax.SphericalGrid2D.from_interior(30, 20, (0.0, 120.0), (-60.0, 60.0))
+    grid = gridax.SphericalCGrid2D.from_interior(30, 20, (0.0, 120.0), (-60.0, 60.0))
     h = np.random.default_rng(2).standard_normal((grid.Ny, grid.Nx))
     return grid, h
 
@@ -109,7 +109,7 @@ def test_spherical_laplacian_is_its_two_terms_bit_for_bit(spherical):
 
 
 def test_3d_laplacian_is_diffusion_with_unit_diffusivity_on_every_level():
-    grid = gridax.CartesianGrid3D.from_interior(16, 12, 4, 32.0e3, 24.0e3, 400.0)
+    grid = gridax.CartesianCGrid3D.from_interior(16, 12, 4, 32.0e3, 24.0e3, 400.0)
     h = np.random.default_rng(3).standard_normal((grid.Nz, grid.Ny, grid.Nx))
     laplacian = np.asarray(gridax.Difference3D(grid=grid).laplacian(h))
     diffusion = np.asarray(gridax.Diffusion3D(grid=grid)(h, kappa=1.0))

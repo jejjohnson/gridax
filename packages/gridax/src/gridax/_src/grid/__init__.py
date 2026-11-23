@@ -9,12 +9,12 @@ from gridax._src.grid.base import (
     CurvilinearGrid3D,
 )
 from gridax._src.grid.cartesian import (
-    CartesianGrid1D,
-    CartesianGrid2D,
-    CartesianGrid3D,
+    CartesianCGrid1D,
+    CartesianCGrid2D,
+    CartesianCGrid3D,
 )
 from gridax._src.grid.coordinates import t_point_coordinates
-from gridax._src.grid.spherical import SphericalGrid2D, SphericalGrid3D
+from gridax._src.grid.spherical import SphericalCGrid2D, SphericalCGrid3D
 
 __all__ = [
     # Abstract topology
@@ -26,12 +26,12 @@ __all__ = [
     "CurvilinearGrid2D",
     "CurvilinearGrid3D",
     # Cartesian concrete
-    "CartesianGrid1D",
-    "CartesianGrid2D",
-    "CartesianGrid3D",
+    "CartesianCGrid1D",
+    "CartesianCGrid2D",
+    "CartesianCGrid3D",
     # Spherical concrete
-    "SphericalGrid2D",
-    "SphericalGrid3D",
+    "SphericalCGrid2D",
+    "SphericalCGrid3D",
     # Point coordinates
     "t_point_coordinates",
 ]

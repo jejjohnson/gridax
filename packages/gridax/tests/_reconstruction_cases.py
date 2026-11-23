@@ -36,18 +36,20 @@ def cases() -> Iterator[tuple[str, Callable[[], np.ndarray]]]:
     """``(name, call)`` for every method of Reconstruction1D/2D/3D and the old reconstruct."""
     setups = {
         1: (
-            gridax.Reconstruction1D(grid=gridax.CartesianGrid1D.from_interior(18, 1.0)),
+            gridax.Reconstruction1D(
+                grid=gridax.CartesianCGrid1D.from_interior(18, 1.0)
+            ),
             (20,),
         ),
         2: (
             gridax.Reconstruction2D(
-                grid=gridax.CartesianGrid2D.from_interior(16, 12, 1.0, 1.0)
+                grid=gridax.CartesianCGrid2D.from_interior(16, 12, 1.0, 1.0)
             ),
             (14, 18),
         ),
         3: (
             gridax.Reconstruction3D(
-                grid=gridax.CartesianGrid3D.from_interior(12, 10, 4, 1.0, 1.0, 1.0)
+                grid=gridax.CartesianCGrid3D.from_interior(12, 10, 4, 1.0, 1.0, 1.0)
             ),
             (6, 12, 14),
         ),

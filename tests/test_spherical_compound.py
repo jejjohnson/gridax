@@ -2,8 +2,8 @@
 
 from gridax import (
     Mask2D,
-    SphericalGrid2D,
-    SphericalGrid3D,
+    SphericalCGrid2D,
+    SphericalCGrid3D,
 )
 from gridax._src.operators.reductions import spherical_area_weights
 from gridax._src.operators.spherical_compound import (
@@ -28,7 +28,7 @@ NX_INT, NY_INT = 10, 8
 
 @pytest.fixture
 def grid():
-    return SphericalGrid2D.from_interior(
+    return SphericalCGrid2D.from_interior(
         nx_interior=NX_INT,
         ny_interior=NY_INT,
         lon_range=(0.0, 360.0),
@@ -244,7 +244,7 @@ class TestGeostrophicVelocity:
 class TestSpherical3DCompound:
     @pytest.fixture
     def grid3d(self):
-        return SphericalGrid3D.from_interior(
+        return SphericalCGrid3D.from_interior(
             nx_interior=NX_INT,
             ny_interior=NY_INT,
             nz_interior=4,

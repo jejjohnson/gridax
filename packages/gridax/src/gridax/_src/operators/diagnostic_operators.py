@@ -40,7 +40,7 @@ from jaxtyping import Float
 import numpy as np
 
 from gridax._src.backend import set_at
-from gridax._src.grid import CartesianGrid2D
+from gridax._src.grid import CartesianCGrid2D
 from gridax._src.mask import Mask2D
 from gridax._src.operators._utils import _spacing
 from gridax._src.operators.diagnostics import (
@@ -110,7 +110,7 @@ class Energetics2D:
 
     Parameters
     ----------
-    grid : CartesianGrid2D
+    grid : CartesianCGrid2D
         The underlying 2-D grid.
     mask : Mask2D or None, optional
         Optional land/ocean mask.  ``None`` (default) returns exactly the
@@ -120,13 +120,13 @@ class Energetics2D:
     Examples
     --------
     >>> import jax.numpy as jnp
-    >>> from gridax import CartesianGrid2D, Energetics2D
-    >>> grid = CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
+    >>> from gridax import CartesianCGrid2D, Energetics2D
+    >>> grid = CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
     >>> u = jnp.ones((grid.Ny, grid.Nx))
     >>> ke = Energetics2D(grid=grid).kinetic_energy(u, 0.0 * u)
     """
 
-    grid: CartesianGrid2D
+    grid: CartesianCGrid2D
     mask: Mask2D | None = None
 
     def _uv(
@@ -268,7 +268,7 @@ class Strain2D:
 
     Parameters
     ----------
-    grid : CartesianGrid2D
+    grid : CartesianCGrid2D
         The underlying 2-D grid.
     mask : Mask2D or None, optional
         Optional land/ocean mask.  Velocities are zeroed on dry faces
@@ -283,19 +283,19 @@ class Strain2D:
     Examples
     --------
     >>> import jax.numpy as jnp
-    >>> from gridax import CartesianGrid2D, Strain2D
-    >>> grid = CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
+    >>> from gridax import CartesianCGrid2D, Strain2D
+    >>> grid = CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
     >>> u = jnp.ones((grid.Ny, grid.Nx))
     >>> ow = Strain2D(grid=grid).okubo_weiss(u, 0.0 * u)
     """
 
-    grid: CartesianGrid2D
+    grid: CartesianCGrid2D
     mask: Mask2D | None
     interp: Interpolation2D
 
     def __init__(
         self,
-        grid: CartesianGrid2D,
+        grid: CartesianCGrid2D,
         mask: Mask2D | None = None,
     ) -> None:
         self.grid = grid
@@ -512,7 +512,7 @@ class QGPotentialVorticity2D:
 
     Parameters
     ----------
-    grid : CartesianGrid2D
+    grid : CartesianCGrid2D
         The underlying 2-D grid.
     mask : Mask2D or None, optional
         Optional land/ocean mask.  ``None`` (default) returns exactly the
@@ -521,14 +521,14 @@ class QGPotentialVorticity2D:
     Examples
     --------
     >>> import jax.numpy as jnp
-    >>> from gridax import CartesianGrid2D, QGPotentialVorticity2D
-    >>> grid = CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
+    >>> from gridax import CartesianCGrid2D, QGPotentialVorticity2D
+    >>> grid = CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
     >>> psi = jnp.zeros((grid.Ny, grid.Nx))
     >>> y = jnp.zeros((grid.Ny, grid.Nx))
     >>> q = QGPotentialVorticity2D(grid=grid)(psi, 1e-4, 0.0, y, 0.0)
     """
 
-    grid: CartesianGrid2D
+    grid: CartesianCGrid2D
     mask: Mask2D | None = None
 
     def _psi(self, psi: Float[Array, "... Ny Nx"]) -> Float[Array, "... Ny Nx"]:

@@ -4,7 +4,7 @@ from typing import ClassVar
 
 from gridax import (
     BoundaryConditionSet,
-    CartesianGrid2D,
+    CartesianCGrid2D,
     Difference2D,
     Dirichlet1D,
     Extrapolation1D,
@@ -570,7 +570,7 @@ class TestStaggeredPoints:
 
     def test_closed_basin_has_zero_net_mass_flux(self):
         """u = v = 1, closed(point=U/V): no mass crosses the walls."""
-        g = CartesianGrid2D.from_interior(
+        g = CartesianCGrid2D.from_interior(
             self.Nx - 2,
             self.Ny - 2,
             Lx=(self.Nx - 2) * self.dx,

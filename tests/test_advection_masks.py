@@ -30,13 +30,13 @@ the wet tendencies do not depend on the land values (``1e10``, ``0`` or
 from __future__ import annotations
 
 from gridax import (
-    CartesianGrid1D,
-    CartesianGrid2D,
-    CartesianGrid3D,
+    CartesianCGrid1D,
+    CartesianCGrid2D,
+    CartesianCGrid3D,
     Mask1D,
     Mask2D,
     Mask3D,
-    SphericalGrid2D,
+    SphericalCGrid2D,
 )
 from gridax._src.advection.advection import (
     Advection1D,
@@ -294,10 +294,10 @@ def _fields(shape, seed):
 
 def _ops():
     """(name, operator, wet mask, arguments-builder) for every dimension."""
-    g1 = CartesianGrid1D.from_interior(N, float(N))
-    g2 = CartesianGrid2D.from_interior(N, N, float(N), float(N))
-    g3 = CartesianGrid3D.from_interior(N, N, 2, float(N), float(N), 2.0)
-    gs = SphericalGrid2D.from_interior(
+    g1 = CartesianCGrid1D.from_interior(N, float(N))
+    g2 = CartesianCGrid2D.from_interior(N, N, float(N), float(N))
+    g3 = CartesianCGrid3D.from_interior(N, N, 2, float(N), float(N), 2.0)
+    gs = SphericalCGrid2D.from_interior(
         nx_interior=N, ny_interior=N, lon_range=(0.0, 60.0), lat_range=(-30.0, 30.0)
     )
     m1, m2, m3 = _basin_1d(), _basin_2d(), _basin_3d()

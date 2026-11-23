@@ -1,9 +1,9 @@
 """Tests for Difference1D, Difference2D, Difference3D."""
 
 from gridax import (
-    CartesianGrid1D,
-    CartesianGrid2D,
-    CartesianGrid3D,
+    CartesianCGrid1D,
+    CartesianCGrid2D,
+    CartesianCGrid3D,
 )
 from gridax._src.operators.difference import (
     Difference1D,
@@ -18,17 +18,17 @@ import pytest
 
 @pytest.fixture
 def grid1d():
-    return CartesianGrid1D.from_interior(8, 1.0)
+    return CartesianCGrid1D.from_interior(8, 1.0)
 
 
 @pytest.fixture
 def grid2d():
-    return CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
+    return CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
 
 
 @pytest.fixture
 def grid3d():
-    return CartesianGrid3D.from_interior(6, 6, 4, 1.0, 1.0, 1.0)
+    return CartesianCGrid3D.from_interior(6, 6, 4, 1.0, 1.0, 1.0)
 
 
 class TestDifference1D:
@@ -391,7 +391,7 @@ class TestGradPerp2D:
 
     def test_anisotropic_grid(self):
         """grad_perp respects different dx and dy spacings."""
-        grid = CartesianGrid2D.from_interior(8, 8, 1.0, 2.0)
+        grid = CartesianCGrid2D.from_interior(8, 8, 1.0, 2.0)
         diff = Difference2D(grid=grid)
         c = 1.5
         y = jnp.arange(grid.Ny, dtype=float) * grid.spacing("y")
@@ -587,21 +587,21 @@ class TestDifferenceLaplacianConstant:
     """Laplacian of a constant field must be zero everywhere in the interior."""
 
     def test_laplacian_1d_constant_is_zero(self):
-        grid = CartesianGrid1D.from_interior(8, 1.0)
+        grid = CartesianCGrid1D.from_interior(8, 1.0)
         diff = Difference1D(grid=grid)
         h = 5.0 * jnp.ones(grid.Nx)
         result = diff.laplacian(h)
         np.testing.assert_allclose(result[1:-1], 0.0, atol=1e-10)
 
     def test_laplacian_2d_constant_is_zero(self):
-        grid = CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
+        grid = CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
         diff = Difference2D(grid=grid)
         h = 7.0 * jnp.ones((grid.Ny, grid.Nx))
         result = diff.laplacian(h)
         np.testing.assert_allclose(result[1:-1, 1:-1], 0.0, atol=1e-10)
 
     def test_laplacian_3d_constant_is_zero(self):
-        grid = CartesianGrid3D.from_interior(6, 6, 4, 1.0, 1.0, 1.0)
+        grid = CartesianCGrid3D.from_interior(6, 6, 4, 1.0, 1.0, 1.0)
         diff = Difference3D(grid=grid)
         h = 3.0 * jnp.ones((grid.Nz, grid.Ny, grid.Nx))
         result = diff.laplacian(h)
@@ -615,7 +615,7 @@ class TestDifferenceLaplacianConstant:
         For h=c*x=c*i*dx, the cancellation is exact at every interior point
         (including i=1, where h[0]=0 is the natural linear continuation).
         """
-        grid = CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
+        grid = CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
         diff = Difference2D(grid=grid)
         c = 3.0
         x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
@@ -631,7 +631,7 @@ class TestDifferenceLaplacianConstant:
         For h=c*y=c*j*dy, the cancellation is exact at every interior point
         (including j=1, where h[0]=0 is the natural linear continuation).
         """
-        grid = CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
+        grid = CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
         diff = Difference2D(grid=grid)
         c = 2.5
         y = jnp.arange(grid.Ny, dtype=float) * grid.spacing("y")
@@ -651,7 +651,7 @@ class TestDifferenceCrossAxis:
 
     def test_x_diff_of_y_only_field_is_zero(self):
         """h = f(y) only → dh/dx = 0 everywhere in the interior."""
-        grid = CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
+        grid = CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
         diff = Difference2D(grid=grid)
         y = jnp.arange(grid.Ny, dtype=float) * grid.spacing("y")
         h = jnp.broadcast_to(2.0 * y[:, None], (grid.Ny, grid.Nx))
@@ -660,7 +660,7 @@ class TestDifferenceCrossAxis:
 
     def test_y_diff_of_x_only_field_is_zero(self):
         """h = f(x) only → dh/dy = 0 everywhere in the interior."""
-        grid = CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
+        grid = CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
         diff = Difference2D(grid=grid)
         x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
         h = jnp.broadcast_to(3.0 * x, (grid.Ny, grid.Nx))
@@ -679,7 +679,7 @@ class TestDifferenceAnisotropicGrid:
     def test_diff_x_respects_dx_scaling(self):
         """dh/dx output should scale inversely with dx."""
         dx, dy = 2.0, 1.0
-        grid = CartesianGrid2D.from_interior(8, 8, dx * 8, dy * 8)
+        grid = CartesianCGrid2D.from_interior(8, 8, dx * 8, dy * 8)
         diff = Difference2D(grid=grid)
         c = 3.0
         x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
@@ -690,7 +690,7 @@ class TestDifferenceAnisotropicGrid:
     def test_diff_y_respects_dy_scaling(self):
         """dh/dy output should scale inversely with dy."""
         dx, dy = 1.0, 3.0
-        grid = CartesianGrid2D.from_interior(8, 8, dx * 8, dy * 8)
+        grid = CartesianCGrid2D.from_interior(8, 8, dx * 8, dy * 8)
         diff = Difference2D(grid=grid)
         c = 2.0
         y = jnp.arange(grid.Ny, dtype=float) * grid.spacing("y")
@@ -708,7 +708,7 @@ class TestDifferenceAnisotropicGrid:
         discrete Laplacian matches the continuous one for quadratic fields.
         """
         # Use unit domain so that grid.spacing("x") = Lx/nx = 1.0, grid.spacing("y") = Ly/ny = 1.0
-        grid = CartesianGrid2D.from_interior(8, 8, 8.0, 8.0)
+        grid = CartesianCGrid2D.from_interior(8, 8, 8.0, 8.0)
         diff = Difference2D(grid=grid)
         a, b = 1.0, 2.0
         x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
@@ -722,7 +722,7 @@ class TestDifferenceRectangularGrid:
     """Operators must work correctly on non-square (nx ≠ ny) domains."""
 
     def test_output_shape_rectangular(self):
-        grid = CartesianGrid2D.from_interior(6, 10, 1.0, 1.0)
+        grid = CartesianCGrid2D.from_interior(6, 10, 1.0, 1.0)
         diff = Difference2D(grid=grid)
         h = jnp.ones((grid.Ny, grid.Nx))
         assert diff.diff_x_T_to_U(h).shape == (grid.Ny, grid.Nx)
@@ -731,7 +731,7 @@ class TestDifferenceRectangularGrid:
 
     def test_linear_field_x_on_rectangular_grid(self):
         """Forward x-diff of a linear field is exact on a rectangular grid."""
-        grid = CartesianGrid2D.from_interior(4, 10, 1.0, 1.0)
+        grid = CartesianCGrid2D.from_interior(4, 10, 1.0, 1.0)
         diff = Difference2D(grid=grid)
         c = 2.5
         x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
@@ -741,7 +741,7 @@ class TestDifferenceRectangularGrid:
 
     def test_linear_field_y_on_rectangular_grid(self):
         """Forward y-diff of a linear field is exact on a rectangular grid."""
-        grid = CartesianGrid2D.from_interior(10, 4, 1.0, 1.0)
+        grid = CartesianCGrid2D.from_interior(10, 4, 1.0, 1.0)
         diff = Difference2D(grid=grid)
         c = 1.5
         y = jnp.arange(grid.Ny, dtype=float) * grid.spacing("y")
@@ -751,7 +751,7 @@ class TestDifferenceRectangularGrid:
 
     def test_divergence_constant_flow_rectangular(self):
         """Divergence of uniform flow is zero on a rectangular grid."""
-        grid = CartesianGrid2D.from_interior(5, 12, 2.0, 3.0)
+        grid = CartesianCGrid2D.from_interior(5, 12, 2.0, 3.0)
         diff = Difference2D(grid=grid)
         u = jnp.ones((grid.Ny, grid.Nx))
         v = jnp.ones((grid.Ny, grid.Nx))
@@ -760,7 +760,7 @@ class TestDifferenceRectangularGrid:
 
     def test_no_nan_on_rectangular_grid(self):
         """Ensure no NaN values are produced for rectangular domains."""
-        grid = CartesianGrid2D.from_interior(6, 10, 2.0, 5.0)
+        grid = CartesianCGrid2D.from_interior(6, 10, 2.0, 5.0)
         diff = Difference2D(grid=grid)
         x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
         y = jnp.arange(grid.Ny, dtype=float) * grid.spacing("y")

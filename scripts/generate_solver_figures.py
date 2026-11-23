@@ -66,7 +66,7 @@ MAX_STEPS = 20_000
 # ── Geometry ────────────────────────────────────────────────────────────
 def make_case(geometry: str, n: int) -> dict:
     """Grid spacing, Mask2D, psi mask [Ny, Nx] and rhs [Ny, Nx] on the unit square."""
-    grid = fvx.CartesianGrid2D.from_interior(n, n, 1.0, 1.0)
+    grid = fvx.CartesianCGrid2D.from_interior(n, n, 1.0, 1.0)
     dx, dy = float(grid.spacing("x")), float(grid.spacing("y"))
     ny, nx = n + 2, n + 2
     # T-point centres: x[i] = (i - 1/2) dx, i = 0 .. Nx-1  (ghost ring at 0, N-1)

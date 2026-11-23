@@ -143,8 +143,8 @@ def test_upwind_flux_numpy_equals_jax():
 
 
 GRIDS = {
-    "cartesian": lambda: gridax.CartesianGrid2D.from_interior(10, 7, 2.0, 1.5),
-    "spherical": lambda: gridax.SphericalGrid2D.from_interior(
+    "cartesian": lambda: gridax.CartesianCGrid2D.from_interior(10, 7, 2.0, 1.5),
+    "spherical": lambda: gridax.SphericalCGrid2D.from_interior(
         10, 7, (0, 40), (-20, 30)
     ),
 }

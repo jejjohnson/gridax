@@ -255,10 +255,10 @@ slabs.)
 ## Creating a Grid
 
 ```python
-from gridax import CartesianGrid2D
+from gridax import CartesianCGrid2D
 
 # 64 physical cells in each direction; 66×66 total array shape
-grid = CartesianGrid2D.from_interior(nx_interior=64, ny_interior=64,
+grid = CartesianCGrid2D.from_interior(nx_interior=64, ny_interior=64,
                                      Lx=1.0, Ly=1.0)
 # grid.Nx == 66, grid.Ny == 66
 # grid.spacing("x") == 1/64, grid.spacing("y") == 1/64
@@ -472,12 +472,12 @@ A typical shallow-water advection step uses all four co-location points:
 
 ```python
 from gridax import (
-    CartesianGrid2D, Difference2D, Interpolation2D, Vorticity2D,
+    CartesianCGrid2D, Difference2D, Interpolation2D, Vorticity2D,
     enforce_periodic,
 )
 import jax.numpy as jnp
 
-grid  = CartesianGrid2D.from_interior(64, 64, 1.0, 1.0)
+grid  = CartesianCGrid2D.from_interior(64, 64, 1.0, 1.0)
 diff  = Difference2D(grid=grid)
 interp = Interpolation2D(grid=grid)
 vort  = Vorticity2D(grid=grid)

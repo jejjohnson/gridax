@@ -41,7 +41,7 @@ variable-coefficient one), see the
 
 | | |
 |---|---|
-| **Domains** | the unit square (`CartesianGrid2D.from_interior(N, N, 1, 1)`); a **rectangle**, and a **circular basin** of radius 0.45 with a disc **island** of radius 0.1, both as `Mask2D` from a T-point ocean mask; ψ uses `mask.xy_corner_strict` |
+| **Domains** | the unit square (`CartesianCGrid2D.from_interior(N, N, 1, 1)`); a **rectangle**, and a **circular basin** of radius 0.45 with a disc **island** of radius 0.1, both as `Mask2D` from a T-point ocean mask; ψ uses `mask.xy_corner_strict` |
 | **Sizes** | $N = 128$ and $256$ interior cells per side (arrays $(N+2)^2$; 16 129 / 65 025 wet ψ nodes on the rectangle, 9 635 / 39 063 in the island basin; 508 / 1 020 and 399 / 795 coast nodes) |
 | **λ** | 4 (screened, $R_d = 0.5$) and 0 (Poisson) |
 | **RHS** | $f = \sin 3\pi x \cos 2\pi y + e^{-[(x-0.3)^2 + (y-0.7)^2]/0.01}$ on the wet nodes |

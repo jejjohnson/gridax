@@ -13,7 +13,7 @@ from jaxtyping import Float
 import numpy as np
 
 from gridax._src.backend import set_at, vmap
-from gridax._src.grid import CartesianGrid2D, CartesianGrid3D
+from gridax._src.grid import CartesianCGrid2D, CartesianCGrid3D
 from gridax._src.mask import Mask2D, Mask3D
 from gridax._src.operators._ghost import interior, zero_z_ghosts
 from gridax._src.operators._utils import _spacing
@@ -41,7 +41,7 @@ class Vorticity2D:
 
     Parameters
     ----------
-    grid : CartesianGrid2D
+    grid : CartesianCGrid2D
         The underlying 2-D grid.
     mask : Mask2D or None, optional
         Optional land/ocean mask.  When provided, both the internal
@@ -57,14 +57,14 @@ class Vorticity2D:
         force dry corners back to exact zero — see the method body.
     """
 
-    grid: CartesianGrid2D
+    grid: CartesianCGrid2D
     mask: Mask2D | None
     diff: Difference2D
     interp: Interpolation2D
 
     def __init__(
         self,
-        grid: CartesianGrid2D,
+        grid: CartesianCGrid2D,
         mask: Mask2D | None = None,
     ) -> None:
         self.grid = grid
@@ -451,7 +451,7 @@ class Vorticity3D:
 
     Parameters
     ----------
-    grid : CartesianGrid3D
+    grid : CartesianCGrid3D
     mask : Mask3D or None, optional
         Optional land/ocean mask.  When provided, the result of
         :meth:`relative_vorticity` is post-multiplied by
@@ -460,7 +460,7 @@ class Vorticity3D:
         function (no sub-operator to inject a mask into).
     """
 
-    grid: CartesianGrid3D
+    grid: CartesianCGrid3D
     mask: Mask3D | None = None
 
     def relative_vorticity(

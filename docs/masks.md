@@ -42,7 +42,7 @@ w-----v-----w..   > x
 
 All staggered points use the *same-index, positive half-step* convention:
 ``u[j, i]`` is the east face of ``h[j, i]``, ``v[j, i]`` is the north face,
-and ``xy_corner[j, i]`` is the NE corner — matching ``CartesianGrid2D``.
+and ``xy_corner[j, i]`` is the NE corner — matching ``CartesianCGrid2D``.
 See [the Arakawa C-grid discretization notes](cgrid_discretization.md) for
 the underlying convention and a comparison with negative half-step
 alternatives.
@@ -177,7 +177,7 @@ through per call.
 ```python
 import gridax as fvx
 
-grid = fvx.CartesianGrid2D.from_interior(64, 64, 1e6, 1e6)
+grid = fvx.CartesianCGrid2D.from_interior(64, 64, 1e6, 1e6)
 mask = fvx.Mask2D.from_mask(h_mask)
 
 # Mask as a class attribute — set once, consumed on every call.

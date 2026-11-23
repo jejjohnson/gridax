@@ -47,6 +47,6 @@ equatorial width `R * dlon`, so a genuinely narrow cell is kept. Prefer the redu
 or resolution guard. Both exclude the ghost ring, and both return 0-d
 arrays so they can be used inside `jax.jit`.
 
-::: gridax.SphericalGrid2D
+::: gridax.SphericalCGrid2D
 
-::: gridax.SphericalGrid3D
+::: gridax.SphericalCGrid3D

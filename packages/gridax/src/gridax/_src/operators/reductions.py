@@ -19,8 +19,8 @@ runtime based on the grid type, so user code can stay grid-agnostic.
 Example
 -------
 >>> import jax.numpy as jnp
->>> from gridax import area_sum, SphericalGrid2D
->>> grid = SphericalGrid2D.from_interior(64, 32, (0.0, 360.0), (-80.0, 80.0))
+>>> from gridax import area_sum, SphericalCGrid2D
+>>> grid = SphericalCGrid2D.from_interior(64, 32, (0.0, 360.0), (-80.0, 80.0))
 >>> h = jnp.ones((grid.Ny, grid.Nx))
 >>> total = area_sum(h, grid)  # integrated tracer over the basin
 """
@@ -35,10 +35,10 @@ import numpy as np
 from gridax._src.grid import (
     ArakawaCGrid2D,
     ArakawaCGrid3D,
-    CartesianGrid2D,
-    CartesianGrid3D,
-    SphericalGrid2D,
-    SphericalGrid3D,
+    CartesianCGrid2D,
+    CartesianCGrid3D,
+    SphericalCGrid2D,
+    SphericalCGrid3D,
 )
 from gridax._src.mask import Mask2D, Mask3D
 from gridax._src.operators._utils import _metric_like
@@ -56,7 +56,7 @@ else:
 
 
 def cartesian_area_weights(
-    grid: CartesianGrid2D, *, xp: Any = None
+    grid: CartesianCGrid2D, *, xp: Any = None
 ) -> Float[Array, "Ny Nx"]:
     """T-cell areas on a Cartesian grid.
 
@@ -64,7 +64,7 @@ def cartesian_area_weights(
 
     Parameters
     ----------
-    grid : CartesianGrid2D
+    grid : CartesianCGrid2D
     xp : array namespace, optional
         The namespace to build the weights in. Default: the namespace of
         the grid's own arrays (NumPy for a grid built with ``from_interior``,
@@ -80,7 +80,7 @@ def cartesian_area_weights(
 
 
 def spherical_area_weights(
-    grid: SphericalGrid2D, *, xp: Any = None
+    grid: SphericalCGrid2D, *, xp: Any = None
 ) -> Float[Array, "Ny Nx"]:
     """T-cell areas on a spherical grid, exact for a lat-lon cell.
 
@@ -98,7 +98,7 @@ def spherical_area_weights(
 
     Parameters
     ----------
-    grid : SphericalGrid2D
+    grid : SphericalCGrid2D
     xp : array namespace, optional
         The namespace to build the weights in. Default: the namespace of
         the grid's own arrays (NumPy for a grid built with ``from_interior``,
@@ -136,18 +136,18 @@ def area_weights(grid: ArakawaCGrid2D, *, xp: Any = None) -> Float[Array, "Ny Nx
     TypeError
         If the grid type is not recognized.
     """
-    if isinstance(grid, SphericalGrid2D):
+    if isinstance(grid, SphericalCGrid2D):
         return spherical_area_weights(grid, xp=xp)
-    if isinstance(grid, CartesianGrid2D):
+    if isinstance(grid, CartesianCGrid2D):
         return cartesian_area_weights(grid, xp=xp)
     raise TypeError(
         f"area_weights: unsupported grid type {type(grid).__name__}. "
-        "Use CartesianGrid2D or SphericalGrid2D."
+        "Use CartesianCGrid2D or SphericalCGrid2D."
     )
 
 
 def cartesian_volume_weights(
-    grid: CartesianGrid3D, *, xp: Any = None
+    grid: CartesianCGrid3D, *, xp: Any = None
 ) -> Float[Array, "Nz Ny Nx"]:
     """T-cell volumes on a Cartesian 3-D grid: ``dx · dy · dz`` (``xp`` as in :func:`area_weights`)."""
     cell = grid.spacing("x") * grid.spacing("y") * grid.spacing("z")
@@ -156,7 +156,7 @@ def cartesian_volume_weights(
 
 
 def spherical_volume_weights(
-    grid: SphericalGrid3D, *, xp: Any = None
+    grid: SphericalCGrid3D, *, xp: Any = None
 ) -> Float[Array, "Nz Ny Nx"]:
     """T-cell volumes on a spherical 3-D grid.
 
@@ -171,13 +171,13 @@ def spherical_volume_weights(
 
 def volume_weights(grid: ArakawaCGrid3D, *, xp: Any = None) -> Float[Array, "Nz Ny Nx"]:
     """Dispatch to Cartesian/spherical volume weights (``xp`` as in :func:`area_weights`)."""
-    if isinstance(grid, SphericalGrid3D):
+    if isinstance(grid, SphericalCGrid3D):
         return spherical_volume_weights(grid, xp=xp)
-    if isinstance(grid, CartesianGrid3D):
+    if isinstance(grid, CartesianCGrid3D):
         return cartesian_volume_weights(grid, xp=xp)
     raise TypeError(
         f"volume_weights: unsupported grid type {type(grid).__name__}. "
-        "Use CartesianGrid3D or SphericalGrid3D."
+        "Use CartesianCGrid3D or SphericalCGrid3D."
     )
 
 
@@ -370,7 +370,7 @@ def volume_mean(
 
 def cartesian_area_sum(
     field: Float[Array, "Ny Nx"],
-    grid: CartesianGrid2D,
+    grid: CartesianCGrid2D,
     mask: Mask2D | None = None,
 ) -> Float[Array, ""]:
     """Cartesian area-weighted sum (:func:`area_sum` with Cartesian grid)."""
@@ -379,7 +379,7 @@ def cartesian_area_sum(
 
 def cartesian_area_mean(
     field: Float[Array, "Ny Nx"],
-    grid: CartesianGrid2D,
+    grid: CartesianCGrid2D,
     mask: Mask2D | None = None,
 ) -> Float[Array, ""]:
     """Cartesian area-weighted mean."""
@@ -388,7 +388,7 @@ def cartesian_area_mean(
 
 def spherical_area_sum(
     field: Float[Array, "Ny Nx"],
-    grid: SphericalGrid2D,
+    grid: SphericalCGrid2D,
     mask: Mask2D | None = None,
 ) -> Float[Array, ""]:
     """Spherical area-weighted sum."""
@@ -397,7 +397,7 @@ def spherical_area_sum(
 
 def spherical_area_mean(
     field: Float[Array, "Ny Nx"],
-    grid: SphericalGrid2D,
+    grid: SphericalCGrid2D,
     mask: Mask2D | None = None,
 ) -> Float[Array, ""]:
     """Spherical area-weighted mean."""
@@ -406,7 +406,7 @@ def spherical_area_mean(
 
 def cartesian_volume_sum(
     field: Float[Array, "Nz Ny Nx"],
-    grid: CartesianGrid3D,
+    grid: CartesianCGrid3D,
     mask: Mask3D | None = None,
 ) -> Float[Array, ""]:
     """Cartesian volume-weighted sum."""
@@ -415,7 +415,7 @@ def cartesian_volume_sum(
 
 def cartesian_volume_mean(
     field: Float[Array, "Nz Ny Nx"],
-    grid: CartesianGrid3D,
+    grid: CartesianCGrid3D,
     mask: Mask3D | None = None,
 ) -> Float[Array, ""]:
     """Cartesian volume-weighted mean."""
@@ -424,7 +424,7 @@ def cartesian_volume_mean(
 
 def spherical_volume_sum(
     field: Float[Array, "Nz Ny Nx"],
-    grid: SphericalGrid3D,
+    grid: SphericalCGrid3D,
     mask: Mask3D | None = None,
 ) -> Float[Array, ""]:
     """Spherical volume-weighted sum."""
@@ -433,7 +433,7 @@ def spherical_volume_sum(
 
 def spherical_volume_mean(
     field: Float[Array, "Nz Ny Nx"],
-    grid: SphericalGrid3D,
+    grid: SphericalCGrid3D,
     mask: Mask3D | None = None,
 ) -> Float[Array, ""]:
     """Spherical volume-weighted mean."""

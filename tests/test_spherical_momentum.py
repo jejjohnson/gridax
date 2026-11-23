@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from gridax import CartesianGrid2D, Mask2D, Mask3D, SphericalGrid2D, SphericalGrid3D
+from gridax import CartesianCGrid2D, Mask2D, Mask3D, SphericalCGrid2D, SphericalCGrid3D
 from gridax._src.diffusion.momentum import MomentumAdvection2D
 from gridax._src.diffusion.spherical_momentum import (
     SphericalMomentumAdvection2D,
@@ -19,7 +19,7 @@ NX_INT, NY_INT = 14, 10
 
 @pytest.fixture
 def grid():
-    return SphericalGrid2D.from_interior(
+    return SphericalCGrid2D.from_interior(
         nx_interior=NX_INT,
         ny_interior=NY_INT,
         lon_range=(0.0, 360.0),
@@ -30,7 +30,7 @@ def grid():
 
 @pytest.fixture
 def grid3d():
-    return SphericalGrid3D.from_interior(
+    return SphericalCGrid3D.from_interior(
         nx_interior=NX_INT,
         ny_interior=NY_INT,
         nz_interior=3,
@@ -97,14 +97,14 @@ class TestSphericalMomentumAdvection2D:
     @pytest.mark.parametrize("scheme", ["energy", "enstrophy", "blend"])
     def test_matches_cartesian_at_narrow_equatorial_band(self, scheme):
         nx, ny = 20, 6
-        sphere = SphericalGrid2D.from_interior(
+        sphere = SphericalCGrid2D.from_interior(
             nx_interior=nx,
             ny_interior=ny,
             lon_range=(0.0, 20.0),
             lat_range=(-0.5, 0.5),
             R=R,
         )
-        cart = CartesianGrid2D.from_interior(
+        cart = CartesianCGrid2D.from_interior(
             nx_interior=nx,
             ny_interior=ny,
             Lx=sphere.Lx,

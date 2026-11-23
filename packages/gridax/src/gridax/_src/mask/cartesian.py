@@ -6,7 +6,7 @@ time and stored as NumPy arrays; JAX converts them when a kernel reads
 them, and each class is a JAX pytree when JAX is importable).
 
 Same-index colocation convention (matches the grid module's
-``CartesianGrid2D`` / ``CartesianGrid3D`` positive-half-step rule)::
+``CartesianCGrid2D`` / ``CartesianCGrid3D`` positive-half-step rule)::
 
     h[j, i]                cell centre  at ( j,        i       )
     u[j, i]                east face    at ( j,        i + 1/2 )

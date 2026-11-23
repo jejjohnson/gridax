@@ -252,7 +252,7 @@ import gridax.advection as gadv
 import gridax.analysis as ga
 import gridax.stencils as gs
 
-grid = gridax.CartesianGrid2D.from_interior(60, 40, 120.0e3, 40.0e3)  # Ny, Nx = 42, 62
+grid = gridax.CartesianCGrid2D.from_interior(60, 40, 120.0e3, 40.0e3)  # Ny, Nx = 42, 62
 
 # Layer 0: the two-point staggered stencil → (-1.0, 1.0)
 coeffs = gs.difference_coeffs(gs.difference_offsets(method="staggered"), 1)

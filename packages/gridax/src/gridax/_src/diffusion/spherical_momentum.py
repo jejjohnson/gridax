@@ -36,7 +36,7 @@ import numpy as np
 
 from gridax._src.backend import vmap
 from gridax._src.diffusion.momentum import _resolve_scheme
-from gridax._src.grid import SphericalGrid2D, SphericalGrid3D
+from gridax._src.grid import SphericalCGrid2D, SphericalCGrid3D
 from gridax._src.mask import Mask2D, Mask3D
 from gridax._src.operators._ghost import interior, zero_z_ghosts
 from gridax._src.operators.interpolation import Interpolation2D
@@ -75,7 +75,7 @@ class SphericalMomentumAdvection2D:
 
     Parameters
     ----------
-    grid : SphericalGrid2D
+    grid : SphericalCGrid2D
         The underlying 2-D spherical grid.
     mask : Mask2D or None, optional
         Optional land/ocean mask.  Pass-down pattern — the internal
@@ -91,8 +91,8 @@ class SphericalMomentumAdvection2D:
     Examples
     --------
     >>> import jax.numpy as jnp
-    >>> from gridax import SphericalGrid2D, SphericalMomentumAdvection2D
-    >>> grid = SphericalGrid2D.from_interior(
+    >>> from gridax import SphericalCGrid2D, SphericalMomentumAdvection2D
+    >>> grid = SphericalCGrid2D.from_interior(
     ...     nx_interior=16,
     ...     ny_interior=8,
     ...     lon_range=(0.0, 360.0),
@@ -104,7 +104,7 @@ class SphericalMomentumAdvection2D:
     >>> du, dv = madv(u, v)
     """
 
-    grid: SphericalGrid2D
+    grid: SphericalCGrid2D
     mask: Mask2D | None
     diff: SphericalDifference2D
     interp: Interpolation2D
@@ -112,7 +112,7 @@ class SphericalMomentumAdvection2D:
 
     def __init__(
         self,
-        grid: SphericalGrid2D,
+        grid: SphericalCGrid2D,
         mask: Mask2D | None = None,
     ) -> None:
         self.grid = grid
@@ -241,7 +241,7 @@ class SphericalMomentumAdvection3D:
 
     Parameters
     ----------
-    grid : SphericalGrid3D
+    grid : SphericalCGrid3D
     mask : Mask3D or None, optional
         Optional 3-D land/ocean mask.  Pattern A (post-compute) — the
         inner :class:`SphericalMomentumAdvection2D` is always built
@@ -249,13 +249,13 @@ class SphericalMomentumAdvection3D:
         ``mask.u`` / ``mask.v``.
     """
 
-    grid: SphericalGrid3D
+    grid: SphericalCGrid3D
     mask: Mask3D | None
     _madv2d: SphericalMomentumAdvection2D
 
     def __init__(
         self,
-        grid: SphericalGrid3D,
+        grid: SphericalCGrid3D,
         mask: Mask3D | None = None,
     ) -> None:
         self.grid = grid

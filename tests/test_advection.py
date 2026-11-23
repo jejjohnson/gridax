@@ -1,9 +1,9 @@
 """Tests for Advection1D, Advection2D, Advection3D."""
 
 from gridax import (
-    CartesianGrid1D,
-    CartesianGrid2D,
-    CartesianGrid3D,
+    CartesianCGrid1D,
+    CartesianCGrid2D,
+    CartesianCGrid3D,
     Mask2D,
     Mask3D,
 )
@@ -16,17 +16,17 @@ import pytest
 
 @pytest.fixture
 def grid1d():
-    return CartesianGrid1D.from_interior(8, 1.0)
+    return CartesianCGrid1D.from_interior(8, 1.0)
 
 
 @pytest.fixture
 def grid2d():
-    return CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
+    return CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
 
 
 @pytest.fixture
 def grid3d():
-    return CartesianGrid3D.from_interior(6, 6, 4, 1.0, 1.0, 1.0)
+    return CartesianCGrid3D.from_interior(6, 6, 4, 1.0, 1.0, 1.0)
 
 
 class TestAdvection1D:
@@ -64,7 +64,7 @@ class TestAdvection1D:
 
     @pytest.mark.slow
     def test_weno_constant_zero_tendency(self):
-        grid = CartesianGrid1D.from_interior(16, 1.0)
+        grid = CartesianCGrid1D.from_interior(16, 1.0)
         adv = Advection1D(grid=grid)
         h = jnp.ones(grid.Nx)
         u = jnp.ones(grid.Nx)
@@ -145,7 +145,7 @@ class TestAdvection2D:
 
     @pytest.mark.slow
     def test_weno_constant_zero_tendency(self):
-        grid = CartesianGrid2D.from_interior(16, 16, 1.0, 1.0)
+        grid = CartesianCGrid2D.from_interior(16, 16, 1.0, 1.0)
         adv = Advection2D(grid=grid)
         h = jnp.ones((grid.Ny, grid.Nx))
         u = jnp.ones((grid.Ny, grid.Nx))
@@ -258,7 +258,7 @@ class TestAdvection3D:
 
     @pytest.mark.slow
     def test_weno_constant_zero_tendency(self):
-        grid = CartesianGrid3D.from_interior(16, 16, 4, 1.0, 1.0, 1.0)
+        grid = CartesianCGrid3D.from_interior(16, 16, 4, 1.0, 1.0, 1.0)
         adv = Advection3D(grid=grid)
         h = jnp.ones((grid.Nz, grid.Ny, grid.Nx))
         u = jnp.ones((grid.Nz, grid.Ny, grid.Nx))
@@ -287,7 +287,7 @@ class TestAdvection2DMask:
 
     @pytest.fixture
     def grid(self):
-        return CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
+        return CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
 
     @pytest.fixture
     def all_ocean(self):
@@ -379,7 +379,7 @@ class TestAdvection3DMask:
 
     @pytest.fixture
     def grid(self):
-        return CartesianGrid3D.from_interior(6, 6, 4, 1.0, 1.0, 1.0)
+        return CartesianCGrid3D.from_interior(6, 6, 4, 1.0, 1.0, 1.0)
 
     @pytest.fixture
     def all_ocean(self):
@@ -433,7 +433,7 @@ class TestAdvection3DMask:
         h_mask_2d[:, 3:5] = False
         h_mask_3d = _np.broadcast_to(h_mask_2d, (6, 8, 8)).copy()
         coastal = Mask3D.from_mask(h_mask_3d)
-        grid = CartesianGrid3D.from_interior(6, 6, 4, 1.0, 1.0, 1.0)
+        grid = CartesianCGrid3D.from_interior(6, 6, 4, 1.0, 1.0, 1.0)
         adv = Advection3D(grid=grid, mask=coastal)
         h = jnp.ones((grid.Nz, grid.Ny, grid.Nx))
         u = jnp.ones((grid.Nz, grid.Ny, grid.Nx))
@@ -459,7 +459,7 @@ class TestAdvection2DRotationStability:
         omega = 2 * jnp.pi
         dx = Lx / nx
         dy = Ly / ny
-        grid = CartesianGrid2D(Nx=nx + 2 * ng, Ny=ny + 2 * ng, Lx=Lx, Ly=Ly, ghost=ng)
+        grid = CartesianCGrid2D(Nx=nx + 2 * ng, Ny=ny + 2 * ng, Lx=Lx, Ly=Ly, ghost=ng)
         # Staggered coordinates
         x_t = (jnp.arange(grid.Nx) - ng + 0.5) * dx
         y_t = (jnp.arange(grid.Ny) - ng + 0.5) * dy
@@ -538,7 +538,7 @@ class TestNegativeFlowExactness:
         ["upwind1", "weno3", "weno5", "weno7", "weno9", "minmod", "van_leer"],
     )
     def test_constant_negative_flow_zero_tendency(self, method):
-        grid = CartesianGrid1D.from_interior(24, 1.0)
+        grid = CartesianCGrid1D.from_interior(24, 1.0)
         adv = Advection1D(grid=grid)
         h = jnp.ones(grid.Nx)
         u = -jnp.ones(grid.Nx)
@@ -551,7 +551,7 @@ class TestNegativeFlowExactness:
         ["upwind1", "weno3", "weno5", "weno7", "weno9", "minmod", "van_leer"],
     )
     def test_constant_negative_flow_2d(self, method):
-        grid = CartesianGrid2D.from_interior(16, 16, 1.0, 1.0)
+        grid = CartesianCGrid2D.from_interior(16, 16, 1.0, 1.0)
         adv = Advection2D(grid=grid)
         h = jnp.ones((grid.Ny, grid.Nx))
         u = -jnp.ones((grid.Ny, grid.Nx))
@@ -579,7 +579,7 @@ class TestNegativeFlowConvergence:
         ng = 4
         Lx = 1.0
         dx = Lx / n_interior
-        grid = CartesianGrid1D(Nx=n_interior + 2 * ng, Lx=Lx, ghost=ng)
+        grid = CartesianCGrid1D(Nx=n_interior + 2 * ng, Lx=Lx, ghost=ng)
 
         x = (jnp.arange(grid.Nx) - ng + 0.5) * dx
         q0 = jnp.sin(2 * jnp.pi * x)
@@ -653,7 +653,7 @@ class TestAdvectionConservation:
         n = 64
         Lx = 1.0
         dx = Lx / n
-        grid = CartesianGrid1D(Nx=n + 2 * ng, Lx=Lx, ghost=ng)
+        grid = CartesianCGrid1D(Nx=n + 2 * ng, Lx=Lx, ghost=ng)
 
         x = (jnp.arange(grid.Nx) - ng + 0.5) * dx
         r = jnp.abs(x - 0.5)

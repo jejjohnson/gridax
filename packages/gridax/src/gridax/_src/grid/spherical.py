@@ -40,7 +40,7 @@ else:
 class _SphericalMetric:
     """The metric of a longitude-latitude grid.
 
-    Mixed into :class:`SphericalGrid2D` and :class:`SphericalGrid3D`, over
+    Mixed into :class:`SphericalCGrid2D` and :class:`SphericalCGrid3D`, over
     the uniform metric it overrides along ``x`` and ``y``.
     """
 
@@ -95,7 +95,7 @@ class _SphericalMetric:
         Examples
         --------
         >>> import gridax
-        >>> grid = gridax.SphericalGrid2D.from_interior(
+        >>> grid = gridax.SphericalCGrid2D.from_interior(
         ...     4, 2, (0.0, 90.0), (-60.0, 60.0), R=1.0
         ... )
         >>> [round(float(d), 4) for d in grid.spacing("x")[1:-1, 0]]
@@ -132,7 +132,7 @@ class _SphericalMetric:
         Examples
         --------
         >>> import gridax, numpy as np
-        >>> grid = gridax.SphericalGrid2D.from_interior(
+        >>> grid = gridax.SphericalCGrid2D.from_interior(
         ...     4, 2, (0.0, 90.0), (-60.0, 60.0)
         ... )
         >>> np.rad2deg(grid.coords("y")).round(6).tolist()
@@ -244,7 +244,7 @@ class _SphericalMetric:
 
 
 @pytree_dataclass
-class SphericalGrid2D(_SphericalMetric, CurvilinearGrid2D):
+class SphericalCGrid2D(_SphericalMetric, CurvilinearGrid2D):
     """2-D Arakawa C-grid on a sphere.
 
     Inherits ``Nx``, ``Ny``, ``Lx``, ``Ly`` from
@@ -305,7 +305,7 @@ class SphericalGrid2D(_SphericalMetric, CurvilinearGrid2D):
         lon_range: tuple[float, float],
         lat_range: tuple[float, float],
         R: float = SPHERE.semi_major,
-    ) -> SphericalGrid2D:
+    ) -> SphericalCGrid2D:
         """Construct a spherical grid from interior cell counts and coordinate ranges.
 
         Parameters
@@ -324,7 +324,7 @@ class SphericalGrid2D(_SphericalMetric, CurvilinearGrid2D):
 
         Returns
         -------
-        SphericalGrid2D
+        SphericalCGrid2D
         """
         lon_min_rad = np.deg2rad(lon_range[0])
         lon_max_rad = np.deg2rad(lon_range[1])
@@ -413,7 +413,7 @@ def _degenerate_width(
 
 
 @pytree_dataclass
-class SphericalGrid3D(_SphericalMetric, CurvilinearGrid3D):
+class SphericalCGrid3D(_SphericalMetric, CurvilinearGrid3D):
     """3-D Arakawa C-grid on a sphere.
 
     Inherits ``Nx``, ``Ny``, ``Nz``, ``Lx``, ``Ly``, ``Lz`` from
@@ -424,7 +424,7 @@ class SphericalGrid3D(_SphericalMetric, CurvilinearGrid3D):
     shared across all z-levels because the horizontal staggering is
     independent of depth.
 
-    As with the Cartesian :class:`CartesianGrid3D`, only the horizontal
+    As with the Cartesian :class:`CartesianCGrid3D`, only the horizontal
     axes are staggered (T, U, V, X share the same ``k * dz``); W-point fields (vertical velocity at z-interfaces) use the same
     ``[Nz, Ny, Nx]`` shape, ``w[k]`` on the top face of ``T[k]`` (as
     ``Mask3D.w`` and ``vertical_velocity``).
@@ -472,7 +472,7 @@ class SphericalGrid3D(_SphericalMetric, CurvilinearGrid3D):
         lat_range: tuple[float, float],
         Lz: float,
         R: float = SPHERE.semi_major,
-    ) -> SphericalGrid3D:
+    ) -> SphericalCGrid3D:
         """Construct a 3-D spherical grid from interior cell counts.
 
         Parameters
@@ -495,10 +495,10 @@ class SphericalGrid3D(_SphericalMetric, CurvilinearGrid3D):
 
         Returns
         -------
-        SphericalGrid3D
+        SphericalCGrid3D
         """
         # Build the horizontal grid first
-        h_grid = SphericalGrid2D.from_interior(
+        h_grid = SphericalCGrid2D.from_interior(
             nx_interior, ny_interior, lon_range, lat_range, R
         )
 
@@ -518,15 +518,15 @@ class SphericalGrid3D(_SphericalMetric, CurvilinearGrid3D):
             _cos_lat_V=h_grid._cos_lat_V,
         )
 
-    def horizontal_grid(self) -> SphericalGrid2D:
+    def horizontal_grid(self) -> SphericalCGrid2D:
         """Extract the horizontal 2-D spherical grid.
 
         Returns
         -------
-        SphericalGrid2D
+        SphericalCGrid2D
             A 2-D grid with the same horizontal fields.
         """
-        return SphericalGrid2D(
+        return SphericalCGrid2D(
             Nx=self.Nx,
             Ny=self.Ny,
             Lx=self.Lx,

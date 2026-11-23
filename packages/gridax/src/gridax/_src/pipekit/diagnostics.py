@@ -64,7 +64,7 @@ class QGPotentialVorticity(GridOperator):
 
     Attributes
     ----------
-    grid : CartesianGrid2D
+    grid : CartesianCGrid2D
         The grid, or ``(nx_interior, ny_interior, Lx, Ly)``.
     f0 : Array
         Reference Coriolis parameter (learnable).
@@ -99,7 +99,7 @@ class AvailablePE(GridOperator):
 
     Attributes
     ----------
-    grid : CartesianGrid2D
+    grid : CartesianCGrid2D
         The grid, or ``(nx_interior, ny_interior, Lx, Ly)``.
     g_prime : Array
         Reduced gravity (learnable).
@@ -129,7 +129,7 @@ class Strain(GridOperator):
 
     Attributes
     ----------
-    grid : CartesianGrid2D
+    grid : CartesianCGrid2D
         The grid, or ``(nx_interior, ny_interior, Lx, Ly)``.
     component : {"shear", "tensor", "magnitude_squared"}
         Which component.

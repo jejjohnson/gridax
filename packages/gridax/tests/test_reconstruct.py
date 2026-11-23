@@ -47,10 +47,10 @@ def test_reconstruction3d_gains_upwind2_and_upwind3(order: int, axis: str) -> No
     rng = np.random.default_rng(order)
     h, u = rng.standard_normal((2, 5, 10, 12))
     r3 = gridax.Reconstruction3D(
-        grid=gridax.CartesianGrid3D.from_interior(10, 8, 3, 1.0, 1.0, 1.0)
+        grid=gridax.CartesianCGrid3D.from_interior(10, 8, 3, 1.0, 1.0, 1.0)
     )
     r2 = gridax.Reconstruction2D(
-        grid=gridax.CartesianGrid2D.from_interior(10, 8, 1.0, 1.0)
+        grid=gridax.CartesianCGrid2D.from_interior(10, 8, 1.0, 1.0)
     )
     got = getattr(r3, f"upwind{order}_{axis}")(h, u)
     for level in range(1, 4):

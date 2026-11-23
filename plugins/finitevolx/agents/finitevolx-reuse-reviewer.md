@@ -96,7 +96,7 @@ list grouped by module, plus spectraldiffx and gaussx.
    physical constant in a model meant to run nondimensionally.
 4. Check each replacement exists in the installed version (the listing
    above) and, where you can, run it against the hand-written code on a
-   small grid (`gridax.CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)`)
+   small grid (`gridax.CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)`)
    to confirm they agree.
 
 ## Report

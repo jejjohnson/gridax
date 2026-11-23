@@ -147,9 +147,9 @@ and `V_to_T` are provided.
 
 ```python
 import jax.numpy as jnp
-from gridax import CartesianGrid2D, Interpolation2D
+from gridax import CartesianCGrid2D, Interpolation2D
 
-grid = CartesianGrid2D.from_interior(64, 64, 1e6, 1e6)
+grid = CartesianCGrid2D.from_interior(64, 64, 1e6, 1e6)
 interp = Interpolation2D(grid=grid)
 
 h = jnp.ones((grid.Ny, grid.Nx))   # T-point thickness

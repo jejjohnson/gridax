@@ -19,7 +19,7 @@ N = 34
 
 
 def _grid():
-    g = fvx.CartesianGrid2D.from_interior(N - 2, N - 2, Lx=1.0, Ly=1.3)
+    g = fvx.CartesianCGrid2D.from_interior(N - 2, N - 2, Lx=1.0, Ly=1.3)
     return g.spacing("x"), g.spacing("y")
 
 
@@ -86,7 +86,7 @@ class TestNeumannOperator:
     def test_matches_diffusion2d_closed_walls(self):
         """The third copy of the zero-flux operator: Diffusion2D with kappa = 1."""
         mask = _island_basin()
-        g = fvx.CartesianGrid2D.from_interior(N - 2, N - 2, Lx=1.0, Ly=1.3)
+        g = fvx.CartesianCGrid2D.from_interior(N - 2, N - 2, Lx=1.0, Ly=1.3)
         p = _rhs(9) * mask.h
         lap = gs.masked_neumann_laplacian(
             p, mask.h.astype(p.dtype), g.spacing("x"), g.spacing("y")

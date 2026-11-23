@@ -4,7 +4,7 @@ import importlib.util
 from pathlib import Path
 import sys
 
-from gridax import CartesianGrid2D, Difference2D, Interpolation2D
+from gridax import CartesianCGrid2D, Difference2D, Interpolation2D
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -188,7 +188,7 @@ def test_qg_geostrophic_velocity_helper_is_nearly_nondivergent() -> None:
     """The QG streamfunction-to-velocity mapping should preserve incompressibility."""
     module = load_script_module("qg_module", "qg_1p5_layer.py")
     config = module.QuasiGeostrophicConfig(nx=16, ny=16)
-    grid = CartesianGrid2D.from_interior(config.nx, config.ny, config.Lx, config.Ly)
+    grid = CartesianCGrid2D.from_interior(config.nx, config.ny, config.Lx, config.Ly)
     diff = Difference2D(grid=grid)
     interp = Interpolation2D(grid=grid)
 

@@ -22,7 +22,7 @@ from jaxtyping import Float
 import numpy as np
 
 from gridax._src.backend import set_at
-from gridax._src.grid import CartesianGrid2D
+from gridax._src.grid import CartesianCGrid2D
 from gridax._src.mask import Mask2D
 from gridax._src.operators._utils import _spacing
 from gridax._src.operators.diagnostic_operators import _sanitize
@@ -182,7 +182,7 @@ class ArakawaJacobian2D:
 
     Parameters
     ----------
-    grid : CartesianGrid2D
+    grid : CartesianCGrid2D
         The underlying 2-D grid (supplies ``dx`` and ``dy``).
     mask : Mask2D or None, optional
         Optional land/ocean mask.  ``None`` (default) returns the functional
@@ -191,14 +191,14 @@ class ArakawaJacobian2D:
     Examples
     --------
     >>> import jax.numpy as jnp
-    >>> from gridax import ArakawaJacobian2D, CartesianGrid2D
-    >>> grid = CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
+    >>> from gridax import ArakawaJacobian2D, CartesianCGrid2D
+    >>> grid = CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
     >>> psi = jnp.zeros((grid.Ny, grid.Nx))
     >>> ArakawaJacobian2D(grid=grid)(psi, psi).shape
     (10, 10)
     """
 
-    grid: CartesianGrid2D
+    grid: CartesianCGrid2D
     mask: Mask2D | None = None
 
     def __call__(

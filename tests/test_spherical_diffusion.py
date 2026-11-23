@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from gridax import CartesianGrid2D, Mask2D, Mask3D, SphericalGrid2D, SphericalGrid3D
+from gridax import CartesianCGrid2D, Mask2D, Mask3D, SphericalCGrid2D, SphericalCGrid3D
 from gridax._src.diffusion.diffusion import BiharmonicDiffusion2D, Diffusion2D
 from gridax._src.diffusion.spherical_diffusion import (
     SphericalBiharmonicDiffusion2D,
@@ -21,7 +21,7 @@ NX_INT, NY_INT = 16, 10
 
 @pytest.fixture
 def grid():
-    return SphericalGrid2D.from_interior(
+    return SphericalCGrid2D.from_interior(
         nx_interior=NX_INT,
         ny_interior=NY_INT,
         lon_range=(0.0, 360.0),
@@ -32,7 +32,7 @@ def grid():
 
 @pytest.fixture
 def grid3d():
-    return SphericalGrid3D.from_interior(
+    return SphericalCGrid3D.from_interior(
         nx_interior=NX_INT,
         ny_interior=NY_INT,
         nz_interior=3,
@@ -101,14 +101,14 @@ class TestSphericalDiffusion2D:
         nx, ny = 20, 6
         lon_range = (0.0, 20.0)  # small so dlon is small
         lat_range = (-0.5, 0.5)  # very narrow band around equator
-        sphere = SphericalGrid2D.from_interior(
+        sphere = SphericalCGrid2D.from_interior(
             nx_interior=nx,
             ny_interior=ny,
             lon_range=lon_range,
             lat_range=lat_range,
             R=R,
         )
-        cart = CartesianGrid2D.from_interior(
+        cart = CartesianCGrid2D.from_interior(
             nx_interior=nx,
             ny_interior=ny,
             Lx=sphere.Lx,
@@ -347,14 +347,14 @@ class TestSphericalBiharmonicDiffusion2D:
 
     def test_matches_cartesian_at_narrow_equatorial_band(self):
         nx, ny = 20, 6
-        sphere = SphericalGrid2D.from_interior(
+        sphere = SphericalCGrid2D.from_interior(
             nx_interior=nx,
             ny_interior=ny,
             lon_range=(0.0, 20.0),
             lat_range=(-0.5, 0.5),
             R=R,
         )
-        cart = CartesianGrid2D.from_interior(
+        cart = CartesianCGrid2D.from_interior(
             nx_interior=nx,
             ny_interior=ny,
             Lx=sphere.Lx,
@@ -492,7 +492,7 @@ def _sph_exact(lam, phi, walls, R):
 
 
 def _sph_variable_kappa_error(n: int) -> float:
-    g = SphericalGrid2D.from_interior(
+    g = SphericalCGrid2D.from_interior(
         n, n, lon_range=(0.0, 60.0), lat_range=(-30.0, 30.0), R=1.0
     )
     lam, phi = np.meshgrid(g.coords("x"), g.coords("y"))  # radians, [Ny, Nx]
@@ -528,7 +528,7 @@ class TestSphericalVariableKappa:
 
     def test_symmetric_area_weighted(self):
         """diag(cos φ_T) · L is symmetric with zero column sums."""
-        g = SphericalGrid2D.from_interior(
+        g = SphericalCGrid2D.from_interior(
             6, 6, lon_range=(0.0, 60.0), lat_range=(-30.0, 30.0), R=1.0
         )
         shape = (g.Ny, g.Nx)

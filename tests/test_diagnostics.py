@@ -1,6 +1,6 @@
 """Tests for diagnostic operators: strain, enstrophy, energy, Okubo-Weiss, QG PV, vertical velocity."""
 
-from gridax import CartesianGrid2D, CartesianGrid3D, Mask3D
+from gridax import CartesianCGrid2D, CartesianCGrid3D, Mask3D
 from gridax._src.operators.diagnostics import (
     available_potential_energy,
     bernoulli_potential,
@@ -28,12 +28,12 @@ import pytest
 
 @pytest.fixture
 def grid2d():
-    return CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
+    return CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
 
 
 @pytest.fixture
 def grid3d():
-    return CartesianGrid3D.from_interior(6, 6, 4, 1.0, 1.0, 1.0)
+    return CartesianCGrid3D.from_interior(6, 6, 4, 1.0, 1.0, 1.0)
 
 
 # ======================================================================

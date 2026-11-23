@@ -23,7 +23,7 @@ import numpy as np
 from pipekit_ops import Operator
 
 SPEC = (8, 6, 2.0, 1.5)
-GRID = fvx.CartesianGrid2D.from_interior(*SPEC)
+GRID = fvx.CartesianCGrid2D.from_interior(*SPEC)
 
 
 class ScaledLaplacian(GridOperator):
@@ -66,7 +66,7 @@ class TestGridField:
             return op(h)
 
         for length in (1.0, 2.0):
-            grid = fvx.CartesianGrid2D.from_interior(8, 6, length, 1.5)
+            grid = fvx.CartesianCGrid2D.from_interior(8, 6, length, 1.5)
             run(ScaledLaplacian(grid=grid), _field())
         assert len(traces) == 1
 

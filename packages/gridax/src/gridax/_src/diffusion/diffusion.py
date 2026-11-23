@@ -90,7 +90,7 @@ from jaxtyping import Bool, Float
 import numpy as np
 
 from gridax._src.backend import set_at, vmap
-from gridax._src.grid import CartesianGrid2D, CartesianGrid3D
+from gridax._src.grid import CartesianCGrid2D, CartesianCGrid3D
 from gridax._src.mask import Mask2D, Mask3D
 from gridax._src.operators._ghost import interior, zero_z_ghosts
 from gridax._src.operators._utils import _spacing
@@ -356,7 +356,7 @@ class Diffusion2D:
 
     Parameters
     ----------
-    grid : CartesianGrid2D
+    grid : CartesianCGrid2D
         The underlying 2-D grid.
     mask : Mask2D or None, optional
         Optional land/ocean mask.  When provided, the three-step
@@ -376,15 +376,15 @@ class Diffusion2D:
     Examples
     --------
     >>> import jax.numpy as jnp
-    >>> from gridax import CartesianGrid2D, Diffusion2D
-    >>> grid = CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
+    >>> from gridax import CartesianCGrid2D, Diffusion2D
+    >>> grid = CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
     >>> diff_op = Diffusion2D(grid=grid)
     >>> h = jnp.ones((grid.Ny, grid.Nx))
     >>> tendency = diff_op(h, kappa=1e-3)  # zero for constant tracer
     >>> flux_x, flux_y = diff_op.fluxes(h, kappa=1e-3)
     """
 
-    grid: CartesianGrid2D
+    grid: CartesianCGrid2D
     mask: Mask2D | None = None
 
     def __call__(
@@ -523,7 +523,7 @@ class Diffusion3D:
 
     Parameters
     ----------
-    grid : CartesianGrid3D
+    grid : CartesianCGrid3D
         The underlying 3-D grid.
     mask : Mask3D or None, optional
         Optional 3-D land/ocean mask.  When provided, the intermediate
@@ -537,14 +537,14 @@ class Diffusion3D:
     Examples
     --------
     >>> import jax.numpy as jnp
-    >>> from gridax import CartesianGrid3D, Diffusion3D
-    >>> grid = CartesianGrid3D.from_interior(4, 8, 8, 1.0, 1.0, 1.0)
+    >>> from gridax import CartesianCGrid3D, Diffusion3D
+    >>> grid = CartesianCGrid3D.from_interior(4, 8, 8, 1.0, 1.0, 1.0)
     >>> diff_op = Diffusion3D(grid=grid)
     >>> h = jnp.ones((grid.Nz, grid.Ny, grid.Nx))
     >>> tendency = diff_op(h, kappa=1e-3)  # zero for constant tracer
     """
 
-    grid: CartesianGrid3D
+    grid: CartesianCGrid3D
     mask: Mask3D | None = None
 
     def __call__(
@@ -692,7 +692,7 @@ class BiharmonicDiffusion2D:
 
     Parameters
     ----------
-    grid : CartesianGrid2D
+    grid : CartesianCGrid2D
         The underlying 2-D grid.
     mask : Mask2D or None, optional
         Optional land/ocean mask.  When provided, the tendency is
@@ -716,8 +716,8 @@ class BiharmonicDiffusion2D:
     Examples
     --------
     >>> import jax.numpy as jnp
-    >>> from gridax import CartesianGrid2D, BiharmonicDiffusion2D
-    >>> grid = CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
+    >>> from gridax import CartesianCGrid2D, BiharmonicDiffusion2D
+    >>> grid = CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
     >>> op = BiharmonicDiffusion2D(grid=grid)
     >>> h = jnp.ones((grid.Ny, grid.Nx))
     >>> tend = op(h, kappa=1e-6)  # zero for constant field
@@ -725,13 +725,13 @@ class BiharmonicDiffusion2D:
     (10, 10)
     """
 
-    grid: CartesianGrid2D
+    grid: CartesianCGrid2D
     mask: Mask2D | None
     _harm: Diffusion2D
 
     def __init__(
         self,
-        grid: CartesianGrid2D,
+        grid: CartesianCGrid2D,
         mask: Mask2D | None = None,
     ) -> None:
         self.grid = grid
@@ -800,7 +800,7 @@ class BiharmonicDiffusion3D:
 
     Parameters
     ----------
-    grid : CartesianGrid3D
+    grid : CartesianCGrid3D
         The underlying 3-D grid.
     mask : Mask3D or None, optional
         Optional 3-D land/ocean mask.  When provided, the tendency is
@@ -811,8 +811,8 @@ class BiharmonicDiffusion3D:
     Examples
     --------
     >>> import jax.numpy as jnp
-    >>> from gridax import CartesianGrid3D, BiharmonicDiffusion3D
-    >>> grid = CartesianGrid3D.from_interior(4, 8, 8, 1.0, 1.0, 1.0)
+    >>> from gridax import CartesianCGrid3D, BiharmonicDiffusion3D
+    >>> grid = CartesianCGrid3D.from_interior(4, 8, 8, 1.0, 1.0, 1.0)
     >>> op = BiharmonicDiffusion3D(grid=grid)
     >>> h = jnp.ones((grid.Nz, grid.Ny, grid.Nx))
     >>> tend = op(h, kappa=1e-6)
@@ -820,13 +820,13 @@ class BiharmonicDiffusion3D:
     (6, 10, 10)
     """
 
-    grid: CartesianGrid3D
+    grid: CartesianCGrid3D
     mask: Mask3D | None
     _harm: Diffusion3D
 
     def __init__(
         self,
-        grid: CartesianGrid3D,
+        grid: CartesianCGrid3D,
         mask: Mask3D | None = None,
     ) -> None:
         self.grid = grid

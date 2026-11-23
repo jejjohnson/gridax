@@ -8,7 +8,7 @@ Every public operator must:
 
 from __future__ import annotations
 
-from gridax import CartesianGrid1D, CartesianGrid2D
+from gridax import CartesianCGrid1D, CartesianCGrid2D
 from gridax._src.advection.reconstruction import Reconstruction1D, Reconstruction2D
 from gridax._src.diffusion.diffusion import Diffusion2D, diffusion_2d
 from gridax._src.operators.difference import Difference1D, Difference2D
@@ -26,12 +26,12 @@ import pytest
 
 @pytest.fixture
 def grid1d():
-    return CartesianGrid1D.from_interior(8, 1.0)
+    return CartesianCGrid1D.from_interior(8, 1.0)
 
 
 @pytest.fixture
 def grid2d():
-    return CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
+    return CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
 
 
 # ---------------------------------------------------------------------------
@@ -323,7 +323,7 @@ class TestNoNanOnValidInputs:
 class TestReconstructionNaNRegression:
     """Reconstruction schemes must not produce NaN near sharp discontinuities."""
 
-    def _step_field(self, grid: CartesianGrid2D) -> tuple[jnp.ndarray, jnp.ndarray]:
+    def _step_field(self, grid: CartesianCGrid2D) -> tuple[jnp.ndarray, jnp.ndarray]:
         """Create a step function and positive velocity field."""
         h = jnp.ones((grid.Ny, grid.Nx))
         # Introduce a step discontinuity in the middle of the domain
@@ -417,7 +417,7 @@ class TestSmallSpacingRobustness:
 
     def test_difference_small_dx_is_finite(self):
         dx = 1e-4
-        grid = CartesianGrid2D.from_interior(8, 8, dx * 8, dx * 8)
+        grid = CartesianCGrid2D.from_interior(8, 8, dx * 8, dx * 8)
         diff = Difference2D(grid=grid)
         x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
         y = jnp.arange(grid.Ny, dtype=float) * grid.spacing("y")
@@ -427,7 +427,7 @@ class TestSmallSpacingRobustness:
 
     def test_interpolation_small_dx_is_finite(self):
         dx = 1e-4
-        grid = CartesianGrid2D.from_interior(8, 8, dx * 8, dx * 8)
+        grid = CartesianCGrid2D.from_interior(8, 8, dx * 8, dx * 8)
         interp = Interpolation2D(grid=grid)
         h = jnp.ones((grid.Ny, grid.Nx))
         result = interp.T_to_U(h)

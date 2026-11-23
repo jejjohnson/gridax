@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from gridax import (
     BoundaryConditionSet,
-    CartesianGrid2D,
-    CartesianGrid3D,
+    CartesianCGrid2D,
+    CartesianCGrid3D,
     Interpolation2D,
     Mask2D,
     Mask3D,
@@ -22,12 +22,12 @@ import pytest
 
 @pytest.fixture
 def grid2d():
-    return CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
+    return CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
 
 
 @pytest.fixture
 def grid3d():
-    return CartesianGrid3D.from_interior(6, 6, 4, 1.0, 1.0, 1.0)
+    return CartesianCGrid3D.from_interior(6, 6, 4, 1.0, 1.0, 1.0)
 
 
 class TestCoriolis2D:
@@ -261,7 +261,7 @@ class TestCoriolis3D:
 
     def test_consistent_with_2d_per_zlevel(self, grid3d):
         """3-D Coriolis result matches 2-D at each z-level independently."""
-        grid2d = CartesianGrid2D.from_interior(
+        grid2d = CartesianCGrid2D.from_interior(
             grid3d.Ny - 2, grid3d.Nx - 2, grid3d.Lx, grid3d.Ly
         )
         cor2d = Coriolis2D(grid=grid2d)
@@ -377,7 +377,7 @@ class TestCoriolisEnergyConservation:
     n = 24
 
     def _grid(self):
-        return CartesianGrid2D.from_interior(self.n, self.n, 1.0, 1.0)
+        return CartesianCGrid2D.from_interior(self.n, self.n, 1.0, 1.0)
 
     def _beta_f(self, g):
         y = (jnp.arange(g.Ny, dtype=float) - 0.5) * g.spacing("y")

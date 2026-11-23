@@ -7,7 +7,7 @@ Every operator here is a `pipekit_jax.JaxOperator`: a pipekit ``Operator``
 (JSON config, ``|`` composition, ``Sequential`` / ``Graph`` nodes) that is
 also an ``eqx.Module`` (runs under ``jit`` / ``grad`` / ``vmap``). Fields
 are C-grid arrays ``[*batch, Ny, Nx]``; the grid is a
-`CartesianGrid2D`, or its ``(nx_interior, ny_interior, Lx, Ly)`` config.
+`CartesianCGrid2D`, or its ``(nx_interior, ny_interior, Lx, Ly)`` config.
 """
 
 from __future__ import annotations

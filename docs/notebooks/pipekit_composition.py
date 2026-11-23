@@ -118,7 +118,7 @@ print(rhs.describe())
 # does not grow with the number of steps.
 
 # %%
-grid = fvx.CartesianGrid2D.from_interior(*G_SPEC)
+grid = fvx.CartesianCGrid2D.from_interior(*G_SPEC)
 y = (jnp.arange(grid.Ny) - 0.5) / N
 x = (jnp.arange(grid.Nx) - 0.5) / N
 Y, X = jnp.meshgrid(y, x, indexing="ij")

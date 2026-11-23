@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from gridax import (
     Advection2D,
-    CartesianGrid2D,
+    CartesianCGrid2D,
     Mask2D,
     Reconstruction2D,
     linear_2pts,
@@ -925,7 +925,7 @@ class TestAdvectionStencilFallback:
         """Away from any coast, weno5 + mask should equal unmasked
         weno5 (the mask dispatch picks the max tier everywhere)."""
         Ny, Nx = 14, 14
-        grid = CartesianGrid2D.from_interior(Nx - 2, Ny - 2, 1.0, 1.0)
+        grid = CartesianCGrid2D.from_interior(Nx - 2, Ny - 2, 1.0, 1.0)
         adv_plain = Advection2D(grid=grid)
         # All-ocean mask: the adaptive dispatch should use weno5 everywhere.
         mask = Mask2D.from_dimensions(Ny, Nx)
@@ -957,7 +957,7 @@ class TestAdvectionStencilFallback:
         h_mask[:, 6] = False
         mask = Mask2D.from_mask(h_mask)
 
-        grid = CartesianGrid2D.from_interior(Nx - 2, Ny - 2, 1.0, 1.0)
+        grid = CartesianCGrid2D.from_interior(Nx - 2, Ny - 2, 1.0, 1.0)
         adv_plain = Advection2D(grid=grid)
         adv_masked = Advection2D(grid=grid, mask=mask)
         h = self._make_staircase_field(Ny, Nx)
@@ -990,7 +990,7 @@ class TestAdvectionStencilFallback:
         h_mask[:, 5] = False
         mask = Mask2D.from_mask(h_mask)
 
-        grid = CartesianGrid2D.from_interior(Nx - 2, Ny - 2, 1.0, 1.0)
+        grid = CartesianCGrid2D.from_interior(Nx - 2, Ny - 2, 1.0, 1.0)
         adv_plain = Advection2D(grid=grid)
         adv_masked = Advection2D(grid=grid, mask=mask)
         h = self._make_staircase_field(Ny, Nx)
@@ -1022,7 +1022,7 @@ class TestUpwindFluxFallbackExplicit:
     def coast_grid_and_mask(self):
         """14×14 grid with a land column at i=7."""
         Ny, Nx = 14, 14
-        grid = CartesianGrid2D.from_interior(Nx - 2, Ny - 2, 1.0, 1.0)
+        grid = CartesianCGrid2D.from_interior(Nx - 2, Ny - 2, 1.0, 1.0)
         h_mask = np.ones((Ny, Nx), dtype=bool)
         h_mask[:, 7] = False
         mask = Mask2D.from_mask(h_mask)
@@ -1251,7 +1251,7 @@ class TestReconstructNegativeFlow:
         """``reconstruct`` equals ``Reconstruction2D.<method><n>_x`` on every
         interior face, for both flow signs and a mixed-sign velocity."""
         Ny, Nx = 8, 16
-        grid = CartesianGrid2D.from_interior(Nx - 2, Ny - 2, 1.0, 1.0)
+        grid = CartesianCGrid2D.from_interior(Nx - 2, Ny - 2, 1.0, 1.0)
         recon = Reconstruction2D(grid=grid)
         fn = getattr(recon, cls_name.format(m=method))
         key_q, key_u = jax.random.split(jax.random.PRNGKey(1))

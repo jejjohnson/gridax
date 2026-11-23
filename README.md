@@ -56,7 +56,7 @@ None of it needs JAX. We write gridax against the [array API](https://data-apis.
 
 ## 🌟 Highlights
 
-- 🧱 **Grids and masks as data**: `CartesianGrid1D/2D/3D` and `SphericalGrid2D/3D` add the ghost ring, and `Mask2D.from_mask` (or `Mask2D.from_bathymetry`) derives the wet T, U, V and X points, the coast classification and the stencil capability from one T-point mask, with NumPy and SciPy alone.
+- 🧱 **Grids and masks as data**: `CartesianCGrid1D/2D/3D` and `SphericalCGrid2D/3D` add the ghost ring, and `Mask2D.from_mask` (or `Mask2D.from_bathymetry`) derives the wet T, U, V and X points, the coast classification and the stencil capability from one T-point mask, with NumPy and SciPy alone.
 - 🔢 **Exact stencil coefficients**: `gridax.stencils.difference_coeffs` solves the Taylor conditions in rational arithmetic, for point values or cell averages, collocated or staggered, and the WENO sub-stencils, optimal weights and smoothness matrices come from the same solver.
 - 🌊 **Advection that is safe at the coast**: `Advection1D/2D/3D` build the fluxes from upwind face values of first to third order, four TVD limiters, or WENO-3, 5, 7 and 9 (and WENO-Z 5), and next to land each face falls back to the widest stencil that fits; `gridax.advection.reconstruct` does the same along one axis.
 - 🧮 **C-grid operators**: `Difference*`, `Interpolation*`, `Divergence2D`, `Vorticity*`, `Coriolis*`, `Diffusion*`, `BiharmonicDiffusion*`, `MomentumAdvection*` and `ArakawaJacobian2D`, with `Spherical*` forms of the difference, divergence, Laplacian, vorticity, advection, diffusion and momentum operators.
@@ -115,7 +115,7 @@ import numpy as np
 # Shapes: N_y = N_x = 34, a 32 × 32 interior and one ghost ring
 
 # today (gridax)
-grid = gridax.CartesianGrid2D.from_interior(32, 32, Lx=1.0, Ly=1.0)
+grid = gridax.CartesianCGrid2D.from_interior(32, 32, Lx=1.0, Ly=1.0)
 # (x_i, y_j), the T-point coordinates
 x, y = np.meshgrid(
     (np.arange(grid.Nx) - 0.5) * grid.spacing("x"), (np.arange(grid.Ny) - 0.5) * grid.spacing("y")
@@ -167,7 +167,7 @@ Each area links to its API page, and the [capability index](https://jejjohnson.g
 
 | Area | Symbols | Notes |
 |---|---|---|
-| [Grids](https://jejjohnson.github.io/gridax/reference/grids/) | `ArakawaCGrid1D/2D/3D`, `CurvilinearGrid1D/2D/3D`, `CartesianGrid1D/2D/3D`, `SphericalGrid2D/3D`, `t_point_coordinates` | topology, then a uniform metric, then the coordinates |
+| [Grids](https://jejjohnson.github.io/gridax/reference/grids/) | `ArakawaCGrid1D/2D/3D`, `CurvilinearGrid1D/2D/3D`, `CartesianCGrid1D/2D/3D`, `SphericalCGrid2D/3D`, `t_point_coordinates` | topology, then a uniform metric, then the coordinates |
 | [Masks](https://jejjohnson.github.io/gridax/reference/masks/) | `Mask1D/2D/3D`, `StencilCapability1D/2D/3D`; `dilate_mask`, `make_sponge`, `pool_bool`, `h_from_pooled`, `count_contiguous` | built once, eagerly, from a T-point mask |
 | [Coefficients and raw stencils](https://jejjohnson.github.io/gridax/reference/stencils/) | `gridax.stencils`: `difference_offsets`, `difference_coeffs`, `nonuniform_coeffs`, `weno_stencils`, `optimal_weights`, `smoothness_matrix`; `diff_x_fwd_2d`, `avg_y_bwd_3d`, …; `staggered_difference`, `staggered_average`, `interior` | Layers 0 and 1 |
 | [Collocated calculus](https://jejjohnson.github.io/gridax/reference/analysis/) | `gridax.analysis`: `difference`, `adaptive_difference`, `gradient_2d`, `divergence_2d`, `curl_2d`, `laplacian_2d` and their 1-D and 3-D forms; `remap_axis`, `remap_axis_columns`, `Extrapolate` | for fields with every variable at the cell centres |

@@ -106,7 +106,7 @@ nx, ny = 32, 32
 Lx = 5.12e6  # Domain length in x [m] (~5120 km)
 Ly = 5.12e6  # Domain length in y [m] (~5120 km)
 
-grid = fvx.CartesianGrid2D.from_interior(nx, ny, Lx, Ly)
+grid = fvx.CartesianCGrid2D.from_interior(nx, ny, Lx, Ly)
 dx, dy = grid.spacing("x"), grid.spacing("y")
 Ny, Nx = ny + 2, nx + 2
 
@@ -523,7 +523,7 @@ print(f"Saved: {IMG_DIR / 'demo_results.png'}")
 #
 # | Concept | gridax API | Detail |
 # |---------|---------------|--------|
-# | **Grid** | `CartesianGrid2D.from_interior(nx, ny, Lx, Ly)` | Creates the C-grid with 2-cell ghost ring |
+# | **Grid** | `CartesianCGrid2D.from_interior(nx, ny, Lx, Ly)` | Creates the C-grid with 2-cell ghost ring |
 # | **Differences** | `Difference2D(grid)` | `diff_x_T_to_U`, `diff_y_T_to_V`, `divergence`, `laplacian` |
 # | **Interpolation** | `Interpolation2D(grid)` | `T_to_U`, `T_to_V`, `V_to_U`, `U_to_V`, `U_to_T`, `V_to_T`, `X_to_T` |
 # | **Vorticity** | `Vorticity2D(grid)` | `relative_vorticity` at corner (X) points |

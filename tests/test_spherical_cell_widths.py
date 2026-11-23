@@ -8,7 +8,7 @@ interior, never the ghost ring.
 """
 
 from geophysix.earth import SPHERE
-from gridax import SphericalGrid2D, SphericalGrid3D
+from gridax import SphericalCGrid2D, SphericalCGrid3D
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -18,7 +18,7 @@ import pytest
 @pytest.fixture
 def grid2d():
     """Unit-radius grid, symmetric about the equator (rows mirror in pairs)."""
-    return SphericalGrid2D.from_interior(
+    return SphericalCGrid2D.from_interior(
         nx_interior=10,
         ny_interior=8,
         lon_range=(0.0, 360.0),
@@ -29,7 +29,7 @@ def grid2d():
 
 @pytest.fixture
 def grid2d_earth():
-    return SphericalGrid2D.from_interior(
+    return SphericalCGrid2D.from_interior(
         nx_interior=12,
         ny_interior=6,
         lon_range=(-40.0, 20.0),
@@ -40,7 +40,7 @@ def grid2d_earth():
 
 @pytest.fixture
 def grid3d():
-    return SphericalGrid3D.from_interior(
+    return SphericalCGrid3D.from_interior(
         nx_interior=10,
         ny_interior=8,
         nz_interior=4,
@@ -67,7 +67,7 @@ def grid_with_cos(cos_column):
     dlon = dlat = 0.1
     lat = jnp.arccos(jnp.clip(cos_column, -1.0, 1.0))
     lon = jnp.arange(nx, dtype=jnp.float32) * dlon
-    return SphericalGrid2D(
+    return SphericalCGrid2D(
         Nx=nx,
         Ny=ny,
         Lx=nx * dlon,
@@ -89,7 +89,7 @@ class TestCellWidths2D:
 
     def test_dx_T_equals_uniform_dx_at_equator(self):
         """Where cos(lat) == 1 the true width collapses to the uniform ``dx``."""
-        grid = SphericalGrid2D.from_interior(
+        grid = SphericalCGrid2D.from_interior(
             nx_interior=8,
             ny_interior=5,
             lon_range=(0.0, 80.0),
@@ -148,7 +148,7 @@ class TestMinCellWidth:
 
     def test_excludes_ghost_rows(self):
         """A ghost row past the pole must not drive the minimum negative."""
-        grid = SphericalGrid2D.from_interior(
+        grid = SphericalCGrid2D.from_interior(
             nx_interior=8,
             ny_interior=6,
             lon_range=(0.0, 360.0),
@@ -190,7 +190,7 @@ class TestMinCellWidth:
 
     def test_is_never_negative_on_a_pole_to_pole_grid(self):
         """Whatever the precision, the reduction stays non-negative."""
-        grid = SphericalGrid2D.from_interior(
+        grid = SphericalCGrid2D.from_interior(
             nx_interior=8,
             ny_interior=4,
             lon_range=(0.0, 360.0),
@@ -204,7 +204,7 @@ class TestMinCellWidth:
 
     def test_takes_dy_when_meridional_spacing_is_finer(self):
         """The minimum is over both directions, not just the zonal one."""
-        grid = SphericalGrid2D.from_interior(
+        grid = SphericalCGrid2D.from_interior(
             nx_interior=4,  # coarse in longitude
             ny_interior=180,  # fine in latitude
             lon_range=(0.0, 40.0),
@@ -218,7 +218,7 @@ class TestMaxAspect:
     @pytest.mark.slow
     def test_matches_inverse_cosine_of_extreme_latitude(self):
         """For ``dlon == dlat`` the aspect is ``1 / cos(lat)``."""
-        grid = SphericalGrid2D.from_interior(
+        grid = SphericalCGrid2D.from_interior(
             nx_interior=36,  # dlon = 10 degrees
             ny_interior=17,  # dlat = 10 degrees
             lon_range=(0.0, 360.0),
@@ -234,7 +234,7 @@ class TestMaxAspect:
         )
 
     def test_is_one_on_an_equatorial_isotropic_cell(self):
-        grid = SphericalGrid2D.from_interior(
+        grid = SphericalCGrid2D.from_interior(
             nx_interior=4,
             ny_interior=2,
             lon_range=(0.0, 4.0),
@@ -272,7 +272,7 @@ class TestCellWidths3D:
 
     def test_min_cell_width_ignores_dz(self, grid3d):
         """A very thin vertical layer must not change the horizontal minimum."""
-        thin = SphericalGrid3D.from_interior(
+        thin = SphericalCGrid3D.from_interior(
             nx_interior=10,
             ny_interior=8,
             nz_interior=4,
