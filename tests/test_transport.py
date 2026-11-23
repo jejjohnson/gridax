@@ -120,7 +120,7 @@ class TestAdvect:
         grid = GRIDS[name]
         mask = island(grid) if masked else None
         prefix = "Spherical" if name[0] == "s" else ""
-        op = getattr(g, f"{prefix}Advection{len(grid.axes)}D")(grid, mask)
+        op = getattr(bindings, f"{prefix}Advection{len(grid.axes)}D")(grid, mask)
         q, u, v = fields(grid, 3)
         args = (q, u) if len(grid.axes) == 1 else (q, u, v)
         # Upwind(11) is wider than the cached masks
