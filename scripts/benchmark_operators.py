@@ -20,7 +20,7 @@ Usage::
     uv run python scripts/benchmark_operators.py --n 512 --out before.json
     uv run python scripts/benchmark_operators.py --n 512 --out after.json
     uv run python scripts/benchmark_operators.py --compare before.json after.json
-    uv run python scripts/benchmark_operators.py --profile "Advection2D.weno5"
+    uv run python scripts/benchmark_operators.py --profile "advect.*weno5"
 
 ``--profile`` traces the VJP of the matching cases with ``jax.profiler`` and
 prints the most expensive XLA kernels (fusions), which is how the hotspots in
@@ -42,7 +42,7 @@ import time
 
 import gridax as fvx
 from gridax.schemes import TVD, WENO, Upwind
-from gridax.stencils import interior
+from gridax.solvers import masked_laplacian
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -57,30 +57,6 @@ class Case:
     n_out: int = 1
 
 
-def _op(obj, attr: str | None = None, *extra, **kwargs) -> Callable:
-    """``f(*arrays) = obj.attr(*arrays, *extra, **kwargs)`` as a plain function.
-
-    jax.jit hashes the callable it is given; an Equinox bound method of an
-    operator whose grid holds arrays (the spherical grids) is unhashable, so
-    every case goes through this closure instead.
-    """
-    target = obj if attr is None else getattr(obj, attr)
-
-    def f(*arrays):
-        return target(*arrays, *extra, **kwargs)
-
-    return f
-
-
-def _okubo_weiss_fn(u, v):
-    ny, nx = u.shape
-    grid = fvx.CartesianCGrid2D.from_interior(nx - 2, ny - 2, nx - 2.0, ny - 2.0)
-    ss = fvx.shear_strain(u, v, grid)
-    sn = fvx.tensor_strain(u, v, grid)
-    om = interior(fvx.diff_x_fwd_2d(v) - fvx.diff_y_fwd_2d(u), u)
-    return fvx.okubo_weiss(sn, ss, om)
-
-
 def _cases(n: int, nz: int) -> list[Case]:
     g1 = fvx.CartesianCGrid1D.from_interior(n * n - 2, 1.0)
     g2 = fvx.CartesianCGrid2D.from_interior(n - 2, n - 2, 1.0, 1.0)
@@ -90,60 +66,66 @@ def _cases(n: int, nz: int) -> list[Case]:
     )
     s1, s2, s3 = (n * n,), (n, n), (nz, n, n)
     f2 = jnp.ones(s2)
+    o1, o2, o3, sph = (fvx.GridOps(grid) for grid in (g1, g2, g3, gs))
 
-    d1, d2, d3 = fvx.Difference1D(g1), fvx.Difference2D(g2), fvx.Difference3D(g3)
-    i2, vo = fvx.Interpolation2D(g2), fvx.Vorticity2D(g2)
-    ad2, ad3 = fvx.Advection2D(g2), fvx.Advection3D(g3)
-    ma = fvx.MomentumAdvection2D(g2)
+    def case(label: str, ops, name: str, n_in: int, n_out: int = 1, **kwargs) -> Case:
+        shape = {1: s1, 2: s2, 3: s3}[len(ops.grid.axes)]
 
-    C = [
-        Case("Difference1D.diff_x_T_to_U", _op(d1, "diff_x_T_to_U"), 1, s1),
-        Case("Difference1D.laplacian", _op(d1, "laplacian"), 1, s1),
-    ]
-    for m in ["diff_x_T_to_U", "diff_y_T_to_V", "diff_x_U_to_T", "diff_y_V_to_T"]:
-        C.append(Case(f"Difference2D.{m}", _op(d2, m), 1, s2))
-    C += [
-        Case("Difference2D.divergence", _op(d2, "divergence"), 2, s2),
-        Case("Difference2D.curl", _op(d2, "curl"), 2, s2),
-        Case("Difference2D.laplacian", _op(d2, "laplacian"), 1, s2),
-        Case("Difference2D.grad_perp", _op(d2, "grad_perp"), 1, s2, 2),
-        Case("Difference3D.divergence", _op(d3, "divergence"), 2, s3),
-        Case("Difference3D.laplacian", _op(d3, "laplacian"), 1, s3),
-    ]
-    for m in ["T_to_U", "T_to_X", "X_to_T", "U_to_V", "V_to_U", "U_to_T"]:
-        C.append(Case(f"Interpolation2D.{m}", _op(i2, m), 1, s2))
-    C += [
-        Case("Divergence2D", _op(fvx.Divergence2D(g2)), 2, s2),
-        Case("Coriolis2D", _op(fvx.Coriolis2D(g2)), 3, s2, 2),
-        Case("Coriolis3D", _op(fvx.Coriolis3D(g3), None, f2), 2, s3, 2),
-        Case("Vorticity2D.relative_vorticity", _op(vo, "relative_vorticity"), 2, s2),
-    ]
-    for m in [
-        "pv_flux_energy_conserving",
-        "pv_flux_enstrophy_conserving",
-        "pv_flux_blend",
-    ]:
-        C.append(Case(f"Vorticity2D.{m}", _op(vo, m), 3, s2, 2))
-    C += [
-        Case(
-            "Energetics2D.kinetic_energy",
-            _op(fvx.Energetics2D(g2), "kinetic_energy"),
-            2,
-            s2,
-        ),
-        Case("Strain2D.okubo_weiss", _op(fvx.Strain2D(g2), "okubo_weiss"), 2, s2),
-        Case("ArakawaJacobian2D", _op(fvx.ArakawaJacobian2D(g2)), 2, s2),
-        Case("Diffusion2D", _op(fvx.Diffusion2D(g2), None, 1.0), 1, s2),
-        Case("Diffusion2D[kappa field]", _op(fvx.Diffusion2D(g2)), 2, s2),
-        Case(
-            "BiharmonicDiffusion2D",
-            _op(fvx.BiharmonicDiffusion2D(g2), None, 1.0),
+        def fn(*arrays):
+            return getattr(ops, name)(*arrays, **kwargs)
+
+        return Case(f"{name}[{label}]", fn, n_in, shape, n_out)
+
+    def move(label: str, ops, src: str, dst: str, axis: str | None = None) -> Case:
+        kwargs = {"src": src, "dst": dst}
+        if axis is None:
+            return case(f"{label}, {src} to {dst}", ops, "interpolate", 1, **kwargs)
+        return case(
+            f"{label}, {axis}, {src} to {dst}",
+            ops,
+            "difference",
             1,
-            s2,
-        ),
-        Case("Diffusion3D", _op(fvx.Diffusion3D(g3), None, 1.0), 1, s3),
-        Case("MomentumAdvection2D[energy]", _op(ma, None, "energy"), 2, s2, 2),
-        Case("MomentumAdvection2D[enstrophy]", _op(ma, None, "enstrophy"), 2, s2, 2),
+            axis=axis,
+            **kwargs,
+        )
+
+    C = [move("1d", o1, "T", "U", "x"), case("1d", o1, "laplacian", 1)]
+    C += [
+        move("2d", o2, src, dst, axis)
+        for axis, src, dst in (
+            ("x", "T", "U"),
+            ("y", "T", "V"),
+            ("x", "U", "T"),
+            ("y", "V", "T"),
+        )
+    ]
+    C += [
+        case("2d", o2, "divergence", 2),
+        case("2d", o2, "curl", 2),
+        case("2d", o2, "laplacian", 1),
+        case("2d", o2, "grad_perp", 1, 2, at="T"),
+        case("3d", o3, "divergence", 2),
+        case("3d", o3, "laplacian", 1),
+    ]
+    C += [move("2d", o2, *pair) for pair in ("TU", "TX", "XT", "UV", "VU", "UT")]
+    C += [
+        Case("coriolis[2d]", lambda u, v, f: o2.coriolis(u, v, f=f), 3, s2, 2),
+        case("3d", o3, "coriolis", 2, 2, f=f2),
+    ]
+    C += [
+        case(f"2d, {form}", o2, "pv_flux", 3, 2, form=form)
+        for form in ("energy", "enstrophy", "blend")
+    ]
+    C += [
+        case("2d", o2, "kinetic_energy", 2),
+        case("2d", o2, "okubo_weiss_parameter", 2),
+        case("2d", o2, "arakawa_jacobian", 2),
+        case("2d", o2, "diffuse", 1, kappa=1.0),
+        Case("diffuse[2d, kappa field]", lambda h, k: o2.diffuse(h, kappa=k), 2, s2),
+        case("2d", o2, "biharmonic", 1, kappa4=1.0),
+        case("3d", o3, "diffuse", 1, kappa=1.0),
+        case("2d, energy", o2, "advect_momentum", 2, 2, form="energy"),
+        case("2d, enstrophy", o2, "advect_momentum", 2, 2, form="enstrophy"),
     ]
     schemes = {
         "upwind1": Upwind(1),
@@ -154,78 +136,36 @@ def _cases(n: int, nz: int) -> list[Case]:
         "weno7": WENO(7),
         "van_leer": TVD("van_leer"),
     }
-    for m, scheme in schemes.items():
-        C.append(Case(f"Advection2D[{m}]", _op(ad2, None, scheme=scheme), 3, s2))
-    C.append(
-        Case(
-            "Advection2D[weno5, open]",
-            _op(ad2, None, scheme=WENO(5), wall="open"),
-            3,
-            s2,
-        )
-    )
+    C += [
+        case(f"2d, {name}", o2, "advect", 3, scheme=scheme)
+        for name, scheme in schemes.items()
+    ]
+    C.append(case("2d, weno5, open", o2, "advect", 3, scheme=WENO(5), wall="open"))
     # a basin with an island: exercises the adaptive-stencil (upwind_flux) path
     wet = np.ones(s2, dtype=bool)
     wet[n // 3 : n // 2, n // 3 : n // 2] = False
-    ad2m = fvx.Advection2D(g2, mask=fvx.Mask2D.from_mask(wet))
-    C.append(Case("Advection2D[weno5, masked]", _op(ad2m, None, scheme=WENO(5)), 3, s2))
-    C.append(
+    masked = fvx.GridOps(g2, fvx.Mask2D.from_mask(wet))
+    C += [
+        case("2d, weno5, masked", masked, "advect", 3, scheme=WENO(5)),
         Case(
-            "Advection1D[weno5]",
-            _op(fvx.Advection1D(g1), None, scheme=WENO(5)),
+            "advect[1d, weno5]",
+            lambda h, u: o1.advect(h, u, None, scheme=WENO(5)),
             2,
             s1,
-        )
-    )
-    C.append(Case("Advection3D[weno5]", _op(ad3, None, scheme=WENO(5)), 3, s3))
-
-    sd = fvx.SphericalDifference2D(gs)
+        ),
+        case("3d, weno5", o3, "advect", 3, scheme=WENO(5)),
+    ]
     C += [
-        Case(
-            "SphericalDifference2D.diff_lon_T_to_U",
-            _op(sd, "diff_lon_T_to_U"),
-            1,
-            s2,
-        ),
-        Case(
-            "SphericalDifference2D.laplacian_merid",
-            _op(sd, "laplacian_merid"),
-            1,
-            s2,
-        ),
-        Case("SphericalDivergence2D", _op(fvx.SphericalDivergence2D(gs)), 2, s2),
-        Case("SphericalLaplacian2D", _op(fvx.SphericalLaplacian2D(gs)), 1, s2),
-        Case(
-            "SphericalVorticity2D.relative_vorticity",
-            _op(fvx.SphericalVorticity2D(gs), "relative_vorticity"),
-            2,
-            s2,
-        ),
-        Case(
-            "SphericalDiffusion2D",
-            _op(fvx.SphericalDiffusion2D(gs), None, 1.0),
-            1,
-            s2,
-        ),
-        Case(
-            "SphericalAdvection2D[weno5]",
-            _op(fvx.SphericalAdvection2D(gs), None, scheme=WENO(5)),
-            3,
-            s2,
-        ),
-        Case(
-            "SphericalMomentumAdvection2D",
-            _op(fvx.SphericalMomentumAdvection2D(gs)),
-            2,
-            s2,
-            2,
-        ),
-        Case("arakawa_jacobian", _op(fvx.arakawa_jacobian, None, g2), 2, s2),
-        Case("kinetic_energy", _op(fvx.kinetic_energy, None, g2), 2, s2),
-        Case("okubo_weiss[fn]", _okubo_weiss_fn, 2, s2),
+        move("sphere", sph, "T", "U", "x"),
+        case("sphere", sph, "divergence", 2),
+        case("sphere", sph, "laplacian", 1),
+        case("sphere", sph, "curl", 2),
+        case("sphere", sph, "diffuse", 1, kappa=1.0),
+        case("sphere, weno5", sph, "advect", 3, scheme=WENO(5)),
+        case("sphere", sph, "advect_momentum", 2, 2),
         Case(
             "masked_laplacian",
-            _op(gs.masked_laplacian, None, f2, 1.0, 1.0),
+            lambda h: masked_laplacian(h, f2, 1.0, 1.0),
             1,
             s2,
         ),

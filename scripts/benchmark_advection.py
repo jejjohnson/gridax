@@ -57,7 +57,6 @@ SCHEMES: dict[str, Scheme] = {
     "mc": TVD("mc"),
 }
 METHODS = tuple(SCHEMES)
-LIMITERS = ("minmod", "van_leer", "superbee", "mc")
 
 # Periodic halo (cells on each side, ghost ring included) wide enough for the
 # widest stencil (weno9: 5) plus the closed-wall write offset.
@@ -69,13 +68,10 @@ _GL_X, _GL_W = np.polynomial.legendre.leggauss(8)
 _GL_X, _GL_W = 0.5 * _GL_X, 0.5 * _GL_W
 
 
-def _face_value_1d(recon: fvx.Reconstruction1D, method: str, q, sign: float):
+def _face_value_1d(grid: fvx.CartesianCGrid1D, method: str, q, sign: float):
     """Reconstructed east-face value q̂[i+1/2] (flux / u with u = ±1)."""
     u = jnp.full_like(q, sign)
-    if method in LIMITERS:
-        flux = recon.tvd_x(q, u, limiter=method)
-    else:
-        flux = getattr(recon, f"{method}_x")(q, u)
+    flux = fvx.reconstruct(q, u, grid, axis="x", scheme=SCHEMES[method])
     return flux / u  # [Nx]
 
 
@@ -92,7 +88,6 @@ def exactness(max_degree: int = 8) -> dict[str, tuple[int, int]]:
     n = 40
     dx = 1.0 / 8.0  # O(1) polynomial values, so 1e-9 is a clean threshold
     grid = fvx.CartesianCGrid1D.from_interior(n, n * dx)
-    recon = fvx.Reconstruction1D(grid=grid)
     k = np.arange(n + 2)
     xl = (k - 1 - n / 2) * dx  # west face of cell k, centred on 0
     xc = xl + 0.5 * dx
@@ -112,7 +107,7 @@ def exactness(max_degree: int = 8) -> dict[str, tuple[int, int]]:
                 q = jnp.asarray(q)
                 err = 0.0
                 for sign in (1.0, -1.0):
-                    face = np.asarray(_face_value_1d(recon, m, q, sign))
+                    face = np.asarray(_face_value_1d(grid, m, q, sign))
                     err = max(err, np.max(np.abs(face[probe] - xf[probe] ** d)))
                 scale = max(1.0, np.max(np.abs(xf[probe] ** d)))
                 if err > 1e-9 * scale:
@@ -145,7 +140,7 @@ def _tendency_errors_1d(
     ntot = n + 2 * HALO
     dx = 1.0 / n
     grid = fvx.CartesianCGrid1D.from_interior(ntot - 2, (ntot - 2) * dx)
-    adv = fvx.Advection1D(grid=grid)
+    adv = fvx.GridOps(grid).advect
     k = np.arange(ntot)
     xl = (k - HALO) * dx  # west face of cell k
     xc = xl + 0.5 * dx
@@ -238,7 +233,7 @@ def _tendency_error_2d(method: str, n: int, variable: bool) -> float:
     grid = fvx.CartesianCGrid2D.from_interior(
         ntot - 2, ntot - 2, (ntot - 2) * d, (ntot - 2) * d
     )
-    adv = fvx.Advection2D(grid=grid)
+    adv = fvx.GridOps(grid).advect
     k = np.arange(ntot)
     lo = (k - HALO) * d  # west / south edge of cell k
     if variable:
@@ -325,7 +320,7 @@ def benchmark(n: int = 64, cfl: float = 0.25, sigma: float = 0.05) -> None:
     nsteps = math.ceil(1.0 / (cfl * d / umax))
     dt = 1.0 / nsteps
     q0j, uj, vj = jnp.asarray(q0), jnp.asarray(u), jnp.asarray(v)
-    adv = fvx.Advection2D(grid=grid)
+    adv = fvx.GridOps(grid).advect
 
     print(
         f"\n## solid-body Gaussian, N = {n}, sigma = {sigma}, CFL {cfl}, "
@@ -360,7 +355,7 @@ def benchmark(n: int = 64, cfl: float = 0.25, sigma: float = 0.05) -> None:
 def _forward_cost(n: int = 256, repeats: int = 50) -> dict[str, float]:
     """Fastest wall time (ms) of the jitted 2-D tendency."""
     grid = fvx.CartesianCGrid2D.from_interior(n, n, 1.0, 1.0)
-    adv = fvx.Advection2D(grid=grid)
+    adv = fvx.GridOps(grid).advect
     q = jax.random.normal(jax.random.PRNGKey(0), (n + 2, n + 2))
     u = jax.random.normal(jax.random.PRNGKey(1), (n + 2, n + 2))
     v = jax.random.normal(jax.random.PRNGKey(2), (n + 2, n + 2))
