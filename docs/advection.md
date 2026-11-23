@@ -461,6 +461,34 @@ seam.  Mask semantics are the Cartesian ones.
 
 ---
 
+(vertical-transport)=
+## Vertical Transport
+
+`advect` and `diffuse` are horizontal, level by level. The z terms that close a 3-D tracer equation are `advect_vertical` and `diffuse_vertical`:
+
+$$
+\frac{\partial \bar q_k}{\partial t} = -\frac{F_{k+1/2} - F_{k-1/2}}{\Delta z}, \qquad F_{k+1/2} = w_{k+1/2}\,\hat q_{k+1/2} \quad\text{or}\quad -\kappa_{k+1/2}\,\frac{q_{k+1} - q_k}{\Delta z_{k+1/2}},
+$$
+
+with $F$ the upward flux through a level face, $w$ the vertical velocity, $\hat q$ the face value of the scheme and $\kappa$ the vertical diffusivity, the mean of the two cells. `w[k]` is on the top face of `T[k]`, so `w[0]` is on the floor and `w[Nz-2]` on the lid, as `vertical_velocity` returns it. A velocity held at T is moved with `interpolate(w, grid, src="T", dst="W")`, which leaves the floor to the caller.
+
+```python
+import numpy as np
+import gridax
+from gridax.schemes import WENO, Upwind
+
+grid = gridax.CartesianCGrid3D.from_interior(8, 8, 10, 1.0, 1.0, 1.0)
+q, u, v = np.random.default_rng(0).normal(size=(3, *grid.shape))
+w = gridax.vertical_velocity(u, v, grid)  # continuity, w = 0 on the floor
+dq = gridax.advect(q, u, v, grid, scheme=WENO(5), wall="open")
+dq = dq + gridax.advect_vertical(q, w, grid, scheme=Upwind(3), wall="open")
+dq = dq + gridax.diffuse_vertical(q, grid, kappa=1e-2)  # (Nz, Ny, Nx)
+```
+
+With `wall="closed"`, the default, nothing crosses the floor and the lid. With `wall="open"` their flux comes from the ghost levels, which is how a surface flux enters; `bc=` fills as many levels as the scheme reads. The sum over a column is what crosses its two ends. Both take a `Mask3D`. `diffuse_vertical` also runs on a stretched grid, whose levels have their own thickness.
+
+---
+
 ## Transports and Other Fluxes
 
 **Transports instead of velocities.**  The face value depends on the

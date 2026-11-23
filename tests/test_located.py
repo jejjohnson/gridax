@@ -61,7 +61,7 @@ def wet_mask(grid, seed=1):
 
 def keywords(name, grid):
     """The keyword arguments of each call an operation is checked on."""
-    if name == "advect":
+    if name in ("advect", "advect_vertical"):
         return [{"scheme": Upwind(3)}, {"scheme": Centred(4)}]
     if name == "qg_potential_vorticity":
         return [{"f0": 0.7, "beta": 0.2}]

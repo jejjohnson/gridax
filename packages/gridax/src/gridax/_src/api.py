@@ -34,6 +34,7 @@ _A = (_A1, *_A2, _A3)
 SUPPORT: dict[str, tuple[str, ...]] = {
     "advect": _C,
     "advect_momentum": (*_C2, *_C3),
+    "advect_vertical": _C3,
     "arakawa_jacobian": ("CartesianCGrid2D",),
     "area_mean": (*_C2, _S2, *_A2),
     "area_sum": (*_C2, _S2, *_A2),
@@ -43,6 +44,7 @@ SUPPORT: dict[str, tuple[str, ...]] = {
     "curl": (*_C2, *_C3, _S2, _S3, *_A2, _A3),
     "difference": (*_C, *_S, *_A),
     "diffuse": (*_C2, *_C3),
+    "diffuse_vertical": (*_C3, _S3),
     "diffusive_fluxes": (*_C2, *_C3),
     "divergence": (*_C2, *_C3, _S2, _S3, *_A2, _A3),
     "geostrophic_velocity": ("SphericalCGrid2D",),

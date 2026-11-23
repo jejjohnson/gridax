@@ -22,6 +22,7 @@ RNG = np.random.default_rng(492)
 CALLS: dict[str, tuple[int, dict[str, Any]]] = {
     "advect": (3, {"scheme": Upwind(3)}),
     "advect_momentum": (2, {"form": "blend"}),
+    "advect_vertical": (2, {"scheme": Upwind(3)}),
     "arakawa_jacobian": (2, {}),
     "area_mean": (1, {}),
     "area_sum": (1, {}),
@@ -31,6 +32,7 @@ CALLS: dict[str, tuple[int, dict[str, Any]]] = {
     "curl": (2, {}),
     "difference": (1, {"axis": "x", "src": "T", "dst": "U"}),
     "diffuse": (1, {"kappa": 0.3}),
+    "diffuse_vertical": (1, {"kappa": 0.3}),
     "diffusive_fluxes": (1, {"kappa": 0.3}),
     "divergence": (2, {}),
     "geostrophic_velocity": (1, {"f": 1.2}),
