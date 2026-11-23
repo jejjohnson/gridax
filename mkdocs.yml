@@ -73,6 +73,7 @@ nav:
   - Stencils and operators:
       - Raw stencils: stencils.md
       - Schemes: schemes.md
+      - GridOps: gridops.md
       - Difference: difference.md
       - Interpolation: interpolation.md
       - Divergence: divergence.md

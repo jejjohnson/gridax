@@ -37,7 +37,7 @@ from gridax._src.boundary.boundary import (
     zero_gradient_boundaries,
 )
 from gridax._src.operators.calculus import curl, divergence, grad_perp, laplacian
-from gridax._src.operators.coriolis import Coriolis2D
+from gridax._src.operators.coriolis import coriolis
 from gridax._src.operators.moves import difference, interpolate
 from gridax._src.operators.triples import PAIRS, TRIPLES, choose
 from gridax._src.pipekit.base import FVXOperator, GridOperator
@@ -133,7 +133,7 @@ class Coriolis(GridOperator):
     """Coriolis tendencies on a β-plane, ``(U, V) → (U, V)``.
 
     f = f₀ + β (y − y₀) at T-points, ghost ring included (y = j Δy), then
-    ``Coriolis2D(u, v, f)``: (+f v̄ at U, −f ū at V), energy conserving.
+    ``gridax.coriolis``: (+f v̄ at U, −f ū at V), energy conserving.
     ``f0`` and ``beta`` are learnable leaves.
 
     Attributes
@@ -164,7 +164,7 @@ class Coriolis(GridOperator):
 
     def _apply(self, u: Field, v: Field) -> tuple[Field, Field]:
         f = self.coriolis_parameter(jnp.result_type(u, v))
-        return Coriolis2D(grid=self.grid)(u, v, f)
+        return coriolis(u, v, self.grid, f=f)
 
 
 #: ``kind -> ghost-ring filler`` for `FillGhosts`.

@@ -21,9 +21,9 @@ or any other backend, in one derivative stack of four layers (``docs/stencils.md
   and the mask a keyword: ``difference``, ``divergence``, ``advect``,
   ``diffuse``, ``coriolis``, ``kinetic_energy``, …; on bare collocated arrays
   :mod:`gridax.analysis`.
-- Layer 3, bindings that hold a grid and a mask: ``Difference2D``,
-  ``Advection2D``, ``Diffusion2D``, … (the C-grid operators, advection,
-  diffusion and boundary conditions live here, in gridax).
+- Layer 3, bindings that hold a grid and a mask: :class:`gridax.GridOps`,
+  with every canonical function as a method, and ``Difference2D``,
+  ``Advection2D``, ``Diffusion2D``, ….
 
 A located field is a :class:`gridax.CField`, an array with named dims and the
 point it sits on; :func:`gridax.combine` and :mod:`gridax.fields` do
@@ -134,6 +134,7 @@ from gridax._src.grid import (
     agrid_from,
     t_point_coordinates,
 )
+from gridax._src.gridops import GridOps
 from gridax._src.mask import (
     CoastGhosts,
     Mask1D,
@@ -315,6 +316,8 @@ __all__ = [
     "kinetic_energy",
     "shear_strain",
     "tensor_strain",
+    # The canonical functions on one grid and mask
+    "GridOps",
     # Located fields (element-wise functions in gridax.fields)
     "CField",
     "combine",
