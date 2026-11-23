@@ -47,6 +47,8 @@ project:
           title: C-grid discretization
         - file: masks.md
           title: Masks
+        - file: fields.md
+          title: Located fields
         - file: multilayer_vs_3d.md
           title: Vertical structure
     - title: Stencils
