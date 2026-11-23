@@ -76,20 +76,20 @@ class SphericalDivergence2D:
 
         div[j, i] = 1/(R·cos(lat_T)) · [du/dλ + d(v·cos(lat_V))/dφ]
         """
-        dlon = self.grid.dlon
-        dlat = self.grid.dlat
-        R = self.grid.R
+        dlon = _metric_like(self.grid.dlon, u)
+        dlat = _metric_like(self.grid.dlat, v)
+        R = _metric_like(self.grid.R, u)
 
         # du/dλ at T: backward diff U → T
         du_dlon = diff_x_bwd_2d(u) / dlon
 
         # d(v·cosφ)/dφ at T: backward diff V → T
-        cos_V = _metric_like(self.grid.cos_lat_V, v)
+        cos_V = _metric_like(self.grid._cos_lat("V"), v)
         v_cos_N = v[1:-1, 1:-1] * cos_V[1:-1, 1:-1]
         v_cos_S = v[:-2, 1:-1] * cos_V[:-2, 1:-1]
         dvc_dlat = (v_cos_N - v_cos_S) / dlat
 
-        cos_T = _metric_like(self.grid.cos_lat_T, u)[1:-1, 1:-1]
+        cos_T = _metric_like(self.grid._cos_lat("T"), u)[1:-1, 1:-1]
         out = interior(_safe_div_cos(du_dlon + dvc_dlat, cos_T, R), u)
         if self.mask is not None:
             out = out * self.mask.h
@@ -152,20 +152,20 @@ class SphericalVorticity2D:
 
         ζ[j+½, i+½] = 1/(R·cos(lat_X)) · [dv/dλ − d(u·cosφ)/dφ]
         """
-        dlon = self.grid.dlon
-        dlat = self.grid.dlat
-        R = self.grid.R
+        dlon = _metric_like(self.grid.dlon, v)
+        dlat = _metric_like(self.grid.dlat, u)
+        R = _metric_like(self.grid.R, u)
 
         # dv/dλ at X: forward diff V → X
         dv_dlon = diff_x_fwd_2d(v) / dlon
 
         # d(u·cosφ)/dφ at X: forward diff U → X
-        cos_U = _metric_like(self.grid.cos_lat_U, u)
+        cos_U = _metric_like(self.grid._cos_lat("U"), u)
         u_cos_N = u[2:, 1:-1] * cos_U[2:, 1:-1]
         u_cos_S = u[1:-1, 1:-1] * cos_U[1:-1, 1:-1]
         duc_dlat = (u_cos_N - u_cos_S) / dlat
 
-        cos_X = _metric_like(self.grid.cos_lat_X, u)[1:-1, 1:-1]
+        cos_X = _metric_like(self.grid._cos_lat("X"), u)[1:-1, 1:-1]
         out = interior(_safe_div_cos(dv_dlon - duc_dlat, cos_X, R), u)
         if self.mask is not None:
             out = out * self.mask.xy_corner_strict
@@ -296,15 +296,15 @@ class SphericalLaplacian2D:
     def __call__(self, h: Float[Array, "Ny Nx"]) -> Float[Array, "Ny Nx"]:
         """Laplacian at T-points on a sphere."""
         R = self.grid.R
-        cos_T = _metric_like(self.grid.cos_lat_T, h)[1:-1, 1:-1]
+        cos_T = _metric_like(self.grid._cos_lat("T"), h)[1:-1, 1:-1]
 
         # Each offset of h is sliced once (see `_Neighbours2D`), so the VJP
         # is one fused pass; the two terms are SphericalDifference2D's
         # diff2_lon and laplacian_merid.
         nb = _neighbours(h)  # c, e, w, n, s views  [Ny-2, Nx-2]
         # V-face cosines from the grid, as SphericalDivergence2D reads them:
-        #   cos_V_N = cos_lat_V[j] (north face), cos_V_S = cos_lat_V[j-1]
-        cos_V = _metric_like(self.grid.cos_lat_V, h)
+        #   cos_V_N = cos_V[j] (north face), cos_V_S = cos_V[j-1]
+        cos_V = _metric_like(self.grid._cos_lat("V"), h)
         cos_V_N = cos_V[1:-1, 1:-1]
         cos_V_S = cos_V[:-2, 1:-1]
 
@@ -365,9 +365,9 @@ def _geostrophic_velocity_sphere(
     public function.
     """
     xp = array_namespace(h, f, wet_u, wet_v)
-    R = grid.R
-    dlon = grid.dlon
-    dlat = grid.dlat
+    R = _metric_like(grid.R, h)
+    dlon = _metric_like(grid.dlon, h)
+    dlat = _metric_like(grid.dlat, h)
 
     # u_g at U-points: compact 4-point stencil
     f_on_U = 0.5 * (f[1:-1, 1:-1] + f[1:-1, 2:])
@@ -382,7 +382,7 @@ def _geostrophic_velocity_sphere(
     if wet_v is not None:
         # f_on_V[j+1/2, i] = f_on_V[j+1/2, i] if wet_v[j+1/2, i] else 1
         f_on_V = xp.where(wet_v[1:-1, 1:-1], f_on_V, 1.0)
-    cos_on_V = _metric_like(grid.cos_lat_V, h)[1:-1, 1:-1]  # cos(lat_T[j] + dlat/2)
+    cos_on_V = _metric_like(grid._cos_lat("V"), h)[1:-1, 1:-1]  # cos(lat_T[j] + dlat/2)
     dh_dlon_V = (h[1:-1, 2:] + h[2:, 2:] - h[1:-1, :-2] - h[2:, :-2]) / (4.0 * dlon)
     v_g = interior(_safe_div_cos(gravity * dh_dlon_V, cos_on_V, f_on_V * R), h)
 

@@ -36,7 +36,7 @@ class TestDifference1D:
         diff = Difference1D(grid=grid1d)
         # h = c * x  =>  dh/dx = c everywhere
         c = 2.0
-        h = c * jnp.arange(grid1d.Nx, dtype=float) * grid1d.dx
+        h = c * jnp.arange(grid1d.Nx, dtype=float) * grid1d.spacing("x")
         result = diff.diff_x_T_to_U(h)
         # interior should be ~c
         np.testing.assert_allclose(result[1:-1], c, rtol=1e-5)
@@ -54,7 +54,7 @@ class TestDifference1D:
     def test_laplacian_quadratic(self, grid1d):
         diff = Difference1D(grid=grid1d)
         # h = x^2  =>  d2h/dx2 = 2
-        x = jnp.arange(grid1d.Nx, dtype=float) * grid1d.dx
+        x = jnp.arange(grid1d.Nx, dtype=float) * grid1d.spacing("x")
         h = x**2
         result = diff.laplacian(h)
         np.testing.assert_allclose(result[1:-1], 2.0, rtol=1e-5)
@@ -72,7 +72,7 @@ class TestDifference2D:
         diff = Difference2D(grid=grid2d)
         # h = c * x  =>  dh/dx = c
         c = 3.0
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
         h = jnp.broadcast_to(c * x, (grid2d.Ny, grid2d.Nx))
         result = diff.diff_x_T_to_U(h)
         np.testing.assert_allclose(result[1:-1, 1:-1], c, rtol=1e-5)
@@ -80,7 +80,7 @@ class TestDifference2D:
     def test_diff_y_T_to_V_linear(self, grid2d):
         diff = Difference2D(grid=grid2d)
         c = 2.5
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         h = jnp.broadcast_to(c * y[:, None], (grid2d.Ny, grid2d.Nx))
         result = diff.diff_y_T_to_V(h)
         np.testing.assert_allclose(result[1:-1, 1:-1], c, rtol=1e-5)
@@ -88,7 +88,7 @@ class TestDifference2D:
     def test_diff_y_X_to_U_linear(self, grid2d):
         diff = Difference2D(grid=grid2d)
         c = 1.75
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         q = jnp.broadcast_to(c * y[:, None], (grid2d.Ny, grid2d.Nx))
         result = diff.diff_y_X_to_U(q)
         np.testing.assert_allclose(result[1:-1, 1:-1], c, rtol=1e-5)
@@ -96,7 +96,7 @@ class TestDifference2D:
     def test_diff_x_X_to_V_linear(self, grid2d):
         diff = Difference2D(grid=grid2d)
         c = 1.25
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
         q = jnp.broadcast_to(c * x, (grid2d.Ny, grid2d.Nx))
         result = diff.diff_x_X_to_V(q)
         np.testing.assert_allclose(result[1:-1, 1:-1], c, rtol=1e-5)
@@ -120,8 +120,8 @@ class TestDifference2D:
     def test_laplacian_quadratic(self, grid2d):
         diff = Difference2D(grid=grid2d)
         # h = x^2 + y^2 => laplacian = 2 + 2 = 4
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         h = x[None, :] ** 2 + y[:, None] ** 2
         result = diff.laplacian(h)
         np.testing.assert_allclose(result[1:-1, 1:-1], 4.0, rtol=1e-5)
@@ -162,7 +162,7 @@ class TestDifference2D:
         """
         diff = Difference2D(grid=grid2d)
         c = 2.0
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
         u = jnp.broadcast_to(c * x, (grid2d.Ny, grid2d.Nx))
         result = diff.diff_x_U_to_T(u)
         np.testing.assert_allclose(result[1:-1, 1:-1], c, rtol=1e-5)
@@ -175,7 +175,7 @@ class TestDifference2D:
         """
         diff = Difference2D(grid=grid2d)
         c = 1.5
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         v = jnp.broadcast_to(c * y[:, None], (grid2d.Ny, grid2d.Nx))
         result = diff.diff_y_V_to_T(v)
         np.testing.assert_allclose(result[1:-1, 1:-1], c, rtol=1e-5)
@@ -188,7 +188,7 @@ class TestDifference2D:
         """
         diff = Difference2D(grid=grid2d)
         c = 1.2
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         u = jnp.broadcast_to(c * y[:, None], (grid2d.Ny, grid2d.Nx))
         result = diff.diff_y_U_to_X(u)
         np.testing.assert_allclose(result[1:-1, 1:-1], c, rtol=1e-5)
@@ -201,7 +201,7 @@ class TestDifference2D:
         """
         diff = Difference2D(grid=grid2d)
         c = 0.8
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
         v = jnp.broadcast_to(c * x, (grid2d.Ny, grid2d.Nx))
         result = diff.diff_x_V_to_X(v)
         np.testing.assert_allclose(result[1:-1, 1:-1], c, rtol=1e-5)
@@ -213,8 +213,8 @@ class TestDifference2D:
         """
         diff = Difference2D(grid=grid2d)
         c = 1.5
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         u = jnp.broadcast_to(-c * y[:, None], (grid2d.Ny, grid2d.Nx))
         v = jnp.broadcast_to(c * x, (grid2d.Ny, grid2d.Nx))
         result = diff.curl(u, v)
@@ -227,8 +227,8 @@ class TestDifference2D:
         """
         diff = Difference2D(grid=grid2d)
         c = 2.0
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         u = jnp.broadcast_to(c * x, (grid2d.Ny, grid2d.Nx))
         v = jnp.broadcast_to(c * y[:, None], (grid2d.Ny, grid2d.Nx))
         result = diff.divergence(u, v)
@@ -251,7 +251,7 @@ class TestDifference2D:
         """
         diff = Difference2D(grid=grid2d)
         c = 3.0
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
         h = jnp.broadcast_to(c * x, (grid2d.Ny, grid2d.Nx))
         dh_u = diff.diff_x_T_to_U(h)
         result = diff.diff_x_U_to_T(dh_u)
@@ -261,7 +261,7 @@ class TestDifference2D:
 
         # Also verify i=1 gives the EXPECTED non-zero value from zero ghost,
         # confirming the implementation is deterministic, not silently wrong.
-        expected_i1 = c / grid2d.dx  # (c - 0) / dx
+        expected_i1 = c / grid2d.spacing("x")  # (c - 0) / dx
         np.testing.assert_allclose(result[1:-1, 1], expected_i1, rtol=1e-6)
 
     def test_second_derivative_y_linear_is_zero(self, grid2d):
@@ -275,7 +275,7 @@ class TestDifference2D:
         """
         diff = Difference2D(grid=grid2d)
         c = 2.5
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         h = jnp.broadcast_to(c * y[:, None], (grid2d.Ny, grid2d.Nx))
         dh_v = diff.diff_y_T_to_V(h)
         result = diff.diff_y_V_to_T(dh_v)
@@ -283,7 +283,7 @@ class TestDifference2D:
         np.testing.assert_allclose(result[2:-1, 1:-1], 0.0, atol=1e-10)
 
         # Verify j=1 gives the expected non-zero value due to zero south ghost.
-        expected_j1 = c / grid2d.dy  # (c - 0) / dy
+        expected_j1 = c / grid2d.spacing("y")  # (c - 0) / dy
         np.testing.assert_allclose(result[1, 1:-1], expected_j1, rtol=1e-6)
 
 
@@ -332,8 +332,8 @@ class TestGradPerp2D:
         chained divergence operator reading the zero ghost ring of u/v.
         """
         diff = Difference2D(grid=grid2d)
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         psi = x[None, :] * y[:, None]  # ψ = x * y
         u, v = diff.grad_perp(psi)
         divergence = diff.divergence(u, v)
@@ -347,7 +347,7 @@ class TestGradPerp2D:
         """
         diff = Difference2D(grid=grid2d)
         c = 3.0
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
         psi = jnp.broadcast_to(c * x, (grid2d.Ny, grid2d.Nx))
         u, v = diff.grad_perp(psi)
         np.testing.assert_allclose(u[1:-1, 1:-1], 0.0, atol=1e-12)
@@ -361,7 +361,7 @@ class TestGradPerp2D:
         """
         diff = Difference2D(grid=grid2d)
         c = 2.0
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         psi = jnp.broadcast_to(c * y[:, None], (grid2d.Ny, grid2d.Nx))
         u, v = diff.grad_perp(psi)
         np.testing.assert_allclose(u[1:-1, 1:-1], -c, rtol=1e-5)
@@ -377,8 +377,8 @@ class TestGradPerp2D:
         """
         diff = Difference2D(grid=grid2d)
         interp = Interpolation2D(grid=grid2d)
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         psi = jnp.sin(x[None, :]) * jnp.cos(y[:, None])
 
         u, v = diff.grad_perp(psi)
@@ -394,7 +394,7 @@ class TestGradPerp2D:
         grid = CartesianGrid2D.from_interior(8, 8, 1.0, 2.0)
         diff = Difference2D(grid=grid)
         c = 1.5
-        y = jnp.arange(grid.Ny, dtype=float) * grid.dy
+        y = jnp.arange(grid.Ny, dtype=float) * grid.spacing("y")
         psi = jnp.broadcast_to(c * y[:, None], (grid.Ny, grid.Nx))
         u, _v = diff.grad_perp(psi)
         # ∂ψ/∂y = c, so u = -c at interior [1:-1, 1:-1]
@@ -406,7 +406,7 @@ class TestGradPerp2D:
 
         all_dry = Mask2D.from_mask(np.zeros((grid2d.Ny, grid2d.Nx), dtype=bool))
         diff = Difference2D(grid=grid2d, mask=all_dry)
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         psi = jnp.broadcast_to(y[:, None], (grid2d.Ny, grid2d.Nx))
         u, _v = diff.grad_perp(psi)
         np.testing.assert_allclose(u, 0.0, atol=1e-12)
@@ -417,7 +417,7 @@ class TestGradPerp2D:
 
         all_dry = Mask2D.from_mask(np.zeros((grid2d.Ny, grid2d.Nx), dtype=bool))
         diff = Difference2D(grid=grid2d, mask=all_dry)
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
         psi = jnp.broadcast_to(x, (grid2d.Ny, grid2d.Nx))
         _u, v = diff.grad_perp(psi)
         np.testing.assert_allclose(v, 0.0, atol=1e-12)
@@ -426,7 +426,7 @@ class TestGradPerp2D:
         """mask=None path produces identical (u, v) to the no-mask default."""
         diff_none = Difference2D(grid=grid2d, mask=None)
         diff_default = Difference2D(grid=grid2d)
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         psi = jnp.broadcast_to(y[:, None], (grid2d.Ny, grid2d.Nx))
         u1, v1 = diff_none.grad_perp(psi)
         u2, v2 = diff_default.grad_perp(psi)
@@ -466,7 +466,7 @@ class TestDifferenceGhostCells2D:
         h = h.at[1:-1, grid2d.Nx - 2].set(2.0)  # last interior T = 2
         h = h.at[1:-1, grid2d.Nx - 1].set(6.0)  # east ghost T = 6
         result = diff.diff_x_T_to_U(h)
-        expected = (6.0 - 2.0) / grid2d.dx
+        expected = (6.0 - 2.0) / grid2d.spacing("x")
         np.testing.assert_allclose(result[1:-1, grid2d.Nx - 2], expected, rtol=1e-6)
 
     # -- diff_x_U_to_T: first T-col reads west ghost U-face -----------------
@@ -478,7 +478,7 @@ class TestDifferenceGhostCells2D:
         u = u.at[1:-1, 0].set(3.0)  # west ghost U-face = 3
         u = u.at[1:-1, 1].set(9.0)  # first interior U = 9
         result = diff.diff_x_U_to_T(u)
-        expected = (9.0 - 3.0) / grid2d.dx
+        expected = (9.0 - 3.0) / grid2d.spacing("x")
         np.testing.assert_allclose(result[1:-1, 1], expected, rtol=1e-6)
 
     # -- diff_y_T_to_V: last V-row reads north ghost T ----------------------
@@ -490,7 +490,7 @@ class TestDifferenceGhostCells2D:
         h = h.at[grid2d.Ny - 2, 1:-1].set(1.0)  # last interior T = 1
         h = h.at[grid2d.Ny - 1, 1:-1].set(5.0)  # north ghost T = 5
         result = diff.diff_y_T_to_V(h)
-        expected = (5.0 - 1.0) / grid2d.dy
+        expected = (5.0 - 1.0) / grid2d.spacing("y")
         np.testing.assert_allclose(result[grid2d.Ny - 2, 1:-1], expected, rtol=1e-6)
 
     # -- diff_y_V_to_T: first T-row reads south ghost V-face ----------------
@@ -502,7 +502,7 @@ class TestDifferenceGhostCells2D:
         v = v.at[0, 1:-1].set(2.0)  # south ghost V-face = 2
         v = v.at[1, 1:-1].set(8.0)  # first interior V = 8
         result = diff.diff_y_V_to_T(v)
-        expected = (8.0 - 2.0) / grid2d.dy
+        expected = (8.0 - 2.0) / grid2d.spacing("y")
         np.testing.assert_allclose(result[1, 1:-1], expected, rtol=1e-6)
 
     # -- diff_x_V_to_X: last X-col reads east ghost V-col -------------------
@@ -514,7 +514,7 @@ class TestDifferenceGhostCells2D:
         v = v.at[1:-1, grid2d.Nx - 2].set(4.0)  # last interior V = 4
         v = v.at[1:-1, grid2d.Nx - 1].set(10.0)  # east ghost V = 10
         result = diff.diff_x_V_to_X(v)
-        expected = (10.0 - 4.0) / grid2d.dx
+        expected = (10.0 - 4.0) / grid2d.spacing("x")
         np.testing.assert_allclose(result[1:-1, grid2d.Nx - 2], expected, rtol=1e-6)
 
     # -- diff_y_U_to_X: last X-row reads north ghost U-row ------------------
@@ -526,7 +526,7 @@ class TestDifferenceGhostCells2D:
         u = u.at[grid2d.Ny - 2, 1:-1].set(2.0)  # last interior U = 2
         u = u.at[grid2d.Ny - 1, 1:-1].set(8.0)  # north ghost U = 8
         result = diff.diff_y_U_to_X(u)
-        expected = (8.0 - 2.0) / grid2d.dy
+        expected = (8.0 - 2.0) / grid2d.spacing("y")
         np.testing.assert_allclose(result[grid2d.Ny - 2, 1:-1], expected, rtol=1e-6)
 
     # -- diff_x_X_to_V: first V-col reads west ghost X-col -----------------
@@ -538,7 +538,7 @@ class TestDifferenceGhostCells2D:
         q = q.at[1:-1, 0].set(2.0)  # west ghost X = 2
         q = q.at[1:-1, 1].set(8.0)  # first interior X = 8
         result = diff.diff_x_X_to_V(q)
-        expected = (8.0 - 2.0) / grid2d.dx
+        expected = (8.0 - 2.0) / grid2d.spacing("x")
         np.testing.assert_allclose(result[1:-1, 1], expected, rtol=1e-6)
 
     # -- diff_y_X_to_U: first U-row reads south ghost X-row ----------------
@@ -550,7 +550,7 @@ class TestDifferenceGhostCells2D:
         q = q.at[0, 1:-1].set(3.0)  # south ghost X = 3
         q = q.at[1, 1:-1].set(9.0)  # first interior X = 9
         result = diff.diff_y_X_to_U(q)
-        expected = (9.0 - 3.0) / grid2d.dy
+        expected = (9.0 - 3.0) / grid2d.spacing("y")
         np.testing.assert_allclose(result[1, 1:-1], expected, rtol=1e-6)
 
 
@@ -570,8 +570,8 @@ class TestDifference3D:
 
     def test_laplacian_quadratic(self, grid3d):
         diff = Difference3D(grid=grid3d)
-        x = jnp.arange(grid3d.Nx, dtype=float) * grid3d.dx
-        y = jnp.arange(grid3d.Ny, dtype=float) * grid3d.dy
+        x = jnp.arange(grid3d.Nx, dtype=float) * grid3d.spacing("x")
+        y = jnp.arange(grid3d.Ny, dtype=float) * grid3d.spacing("y")
         h2d = x[None, :] ** 2 + y[:, None] ** 2
         h = jnp.broadcast_to(h2d, (grid3d.Nz, grid3d.Ny, grid3d.Nx))
         result = diff.laplacian(h)
@@ -618,7 +618,7 @@ class TestDifferenceLaplacianConstant:
         grid = CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
         diff = Difference2D(grid=grid)
         c = 3.0
-        x = jnp.arange(grid.Nx, dtype=float) * grid.dx
+        x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
         h = jnp.broadcast_to(c * x, (grid.Ny, grid.Nx))
         result = diff.laplacian(h)
         np.testing.assert_allclose(result[1:-1, 1:-1], 0.0, atol=1e-10)
@@ -634,7 +634,7 @@ class TestDifferenceLaplacianConstant:
         grid = CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
         diff = Difference2D(grid=grid)
         c = 2.5
-        y = jnp.arange(grid.Ny, dtype=float) * grid.dy
+        y = jnp.arange(grid.Ny, dtype=float) * grid.spacing("y")
         h = jnp.broadcast_to(c * y[:, None], (grid.Ny, grid.Nx))
         result = diff.laplacian(h)
         np.testing.assert_allclose(result[1:-1, 1:-1], 0.0, atol=1e-10)
@@ -653,7 +653,7 @@ class TestDifferenceCrossAxis:
         """h = f(y) only → dh/dx = 0 everywhere in the interior."""
         grid = CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
         diff = Difference2D(grid=grid)
-        y = jnp.arange(grid.Ny, dtype=float) * grid.dy
+        y = jnp.arange(grid.Ny, dtype=float) * grid.spacing("y")
         h = jnp.broadcast_to(2.0 * y[:, None], (grid.Ny, grid.Nx))
         result = diff.diff_x_T_to_U(h)
         np.testing.assert_allclose(result[1:-1, 1:-1], 0.0, atol=1e-10)
@@ -662,7 +662,7 @@ class TestDifferenceCrossAxis:
         """h = f(x) only → dh/dy = 0 everywhere in the interior."""
         grid = CartesianGrid2D.from_interior(8, 8, 1.0, 1.0)
         diff = Difference2D(grid=grid)
-        x = jnp.arange(grid.Nx, dtype=float) * grid.dx
+        x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
         h = jnp.broadcast_to(3.0 * x, (grid.Ny, grid.Nx))
         result = diff.diff_y_T_to_V(h)
         np.testing.assert_allclose(result[1:-1, 1:-1], 0.0, atol=1e-10)
@@ -682,7 +682,7 @@ class TestDifferenceAnisotropicGrid:
         grid = CartesianGrid2D.from_interior(8, 8, dx * 8, dy * 8)
         diff = Difference2D(grid=grid)
         c = 3.0
-        x = jnp.arange(grid.Nx, dtype=float) * grid.dx
+        x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
         h = jnp.broadcast_to(c * x, (grid.Ny, grid.Nx))
         result = diff.diff_x_T_to_U(h)
         np.testing.assert_allclose(result[1:-1, 1:-1], c, rtol=1e-5)
@@ -693,7 +693,7 @@ class TestDifferenceAnisotropicGrid:
         grid = CartesianGrid2D.from_interior(8, 8, dx * 8, dy * 8)
         diff = Difference2D(grid=grid)
         c = 2.0
-        y = jnp.arange(grid.Ny, dtype=float) * grid.dy
+        y = jnp.arange(grid.Ny, dtype=float) * grid.spacing("y")
         h = jnp.broadcast_to(c * y[:, None], (grid.Ny, grid.Nx))
         result = diff.diff_y_T_to_V(h)
         np.testing.assert_allclose(result[1:-1, 1:-1], c, rtol=1e-5)
@@ -707,12 +707,12 @@ class TestDifferenceAnisotropicGrid:
         Since we use the same spacing for both axes in grid units, the
         discrete Laplacian matches the continuous one for quadratic fields.
         """
-        # Use unit domain so that grid.dx = Lx/nx = 1.0, grid.dy = Ly/ny = 1.0
+        # Use unit domain so that grid.spacing("x") = Lx/nx = 1.0, grid.spacing("y") = Ly/ny = 1.0
         grid = CartesianGrid2D.from_interior(8, 8, 8.0, 8.0)
         diff = Difference2D(grid=grid)
         a, b = 1.0, 2.0
-        x = jnp.arange(grid.Nx, dtype=float) * grid.dx
-        y = jnp.arange(grid.Ny, dtype=float) * grid.dy
+        x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
+        y = jnp.arange(grid.Ny, dtype=float) * grid.spacing("y")
         h = a * x[None, :] ** 2 + b * y[:, None] ** 2
         result = diff.laplacian(h)
         np.testing.assert_allclose(result[1:-1, 1:-1], 2.0 * (a + b), rtol=1e-5)
@@ -734,7 +734,7 @@ class TestDifferenceRectangularGrid:
         grid = CartesianGrid2D.from_interior(4, 10, 1.0, 1.0)
         diff = Difference2D(grid=grid)
         c = 2.5
-        x = jnp.arange(grid.Nx, dtype=float) * grid.dx
+        x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
         h = jnp.broadcast_to(c * x, (grid.Ny, grid.Nx))
         result = diff.diff_x_T_to_U(h)
         np.testing.assert_allclose(result[1:-1, 1:-1], c, rtol=1e-5)
@@ -744,7 +744,7 @@ class TestDifferenceRectangularGrid:
         grid = CartesianGrid2D.from_interior(10, 4, 1.0, 1.0)
         diff = Difference2D(grid=grid)
         c = 1.5
-        y = jnp.arange(grid.Ny, dtype=float) * grid.dy
+        y = jnp.arange(grid.Ny, dtype=float) * grid.spacing("y")
         h = jnp.broadcast_to(c * y[:, None], (grid.Ny, grid.Nx))
         result = diff.diff_y_T_to_V(h)
         np.testing.assert_allclose(result[1:-1, 1:-1], c, rtol=1e-5)
@@ -762,8 +762,8 @@ class TestDifferenceRectangularGrid:
         """Ensure no NaN values are produced for rectangular domains."""
         grid = CartesianGrid2D.from_interior(6, 10, 2.0, 5.0)
         diff = Difference2D(grid=grid)
-        x = jnp.arange(grid.Nx, dtype=float) * grid.dx
-        y = jnp.arange(grid.Ny, dtype=float) * grid.dy
+        x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
+        y = jnp.arange(grid.Ny, dtype=float) * grid.spacing("y")
         h = jnp.sin(x[None, :]) + jnp.cos(y[:, None])
         for result in [diff.laplacian(h), diff.diff_x_T_to_U(h), diff.diff_y_T_to_V(h)]:
             assert jnp.all(jnp.isfinite(result)), "NaN/Inf on rectangular grid"

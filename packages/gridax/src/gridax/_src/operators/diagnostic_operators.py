@@ -42,6 +42,7 @@ import numpy as np
 from gridax._src.backend import set_at
 from gridax._src.grid import CartesianGrid2D
 from gridax._src.mask import Mask2D
+from gridax._src.operators._utils import _spacing
 from gridax._src.operators.diagnostics import (
     available_potential_energy,
     bernoulli_potential,
@@ -335,9 +336,13 @@ class Strain2D:
         """
         xp = array_namespace(u, v)
         # dv_dx[j+1/2, i+1/2] = (v[j+1/2, i+1] - v[j+1/2, i]) / dx
-        dv_dx = (v[..., :-1, 1:] - v[..., :-1, :-1]) / self.grid.dx
+        dv_dx = (v[..., :-1, 1:] - v[..., :-1, :-1]) / _spacing(
+            self.grid, "x", v, at="X"
+        )
         # du_dy[j+1/2, i+1/2] = (u[j+1, i+1/2] - u[j, i+1/2]) / dy
-        du_dy = (u[..., 1:, :-1] - u[..., :-1, :-1]) / self.grid.dy
+        du_dy = (u[..., 1:, :-1] - u[..., :-1, :-1]) / _spacing(
+            self.grid, "y", u, at="X"
+        )
         x = dv_dx + sign * du_dy
         # out[j, i] = x[j, i] for 0 <= j <= Ny-2, 0 <= i <= Nx-2
         out = set_at(
@@ -369,7 +374,12 @@ class Strain2D:
             ``self.mask`` is set, at dry X-corners.
         """
         u, v = self._uv(u, v)
-        out = shear_strain(u, v, self.grid.dx, self.grid.dy)
+        out = shear_strain(
+            u,
+            v,
+            _spacing(self.grid, "x", v, at="X"),
+            _spacing(self.grid, "y", u, at="X"),
+        )
         return _where(None if self.mask is None else self.mask.xy_corner_strict, out)
 
     def tensor(
@@ -396,7 +406,9 @@ class Strain2D:
             ``self.mask`` is set, at dry T-cells.
         """
         u, v = self._uv(u, v)
-        out = tensor_strain(u, v, self.grid.dx, self.grid.dy)
+        out = tensor_strain(
+            u, v, _spacing(self.grid, "x", u), _spacing(self.grid, "y", v)
+        )
         return _where(None if self.mask is None else self.mask.h, out)
 
     def magnitude_squared(
@@ -430,7 +442,9 @@ class Strain2D:
             and, when ``self.mask`` is set, at dry T-cells.
         """
         u, v = self._uv(u, v)
-        sn = tensor_strain(u, v, self.grid.dx, self.grid.dy)
+        sn = tensor_strain(
+            u, v, _spacing(self.grid, "x", u), _spacing(self.grid, "y", v)
+        )
         ss_on_T = self.interp.X_to_T(self._x_with_ghosts(u, v, 1.0))
         out = strain_magnitude_squared(sn, ss_on_T)
         return _where(None if self.mask is None else self.mask.h, out)
@@ -468,7 +482,9 @@ class Strain2D:
             when ``self.mask`` is set, at dry T-cells.
         """
         u, v = self._uv(u, v)
-        sn = tensor_strain(u, v, self.grid.dx, self.grid.dy)
+        sn = tensor_strain(
+            u, v, _spacing(self.grid, "x", u), _spacing(self.grid, "y", v)
+        )
         ss_on_T = self.interp.X_to_T(self._x_with_ghosts(u, v, 1.0))
         omega_on_T = self.interp.X_to_T(self._x_with_ghosts(u, v, -1.0))
         out = okubo_weiss(sn, ss_on_T, omega_on_T)
@@ -529,7 +545,7 @@ class QGPotentialVorticity2D:
         f0: float | Float[Array, ""],
         beta: float | Float[Array, ""],
         y: Float[Array, "*batch Ny Nx"],
-        y0: float,
+        y0: float | Float[Array, ""],
     ) -> Float[Array, "*batch Ny Nx"]:
         """Single-layer QG potential vorticity.
 
@@ -559,7 +575,15 @@ class QGPotentialVorticity2D:
         """
         psi = self._psi(psi)
         return self._mask_h(
-            qg_potential_vorticity(psi, f0, beta, self.grid.dx, self.grid.dy, y, y0)
+            qg_potential_vorticity(
+                psi,
+                f0,
+                beta,
+                _spacing(self.grid, "x", psi),
+                _spacing(self.grid, "y", psi),
+                y,
+                y0,
+            )
         )
 
     def stretching(
@@ -593,7 +617,7 @@ class QGPotentialVorticity2D:
         f0: float,
         beta: float,
         y: Float[Array, "Ny Nx"],
-        y0: float,
+        y0: float | Float[Array, ""],
     ) -> Float[Array, "nl Ny Nx"]:
         """Multi-layer QG potential vorticity.
 
@@ -629,6 +653,13 @@ class QGPotentialVorticity2D:
         psi = self._psi(psi)
         return self._mask_h(
             potential_vorticity_multilayer(
-                psi, A, f0, beta, self.grid.dx, self.grid.dy, y, y0
+                psi,
+                A,
+                f0,
+                beta,
+                _spacing(self.grid, "x", psi),
+                _spacing(self.grid, "y", psi),
+                y,
+                y0,
             )
         )

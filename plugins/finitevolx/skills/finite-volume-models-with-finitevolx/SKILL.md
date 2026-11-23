@@ -101,8 +101,8 @@ jax.config.update("jax_enable_x64", True)
 
 # 1. A doubly periodic 64 × 64 C-grid on [0, 1]²: arrays are [Ny, Nx] = [66, 66]
 grid = fvx.CartesianGrid2D.from_interior(64, 64, 1.0, 1.0)
-xc = (jnp.arange(grid.Nx) - 0.5) * grid.dx  # T-point x, ghost columns included
-yc = (jnp.arange(grid.Ny) - 0.5) * grid.dy
+xc = (jnp.arange(grid.Nx) - 0.5) * grid.spacing("x")  # T-point x, ghost columns included
+yc = (jnp.arange(grid.Ny) - 0.5) * grid.spacing("y")
 X, Y = jnp.meshgrid(xc, yc)  # [Ny, Nx] T-point coordinates
 
 # 2. Streamfunction at T-points → non-divergent velocities on the faces
@@ -115,7 +115,7 @@ div = diff.divergence(u, v)  # [Ny, Nx] at T-points
 # 3. Invert the discrete Laplacian back to ψ with the periodic (FFT) solver
 lap = diff.laplacian(psi)  # ∇²ψ at T-points, zero ghost ring
 psi_rec = jnp.zeros_like(lap).at[1:-1, 1:-1].set(
-    gs.solve_helmholtz_fft(lap[1:-1, 1:-1], grid.dx, grid.dy)
+    gs.solve_helmholtz_fft(lap[1:-1, 1:-1], grid.spacing("x"), grid.spacing("y"))
 )  # slice the T interior, solve (zero-mean), embed in zeros
 inv_err = jnp.max(jnp.abs(psi_rec[1:-1, 1:-1] - psi[1:-1, 1:-1]))
 
@@ -129,7 +129,7 @@ def rhs(q):
 
 
 q0 = jnp.exp(-((X - 0.3) ** 2 + (Y - 0.5) ** 2) / 0.005)  # [Ny, Nx]
-dt = 0.4 * grid.dx / jnp.max(jnp.abs(u))  # CFL number 0.4
+dt = 0.4 * grid.spacing("x") / jnp.max(jnp.abs(u))  # CFL number 0.4
 step = jax.jit(lambda q: rk3_ssp_step(q, rhs, dt))
 q = q0
 for _ in range(100):

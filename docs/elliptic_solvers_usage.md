@@ -24,7 +24,7 @@ jax.config.update("jax_enable_x64", True)
 # 1. A 64 x 64-cell basin, 100 km on a side.  Arrays are [Ny, Nx] = [66, 66]:
 #    the interior plus one ghost ring.
 grid = fvx.CartesianGrid2D.from_interior(64, 64, 1e5, 1e5)
-dx, dy, Ny, Nx = grid.dx, grid.dy, grid.Ny, grid.Nx
+dx, dy, Ny, Nx = grid.spacing("x"), grid.spacing("y"), grid.Ny, grid.Nx
 
 # 2. Vorticity at the X points, where psi lives (X node i sits at x = i dx)
 x = jnp.arange(Nx)[None, :] * dx

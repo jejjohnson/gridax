@@ -101,31 +101,31 @@ class TestShearStrain:
     def test_output_shape(self, grid2d):
         u = jnp.ones((grid2d.Ny, grid2d.Nx))
         v = jnp.ones((grid2d.Ny, grid2d.Nx))
-        result = shear_strain(u, v, grid2d.dx, grid2d.dy)
+        result = shear_strain(u, v, grid2d.spacing("x"), grid2d.spacing("y"))
         assert result.shape == (grid2d.Ny, grid2d.Nx)
 
     def test_uniform_field_zero(self, grid2d):
         u = jnp.ones((grid2d.Ny, grid2d.Nx))
         v = jnp.ones((grid2d.Ny, grid2d.Nx))
-        result = shear_strain(u, v, grid2d.dx, grid2d.dy)
+        result = shear_strain(u, v, grid2d.spacing("x"), grid2d.spacing("y"))
         np.testing.assert_allclose(result[1:-1, 1:-1], 0.0, atol=1e-10)
 
     def test_linear_fields(self, grid2d):
         """u = a*y, v = b*x => Ss = b + a at X-points."""
         a, b = 2.0, 3.0
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         u = jnp.broadcast_to(a * y[:, None], (grid2d.Ny, grid2d.Nx))
         v = jnp.broadcast_to(b * x, (grid2d.Ny, grid2d.Nx))
-        result = shear_strain(u, v, grid2d.dx, grid2d.dy)
+        result = shear_strain(u, v, grid2d.spacing("x"), grid2d.spacing("y"))
         np.testing.assert_allclose(result[1:-1, 1:-1], a + b, rtol=1e-5)
 
     def test_ghost_ring_zero(self, grid2d):
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         u = jnp.broadcast_to(y[:, None], (grid2d.Ny, grid2d.Nx))
         v = jnp.broadcast_to(x, (grid2d.Ny, grid2d.Nx))
-        result = shear_strain(u, v, grid2d.dx, grid2d.dy)
+        result = shear_strain(u, v, grid2d.spacing("x"), grid2d.spacing("y"))
         np.testing.assert_allclose(result[0, :], 0.0, atol=1e-10)
         np.testing.assert_allclose(result[-1, :], 0.0, atol=1e-10)
         np.testing.assert_allclose(result[:, 0], 0.0, atol=1e-10)
@@ -136,23 +136,23 @@ class TestTensorStrain:
     def test_output_shape(self, grid2d):
         u = jnp.ones((grid2d.Ny, grid2d.Nx))
         v = jnp.ones((grid2d.Ny, grid2d.Nx))
-        result = tensor_strain(u, v, grid2d.dx, grid2d.dy)
+        result = tensor_strain(u, v, grid2d.spacing("x"), grid2d.spacing("y"))
         assert result.shape == (grid2d.Ny, grid2d.Nx)
 
     def test_uniform_field_zero(self, grid2d):
         u = jnp.ones((grid2d.Ny, grid2d.Nx))
         v = jnp.ones((grid2d.Ny, grid2d.Nx))
-        result = tensor_strain(u, v, grid2d.dx, grid2d.dy)
+        result = tensor_strain(u, v, grid2d.spacing("x"), grid2d.spacing("y"))
         np.testing.assert_allclose(result[1:-1, 1:-1], 0.0, atol=1e-10)
 
     def test_linear_fields(self, grid2d):
         """u = a*x, v = b*y => Sn = a - b at T-points."""
         a, b = 5.0, 2.0
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         u = jnp.broadcast_to(a * x, (grid2d.Ny, grid2d.Nx))
         v = jnp.broadcast_to(b * y[:, None], (grid2d.Ny, grid2d.Nx))
-        result = tensor_strain(u, v, grid2d.dx, grid2d.dy)
+        result = tensor_strain(u, v, grid2d.spacing("x"), grid2d.spacing("y"))
         np.testing.assert_allclose(result[1:-1, 1:-1], a - b, rtol=1e-5)
 
 
@@ -261,22 +261,34 @@ class TestQGPotentialVorticity:
     def test_output_shape(self, grid2d):
         psi = jnp.zeros((grid2d.Ny, grid2d.Nx))
         y = jnp.broadcast_to(
-            jnp.arange(grid2d.Ny, dtype=float)[:, None] * grid2d.dy,
+            jnp.arange(grid2d.Ny, dtype=float)[:, None] * grid2d.spacing("y"),
             (grid2d.Ny, grid2d.Nx),
         )
         result = qg_potential_vorticity(
-            psi, f0=1e-4, beta=1e-11, dx=grid2d.dx, dy=grid2d.dy, y=y, y0=0.0
+            psi,
+            f0=1e-4,
+            beta=1e-11,
+            dx=grid2d.spacing("x"),
+            dy=grid2d.spacing("y"),
+            y=y,
+            y0=0.0,
         )
         assert result.shape == (grid2d.Ny, grid2d.Nx)
 
     def test_ghost_ring_zero(self, grid2d):
         psi = jnp.ones((grid2d.Ny, grid2d.Nx))
         y = jnp.broadcast_to(
-            jnp.arange(grid2d.Ny, dtype=float)[:, None] * grid2d.dy,
+            jnp.arange(grid2d.Ny, dtype=float)[:, None] * grid2d.spacing("y"),
             (grid2d.Ny, grid2d.Nx),
         )
         result = qg_potential_vorticity(
-            psi, f0=1e-4, beta=0.0, dx=grid2d.dx, dy=grid2d.dy, y=y, y0=0.0
+            psi,
+            f0=1e-4,
+            beta=0.0,
+            dx=grid2d.spacing("x"),
+            dy=grid2d.spacing("y"),
+            y=y,
+            y0=0.0,
         )
         np.testing.assert_allclose(result[0, :], 0.0, atol=1e-10)
         np.testing.assert_allclose(result[-1, :], 0.0, atol=1e-10)
@@ -286,11 +298,17 @@ class TestQGPotentialVorticity:
         psi = jnp.zeros((grid2d.Ny, grid2d.Nx))
         f0, beta, y0 = 1e-4, 2e-11, 0.5
         y = jnp.broadcast_to(
-            jnp.arange(grid2d.Ny, dtype=float)[:, None] * grid2d.dy,
+            jnp.arange(grid2d.Ny, dtype=float)[:, None] * grid2d.spacing("y"),
             (grid2d.Ny, grid2d.Nx),
         )
         result = qg_potential_vorticity(
-            psi, f0=f0, beta=beta, dx=grid2d.dx, dy=grid2d.dy, y=y, y0=y0
+            psi,
+            f0=f0,
+            beta=beta,
+            dx=grid2d.spacing("x"),
+            dy=grid2d.spacing("y"),
+            y=y,
+            y0=y0,
         )
         expected = beta * (y[1:-1, 1:-1] - y0) / f0
         np.testing.assert_allclose(result[1:-1, 1:-1], expected, rtol=1e-5)
@@ -299,12 +317,18 @@ class TestQGPotentialVorticity:
         """psi = 0.5*c*(x^2 + y^2) => laplacian = 2*c, q = 2*c/f0 + beta*(y-y0)/f0."""
         c = 1.0
         f0, beta, y0 = 1.0, 0.0, 0.0
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y_arr = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y_arr = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         X, Y = jnp.meshgrid(x, y_arr)
         psi = 0.5 * c * (X**2 + Y**2)
         result = qg_potential_vorticity(
-            psi, f0=f0, beta=beta, dx=grid2d.dx, dy=grid2d.dy, y=Y, y0=y0
+            psi,
+            f0=f0,
+            beta=beta,
+            dx=grid2d.spacing("x"),
+            dy=grid2d.spacing("y"),
+            y=Y,
+            y0=y0,
         )
         np.testing.assert_allclose(result[1:-1, 1:-1], 2.0 * c / f0, rtol=1e-5)
 
@@ -313,12 +337,18 @@ class TestQGPotentialVorticity:
         nl = 3
         psi = jnp.zeros((nl, grid2d.Ny, grid2d.Nx))
         y = jnp.broadcast_to(
-            jnp.arange(grid2d.Ny, dtype=float)[:, None] * grid2d.dy,
+            jnp.arange(grid2d.Ny, dtype=float)[:, None] * grid2d.spacing("y"),
             (grid2d.Ny, grid2d.Nx),
         )
         qg_pv = jax.vmap(
             lambda p: qg_potential_vorticity(
-                p, f0=1e-4, beta=1e-11, dx=grid2d.dx, dy=grid2d.dy, y=y, y0=0.0
+                p,
+                f0=1e-4,
+                beta=1e-11,
+                dx=grid2d.spacing("x"),
+                dy=grid2d.spacing("y"),
+                y=y,
+                y0=0.0,
             )
         )
         A = jnp.eye(nl) * 0.01
@@ -338,7 +368,13 @@ class TestQGPotentialVorticity:
         A = a_val * jnp.eye(nl)
         qg_pv = jax.vmap(
             lambda p: qg_potential_vorticity(
-                p, f0=f0, beta=0.0, dx=grid2d.dx, dy=grid2d.dy, y=y, y0=0.0
+                p,
+                f0=f0,
+                beta=0.0,
+                dx=grid2d.spacing("x"),
+                dy=grid2d.spacing("y"),
+                y=y,
+                y0=0.0,
             )
         )
         result = qg_pv(psi) - stretching_term(A, psi)
@@ -354,7 +390,13 @@ class TestQGPotentialVorticity:
         A = 0.01 * jnp.eye(nl)
         qg_pv = jax.vmap(
             lambda p: qg_potential_vorticity(
-                p, f0=1.0, beta=0.0, dx=grid2d.dx, dy=grid2d.dy, y=y, y0=0.0
+                p,
+                f0=1.0,
+                beta=0.0,
+                dx=grid2d.spacing("x"),
+                dy=grid2d.spacing("y"),
+                y=y,
+                y0=0.0,
             )
         )
         result = qg_pv(psi) - stretching_term(A, psi)
@@ -367,8 +409,8 @@ class TestQGPotentialVorticity:
     def test_multilayer_laplacian_per_layer(self, grid2d):
         """Each layer gets its own Laplacian via jax.vmap(); no stretching."""
         f0, beta, y0 = 1.0, 0.0, 0.0
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y_arr = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y_arr = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         X, Y = jnp.meshgrid(x, y_arr)
         # Layer 0: psi = x^2 => lap = 2; Layer 1: psi = y^2 => lap = 2
         psi_0 = 0.5 * X**2
@@ -376,7 +418,13 @@ class TestQGPotentialVorticity:
         psi = jnp.stack([psi_0, psi_1], axis=0)
         qg_pv = jax.vmap(
             lambda p: qg_potential_vorticity(
-                p, f0=f0, beta=beta, dx=grid2d.dx, dy=grid2d.dy, y=Y, y0=y0
+                p,
+                f0=f0,
+                beta=beta,
+                dx=grid2d.spacing("x"),
+                dy=grid2d.spacing("y"),
+                y=Y,
+                y0=y0,
             )
         )
         result = qg_pv(psi)
@@ -394,24 +442,24 @@ class TestTotalEnergy:
     def test_known_value(self, grid2d):
         ke = jnp.ones((grid2d.Ny, grid2d.Nx))
         ape = jnp.ones((grid2d.Ny, grid2d.Nx))
-        result = total_energy(ke, ape, grid2d.dx, grid2d.dy)
+        result = total_energy(ke, ape, grid2d.spacing("x"), grid2d.spacing("y"))
         # Interior is 8x8, each cell = 2 * dx * dy = 2 * 0.125 * 0.125
         n_interior = 8 * 8
-        expected = 2.0 * n_interior * grid2d.dx * grid2d.dy
+        expected = 2.0 * n_interior * grid2d.spacing("x") * grid2d.spacing("y")
         np.testing.assert_allclose(result, expected, rtol=1e-5)
 
     def test_zero_fields(self, grid2d):
         z = jnp.zeros((grid2d.Ny, grid2d.Nx))
-        result = total_energy(z, z, grid2d.dx, grid2d.dy)
+        result = total_energy(z, z, grid2d.spacing("x"), grid2d.spacing("y"))
         np.testing.assert_allclose(result, 0.0, atol=1e-10)
 
 
 class TestTotalEnstrophy:
     def test_known_value(self, grid2d):
         ens = 3.0 * jnp.ones((grid2d.Ny, grid2d.Nx))
-        result = total_enstrophy(ens, grid2d.dx, grid2d.dy)
+        result = total_enstrophy(ens, grid2d.spacing("x"), grid2d.spacing("y"))
         n_interior = 8 * 8
-        expected = 3.0 * n_interior * grid2d.dx * grid2d.dy
+        expected = 3.0 * n_interior * grid2d.spacing("x") * grid2d.spacing("y")
         np.testing.assert_allclose(result, expected, rtol=1e-5)
 
 
@@ -426,106 +474,158 @@ class TestVerticalVelocity:
     def test_output_shape(self, grid3d):
         u = jnp.zeros((grid3d.Nz, grid3d.Ny, grid3d.Nx))
         v = jnp.zeros((grid3d.Nz, grid3d.Ny, grid3d.Nx))
-        w = vertical_velocity(u, v, grid3d.dx, grid3d.dy, grid3d.dz)
+        w = vertical_velocity(
+            u, v, grid3d.spacing("x"), grid3d.spacing("y"), grid3d.spacing("z")
+        )
         assert w.shape == (grid3d.Nz, grid3d.Ny, grid3d.Nx)
 
     def test_zero_divergence(self, grid3d):
         """Non-divergent flow => w = 0 everywhere."""
         u = jnp.ones((grid3d.Nz, grid3d.Ny, grid3d.Nx))
         v = jnp.ones((grid3d.Nz, grid3d.Ny, grid3d.Nx))
-        w = vertical_velocity(u, v, grid3d.dx, grid3d.dy, grid3d.dz)
+        w = vertical_velocity(
+            u, v, grid3d.spacing("x"), grid3d.spacing("y"), grid3d.spacing("z")
+        )
         np.testing.assert_allclose(w, 0.0, atol=1e-10)
 
     def test_floor_and_outside_slab_zero(self, grid3d):
         """w[0] is the rigid floor and w[Nz-1] is outside the domain: both zero."""
-        x = jnp.arange(grid3d.Nx, dtype=float) * grid3d.dx
+        x = jnp.arange(grid3d.Nx, dtype=float) * grid3d.spacing("x")
         u = jnp.broadcast_to(x, (grid3d.Nz, grid3d.Ny, grid3d.Nx))
         v = jnp.zeros((grid3d.Nz, grid3d.Ny, grid3d.Nx))
-        w = vertical_velocity(u, v, grid3d.dx, grid3d.dy, grid3d.dz)
+        w = vertical_velocity(
+            u, v, grid3d.spacing("x"), grid3d.spacing("y"), grid3d.spacing("z")
+        )
         np.testing.assert_array_equal(w[0], 0.0)
         np.testing.assert_array_equal(w[-1], 0.0)
 
     def test_known_w_uniform_divergence(self, grid3d):
         """Uniform du/dx = c on the physical levels => w[k] = -c k dz, k = 1..Nz-2."""
         c = 2.0
-        x = jnp.arange(grid3d.Nx, dtype=float) * grid3d.dx
+        x = jnp.arange(grid3d.Nx, dtype=float) * grid3d.spacing("x")
         u = jnp.broadcast_to(c * x, (grid3d.Nz, grid3d.Ny, grid3d.Nx))
         v = jnp.zeros((grid3d.Nz, grid3d.Ny, grid3d.Nx))
-        w = vertical_velocity(u, v, grid3d.dx, grid3d.dy, grid3d.dz)
+        w = vertical_velocity(
+            u, v, grid3d.spacing("x"), grid3d.spacing("y"), grid3d.spacing("z")
+        )
         for k in range(1, grid3d.Nz - 1):
             np.testing.assert_allclose(
-                w[k, 1:-1, 1:-1], -k * c * grid3d.dz, rtol=1e-12, err_msg=f"w[{k}]"
+                w[k, 1:-1, 1:-1],
+                -k * c * grid3d.spacing("z"),
+                rtol=1e-12,
+                err_msg=f"w[{k}]",
             )
 
     def test_z_ghost_slabs_are_not_read(self, grid3d):
         """BC-filled (non-zero, divergent) z-ghosts leave w unchanged (#290)."""
-        x = jnp.arange(grid3d.Nx, dtype=float) * grid3d.dx
-        y = jnp.arange(grid3d.Ny, dtype=float)[:, None] * grid3d.dy
+        x = jnp.arange(grid3d.Nx, dtype=float) * grid3d.spacing("x")
+        y = jnp.arange(grid3d.Ny, dtype=float)[:, None] * grid3d.spacing("y")
         u = jnp.broadcast_to(x, (grid3d.Nz, grid3d.Ny, grid3d.Nx))
         v = jnp.zeros((grid3d.Nz, grid3d.Ny, grid3d.Nx))
-        w_ref = vertical_velocity(u, v, grid3d.dx, grid3d.dy, grid3d.dz)
+        w_ref = vertical_velocity(
+            u, v, grid3d.spacing("x"), grid3d.spacing("y"), grid3d.spacing("z")
+        )
         # put a strongly divergent field in both z-ghost slabs
         junk_u = 7.0 * x**2 + 3.0 * y
         junk_v = -5.0 * y**3 + x
         u_g = u.at[0].set(junk_u).at[-1].set(-junk_u)
         v_g = v.at[0].set(junk_v).at[-1].set(2.0 * junk_v)
-        w = vertical_velocity(u_g, v_g, grid3d.dx, grid3d.dy, grid3d.dz)
+        w = vertical_velocity(
+            u_g, v_g, grid3d.spacing("x"), grid3d.spacing("y"), grid3d.spacing("z")
+        )
         np.testing.assert_array_equal(w, w_ref)
         # the issue's repro: du/dx = 1 everywhere, w[1] = -dz (not -2 dz)
-        np.testing.assert_allclose(w[1, 2, 2], -grid3d.dz, rtol=1e-12)
+        np.testing.assert_allclose(w[1, 2, 2], -grid3d.spacing("z"), rtol=1e-12)
 
     def test_mask3d(self, grid3d):
         """Mask3D: dry columns have zero divergence; output zeroed on dry W-faces."""
-        x = jnp.arange(grid3d.Nx, dtype=float) * grid3d.dx
+        x = jnp.arange(grid3d.Nx, dtype=float) * grid3d.spacing("x")
         u = jnp.broadcast_to(x, (grid3d.Nz, grid3d.Ny, grid3d.Nx))
         v = jnp.zeros((grid3d.Nz, grid3d.Ny, grid3d.Nx))
         wet = np.ones((grid3d.Nz, grid3d.Ny, grid3d.Nx), dtype=bool)
         wet[:, :, :3] = False  # a land block on the west side, all depths
         mask = Mask3D.from_mask(wet)
-        w = vertical_velocity(u, v, grid3d.dx, grid3d.dy, grid3d.dz, mask=mask)
+        w = vertical_velocity(
+            u,
+            v,
+            grid3d.spacing("x"),
+            grid3d.spacing("y"),
+            grid3d.spacing("z"),
+            mask=mask,
+        )
         assert w.shape == mask.w.shape
         np.testing.assert_array_equal(np.asarray(w)[~np.asarray(mask.w)], 0.0)
         # = the unmasked result on the masked velocities (no flow through the
         # coast faces), zeroed on dry W-faces
         w_ref = vertical_velocity(
-            u * mask.u, v * mask.v, grid3d.dx, grid3d.dy, grid3d.dz
+            u * mask.u,
+            v * mask.v,
+            grid3d.spacing("x"),
+            grid3d.spacing("y"),
+            grid3d.spacing("z"),
         )
         np.testing.assert_allclose(jnp.where(mask.w, w_ref, 0.0), w, rtol=0, atol=1e-14)
-        w_all = vertical_velocity(u, v, grid3d.dx, grid3d.dy, grid3d.dz)
+        w_all = vertical_velocity(
+            u, v, grid3d.spacing("x"), grid3d.spacing("y"), grid3d.spacing("z")
+        )
         # an all-ocean mask equals mask=None
         ocean = Mask3D.from_mask(np.ones_like(wet))
         np.testing.assert_array_equal(
-            vertical_velocity(u, v, grid3d.dx, grid3d.dy, grid3d.dz, mask=ocean)[
-                1:-1, 1:-1, 1:-1
-            ],
+            vertical_velocity(
+                u,
+                v,
+                grid3d.spacing("x"),
+                grid3d.spacing("y"),
+                grid3d.spacing("z"),
+                mask=ocean,
+            )[1:-1, 1:-1, 1:-1],
             w_all[1:-1, 1:-1, 1:-1],
         )
 
     def test_mask3d_nan_land_stays_finite(self, grid3d):
         """NaN on dry faces never reaches a wet W-face (contract 3)."""
-        x = jnp.arange(grid3d.Nx, dtype=float) * grid3d.dx
+        x = jnp.arange(grid3d.Nx, dtype=float) * grid3d.spacing("x")
         wet = np.ones((grid3d.Nz, grid3d.Ny, grid3d.Nx), dtype=bool)
         wet[:, :, :3] = False
         mask = Mask3D.from_mask(wet)
         u = jnp.where(mask.u, jnp.broadcast_to(x, wet.shape), jnp.nan)
         v = jnp.where(mask.v, 0.0, jnp.nan)
-        w = vertical_velocity(u, v, grid3d.dx, grid3d.dy, grid3d.dz, mask=mask)
+        w = vertical_velocity(
+            u,
+            v,
+            grid3d.spacing("x"),
+            grid3d.spacing("y"),
+            grid3d.spacing("z"),
+            mask=mask,
+        )
         assert bool(jnp.all(jnp.isfinite(w)))
         grad = jax.grad(
             lambda a: vertical_velocity(
-                a, v, grid3d.dx, grid3d.dy, grid3d.dz, mask=mask
+                a,
+                v,
+                grid3d.spacing("x"),
+                grid3d.spacing("y"),
+                grid3d.spacing("z"),
+                mask=mask,
             ).sum()
         )(u)
         assert bool(jnp.all(jnp.isfinite(grad)))
 
     def test_float_mask_is_deprecated(self, grid3d):
         """A raw float mask still zeroes the divergence, with a DeprecationWarning."""
-        x = jnp.arange(grid3d.Nx, dtype=float) * grid3d.dx
+        x = jnp.arange(grid3d.Nx, dtype=float) * grid3d.spacing("x")
         u = jnp.broadcast_to(x, (grid3d.Nz, grid3d.Ny, grid3d.Nx))
         v = jnp.zeros((grid3d.Nz, grid3d.Ny, grid3d.Nx))
         mask = jnp.zeros((grid3d.Nz, grid3d.Ny, grid3d.Nx))
         with pytest.warns(DeprecationWarning, match="Mask3D"):
-            w = vertical_velocity(u, v, grid3d.dx, grid3d.dy, grid3d.dz, mask=mask)
+            w = vertical_velocity(
+                u,
+                v,
+                grid3d.spacing("x"),
+                grid3d.spacing("y"),
+                grid3d.spacing("z"),
+                mask=mask,
+            )
         np.testing.assert_allclose(w, 0.0, atol=1e-10)
 
 
@@ -550,8 +650,8 @@ class TestRelativeVorticityCgrid:
     def test_solid_body_rotation(self, grid2d):
         """u = -c*y, v = c*x => zeta = 2c."""
         c = 1.5
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         u = jnp.broadcast_to(-c * y[:, None], (grid2d.Ny, grid2d.Nx))
         v = jnp.broadcast_to(c * x, (grid2d.Ny, grid2d.Nx))
         result = Difference2D(grid=grid2d).curl(u, v)
@@ -559,8 +659,8 @@ class TestRelativeVorticityCgrid:
 
     def test_ghost_ring_zero(self, grid2d):
         c = 1.0
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         u = jnp.broadcast_to(-c * y[:, None], (grid2d.Ny, grid2d.Nx))
         v = jnp.broadcast_to(c * x, (grid2d.Ny, grid2d.Nx))
         result = Difference2D(grid=grid2d).curl(u, v)
@@ -665,7 +765,13 @@ class TestJITCompatibility:
         psi = jnp.ones((grid2d.Ny, grid2d.Nx))
         y = jnp.zeros((grid2d.Ny, grid2d.Nx))
         fn = lambda p: qg_potential_vorticity(
-            p, f0=1.0, beta=0.0, dx=grid2d.dx, dy=grid2d.dy, y=y, y0=0.0
+            p,
+            f0=1.0,
+            beta=0.0,
+            dx=grid2d.spacing("x"),
+            dy=grid2d.spacing("y"),
+            y=y,
+            y0=0.0,
         )
         result_eager = fn(psi)
         result_jit = jax.jit(fn)(psi)
@@ -674,7 +780,9 @@ class TestJITCompatibility:
     def test_vertical_velocity_jit(self, grid3d):
         u = jnp.ones((grid3d.Nz, grid3d.Ny, grid3d.Nx))
         v = jnp.ones((grid3d.Nz, grid3d.Ny, grid3d.Nx))
-        fn = lambda u, v: vertical_velocity(u, v, grid3d.dx, grid3d.dy, grid3d.dz)
+        fn = lambda u, v: vertical_velocity(
+            u, v, grid3d.spacing("x"), grid3d.spacing("y"), grid3d.spacing("z")
+        )
         result_eager = fn(u, v)
         result_jit = jax.jit(fn)(u, v)
         np.testing.assert_allclose(result_jit, result_eager, atol=1e-10)
@@ -740,5 +848,5 @@ def test_deprecated_relative_vorticity_cgrid_warns_and_matches(grid2d):
         relative_vorticity_cgrid = gridax.relative_vorticity_cgrid
     np.testing.assert_array_equal(
         Difference2D(grid=grid2d).curl(u, v),
-        relative_vorticity_cgrid(u, v, grid2d.dx, grid2d.dy),
+        relative_vorticity_cgrid(u, v, grid2d.spacing("x"), grid2d.spacing("y")),
     )

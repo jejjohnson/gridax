@@ -14,8 +14,6 @@ import equinox as eqx
 import gridax as fvx
 from gridax.pipekit import (
     GridOperator,
-    as_grid_spec,
-    build_grid,
     over_leading,
 )
 from gridax.pipekit.testing import check_operator, compiled_hlo
@@ -25,6 +23,7 @@ import numpy as np
 from pipekit_ops import Operator
 
 SPEC = (8, 6, 2.0, 1.5)
+GRID = fvx.CartesianGrid2D.from_interior(*SPEC)
 
 
 class ScaledLaplacian(GridOperator):
@@ -33,38 +32,43 @@ class ScaledLaplacian(GridOperator):
     kappa: jax.Array = eqx.field(converter=jnp.asarray, default=1.0)
 
     def _apply(self, h):
-        return self.kappa * fvx.Difference2D(grid=self.cartesian_grid).laplacian(h)
+        return self.kappa * fvx.Difference2D(grid=self.grid).laplacian(h)
 
 
 def _field(seed: int = 0) -> jax.Array:
-    g = build_grid(SPEC)
+    g = GRID
     return jax.random.normal(jax.random.key(seed), (g.Ny, g.Nx))
 
 
-class TestGridSpec:
-    def test_normalises_lists_and_grids(self):
-        assert as_grid_spec([8, 6, 2, 1.5]) == (8, 6, 2.0, 1.5)
-        grid = fvx.CartesianGrid2D.from_interior(8, 6, 2.0, 1.5)
-        assert as_grid_spec(grid) == SPEC
+class TestGridField:
+    def test_takes_a_grid_or_its_config(self):
+        for grid in (GRID, SPEC, list(SPEC)):
+            assert ScaledLaplacian(grid=grid).grid == GRID
 
     @pytest.mark.parametrize("bad", [(8, 6, 2.0), (0, 6, 2.0, 1.5)])
     def test_rejects_bad_specs(self, bad):
-        with pytest.raises(ValueError, match="grid spec"):
-            as_grid_spec(bad)
+        with pytest.raises(ValueError, match="grid"):
+            ScaledLaplacian(grid=bad)
 
-    def test_build_grid_matches_from_interior_and_is_cached(self):
-        g = build_grid(SPEC)
-        ref = fvx.CartesianGrid2D.from_interior(*SPEC)
-        assert (g.Nx, g.Ny, g.dx, g.dy) == (ref.Nx, ref.Ny, ref.dx, ref.dy)
-        assert build_grid(SPEC) is g
-
-    def test_grid_field_is_static_and_round_trips_json(self):
-        op = ScaledLaplacian(grid=list(SPEC), kappa=0.5)
-        assert op.grid == SPEC
-        assert len(jax.tree.leaves(op)) == 1  # kappa only; the grid is static
+    def test_grid_round_trips_json(self):
+        op = ScaledLaplacian(grid=GRID, kappa=0.5)
         state = json.loads(json.dumps(op.state))
+        assert state["config"]["grid"] == list(SPEC)
         rebuilt = Operator.from_state(state)
-        assert rebuilt.grid == SPEC
+        assert rebuilt.grid == GRID
+
+    def test_one_compile_for_grids_of_one_shape(self):
+        traces = []
+
+        @eqx.filter_jit
+        def run(op, h):
+            traces.append(1)
+            return op(h)
+
+        for length in (1.0, 2.0):
+            grid = fvx.CartesianGrid2D.from_interior(8, 6, length, 1.5)
+            run(ScaledLaplacian(grid=grid), _field())
+        assert len(traces) == 1
 
 
 class TestOverLeading:
@@ -101,7 +105,7 @@ class TestCheckOperator:
     def test_matches_tier_a(self):
         h = _field(2)
         out = ScaledLaplacian(grid=SPEC, kappa=0.5)(h)
-        ref = 0.5 * fvx.Difference2D(grid=build_grid(SPEC)).laplacian(h)
+        ref = 0.5 * fvx.Difference2D(grid=GRID).laplacian(h)
         np.testing.assert_array_equal(out, ref)
 
     @pytest.mark.slow  # compiles the operator several times (~2 s)

@@ -494,8 +494,8 @@ fx = rusanov_flux(q, u[:, :-1], axis=-1, eps=0.0)  # [Ny, Nx-1]
 fy = rusanov_flux(q, v[:-1, :], axis=-2, eps=0.0)  # [Ny-1, Nx]
 dq = interior(
     -(
-        jnp.diff(fx, axis=-1)[1:-1, :] / grid.dx
-        + jnp.diff(fy, axis=-2)[:, 1:-1] / grid.dy
+        jnp.diff(fx, axis=-1)[1:-1, :] / grid.spacing("x")
+        + jnp.diff(fy, axis=-2)[:, 1:-1] / grid.spacing("y")
     ),
     q,
 )  # [Ny, Nx]; reads the wall faces, like wall="open"

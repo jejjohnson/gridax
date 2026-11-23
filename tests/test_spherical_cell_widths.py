@@ -65,33 +65,27 @@ def grid_with_cos(cos_column):
     nx = 5
     cos_2d = jnp.broadcast_to(cos_column[:, None], (ny, nx))
     dlon = dlat = 0.1
-    lat = jnp.broadcast_to(
-        jnp.arccos(jnp.clip(cos_column, -1.0, 1.0))[:, None], (ny, nx)
-    )
-    lon = jnp.broadcast_to(jnp.arange(nx, dtype=jnp.float32) * dlon, (ny, nx))
+    lat = jnp.arccos(jnp.clip(cos_column, -1.0, 1.0))
+    lon = jnp.arange(nx, dtype=jnp.float32) * dlon
     return SphericalGrid2D(
         Nx=nx,
         Ny=ny,
         Lx=nx * dlon,
         Ly=ny * dlat,
-        dx=dlon,
-        dy=dlat,
         dlon=dlon,
         dlat=dlat,
         R=1.0,
-        cos_lat_T=cos_2d,
-        cos_lat_U=cos_2d,
-        cos_lat_V=cos_2d,
-        cos_lat_X=cos_2d,
-        lat_T=lat,
-        lon_T=lon,
+        _lat=lat,
+        _lon=lon,
+        _cos_lat_T=cos_2d,
+        _cos_lat_V=cos_2d,
     )
 
 
 class TestCellWidths2D:
     def test_dx_T_matches_metric_formula(self, grid2d_earth):
-        expected = grid2d_earth.R * grid2d_earth.cos_lat_T * grid2d_earth.dlon
-        np.testing.assert_allclose(grid2d_earth.dx_T, expected, rtol=1e-12)
+        expected = grid2d_earth.R * grid2d_earth._cos_lat("T") * grid2d_earth.dlon
+        np.testing.assert_allclose(grid2d_earth.spacing("x"), expected, rtol=1e-12)
 
     def test_dx_T_equals_uniform_dx_at_equator(self):
         """Where cos(lat) == 1 the true width collapses to the uniform ``dx``."""
@@ -102,43 +96,54 @@ class TestCellWidths2D:
             lat_range=(-20.0, 20.0),
             R=SPHERE.semi_major,
         )
-        lat = np.asarray(grid.lat_T)
+        lat = np.broadcast_to(grid.coords("y")[:, None], grid.shape)
         # Rows are cell centres: the equator is a row for a symmetric range
         # with an odd number of interior rows.
         j_eq = int(np.argmin(np.abs(lat[:, 0])))
         assert np.isclose(lat[j_eq, 0], 0.0, atol=1e-6)
-        np.testing.assert_allclose(np.asarray(grid.dx_T)[j_eq, :], grid.dx, rtol=1e-6)
+        np.testing.assert_allclose(
+            np.asarray(grid.spacing("x"))[j_eq, :], grid.R * grid.dlon, rtol=1e-6
+        )
 
     def test_dx_T_shrinks_polewards(self, grid2d):
         """Width decreases with |latitude| (northern half, ties excluded)."""
-        lat = np.asarray(grid2d.lat_T)[:, 0]
-        dx = np.asarray(grid2d.dx_T)[:, 0]
+        lat = np.asarray(grid2d.coords("y"))
+        dx = np.asarray(grid2d.spacing("x"))[:, 0]
         north = lat >= 0.0
         order = np.argsort(lat[north])
         assert np.all(np.diff(dx[north][order]) < 0.0)
 
     def test_dx_V_uses_the_V_point_latitude(self, grid2d):
-        expected = grid2d.R * grid2d.cos_lat_V * grid2d.dlon
-        np.testing.assert_allclose(grid2d.dx_V, expected, rtol=1e-12)
+        expected = grid2d.R * grid2d._cos_lat("V") * grid2d.dlon
+        np.testing.assert_allclose(grid2d.spacing("x", at="V"), expected, rtol=1e-12)
         # V sits half a cell north of T, so the widths genuinely differ.
-        assert not np.allclose(grid2d.dx_V, grid2d.dx_T)
+        assert not np.allclose(grid2d.spacing("x", at="V"), grid2d.spacing("x"))
 
     def test_dy_T_is_uniform_and_matches_dy(self, grid2d_earth):
-        assert grid2d_earth.dy_T == pytest.approx(grid2d_earth.R * grid2d_earth.dlat)
-        assert grid2d_earth.dy_T == pytest.approx(grid2d_earth.dy)
+        assert grid2d_earth.spacing("y") == pytest.approx(
+            grid2d_earth.R * grid2d_earth.dlat
+        )
+        assert grid2d_earth.spacing("y") == pytest.approx(
+            grid2d_earth.Ly / (grid2d_earth.Ny - 2)
+        )
 
     def test_unit_radius_grid_gives_arc_lengths(self, grid2d):
         """``R=1`` grids carry nondimensional arc lengths ``cos(lat)*dlon``."""
-        expected = np.cos(np.asarray(grid2d.lat_T)) * grid2d.dlon
-        np.testing.assert_allclose(grid2d.dx_T, expected, rtol=1e-12)
+        expected = (
+            np.broadcast_to(np.cos(grid2d.coords("y")[:, None]), grid2d.shape)
+            * grid2d.dlon
+        )
+        np.testing.assert_allclose(grid2d.spacing("x"), expected, rtol=1e-12)
 
 
 class TestMinCellWidth:
     def test_attained_at_highest_interior_latitude(self, grid2d):
-        interior_lat = np.asarray(grid2d.lat_T)[1:-1, 1:-1]
-        interior_dx = np.asarray(grid2d.dx_T)[1:-1, 1:-1]
+        interior_lat = np.broadcast_to(grid2d.coords("y")[:, None], grid2d.shape)[
+            1:-1, 1:-1
+        ]
+        interior_dx = np.asarray(grid2d.spacing("x"))[1:-1, 1:-1]
         j_pole = np.unravel_index(np.argmax(np.abs(interior_lat)), interior_lat.shape)
-        expected = min(float(interior_dx[j_pole]), grid2d.dy_T)
+        expected = min(float(interior_dx[j_pole]), grid2d.spacing("y"))
         assert float(grid2d.min_cell_width) == pytest.approx(expected, rel=1e-12)
 
     def test_excludes_ghost_rows(self):
@@ -150,18 +155,18 @@ class TestMinCellWidth:
             lat_range=(-60.0, 60.0),
             R=1.0,
         )
-        ghost_lat = np.asarray(grid.lat_T)[[0, -1], 0]
+        ghost_lat = np.asarray(grid.coords("y"))[[0, -1]]
         # Sanity: the ghost ring sits outside the physical latitude band.
         assert np.max(np.abs(ghost_lat)) > np.deg2rad(60.0)
-        interior_dx = np.asarray(grid.dx_T)[1:-1, 1:-1]
+        interior_dx = np.asarray(grid.spacing("x"))[1:-1, 1:-1]
         assert float(grid.min_cell_width) == pytest.approx(
-            min(interior_dx.min(), grid.dy_T), rel=1e-6
+            min(interior_dx.min(), grid.spacing("y")), rel=1e-6
         )
 
     def test_clamps_a_negative_interior_width_to_zero(self):
         """A polar row whose cosine underflows negative must not go below 0."""
         grid = grid_with_cos([0.5, -4.371e-08, 0.5, 0.5])
-        raw = np.asarray(grid.dx_T)[1:-1, 1:-1]
+        raw = np.asarray(grid.spacing("x"))[1:-1, 1:-1]
         assert raw.min() < 0.0  # the unclamped metric really does go negative
         assert float(grid.min_cell_width) == 0.0
 
@@ -174,7 +179,7 @@ class TestMinCellWidth:
         then pick an unusable step from it.
         """
         grid = grid_with_cos([0.5, 6.123234e-17, 0.5, 0.5])
-        raw = np.asarray(grid.dx_T)[1:-1, 1:-1]
+        raw = np.asarray(grid.spacing("x"))[1:-1, 1:-1]
         assert raw.min() > 0.0  # positive, and still meaningless
         assert float(grid.min_cell_width) == 0.0
 
@@ -192,8 +197,8 @@ class TestMinCellWidth:
             lat_range=(-90.0, 90.0),
             R=1.0,
         )
-        raw = np.asarray(grid.dx_T)[1:-1, 1:-1]
-        expected = min(max(float(raw.min()), 0.0), grid.dy_T)
+        raw = np.asarray(grid.spacing("x"))[1:-1, 1:-1]
+        expected = min(max(float(raw.min()), 0.0), grid.spacing("y"))
         assert float(grid.min_cell_width) >= 0.0
         assert float(grid.min_cell_width) == pytest.approx(expected, abs=1e-12)
 
@@ -206,7 +211,7 @@ class TestMinCellWidth:
             lat_range=(-10.0, 10.0),
             R=1.0,
         )
-        assert float(grid.min_cell_width) == pytest.approx(grid.dy_T, rel=1e-12)
+        assert float(grid.min_cell_width) == pytest.approx(grid.spacing("y"), rel=1e-12)
 
 
 class TestMaxAspect:
@@ -221,7 +226,7 @@ class TestMaxAspect:
             R=1.0,
         )
         assert grid.dlon == pytest.approx(grid.dlat)
-        interior_cos = np.asarray(grid.cos_lat_T)[1:-1, 1:-1]
+        interior_cos = np.asarray(grid._cos_lat("T"))[1:-1, 1:-1]
         # The interior stops short of the poles, so no cell degenerates.
         assert interior_cos.min() > 0.0
         assert float(grid.max_aspect) == pytest.approx(
@@ -254,14 +259,16 @@ class TestMaxAspect:
 class TestCellWidths3D:
     def test_delegates_to_horizontal_grid(self, grid3d):
         h = grid3d.horizontal_grid()
-        np.testing.assert_allclose(grid3d.dx_T, h.dx_T, rtol=1e-12)
-        np.testing.assert_allclose(grid3d.dx_V, h.dx_V, rtol=1e-12)
-        assert grid3d.dy_T == pytest.approx(h.dy_T)
+        np.testing.assert_allclose(grid3d.spacing("x"), h.spacing("x"), rtol=1e-12)
+        np.testing.assert_allclose(
+            grid3d.spacing("x", at="V"), h.spacing("x", at="V"), rtol=1e-12
+        )
+        assert grid3d.spacing("y") == pytest.approx(h.spacing("y"))
         assert float(grid3d.min_cell_width) == pytest.approx(float(h.min_cell_width))
         assert float(grid3d.max_aspect) == pytest.approx(float(h.max_aspect))
 
     def test_widths_are_two_dimensional(self, grid3d):
-        assert grid3d.dx_T.shape == (grid3d.Ny, grid3d.Nx)
+        assert grid3d.spacing("x").shape == (grid3d.Ny, grid3d.Nx)
 
     def test_min_cell_width_ignores_dz(self, grid3d):
         """A very thin vertical layer must not change the horizontal minimum."""
@@ -318,7 +325,7 @@ class TestGenuinelyNegativeWidths:
     def test_the_raw_metric_really_is_negative(self):
         """So the reductions are doing the work, not the metric."""
         grid = grid_with_cos([0.5, -0.25, 0.5, 0.5])
-        assert np.asarray(grid.dx_T)[1:-1, 1:-1].min() < 0.0
+        assert np.asarray(grid.spacing("x"))[1:-1, 1:-1].min() < 0.0
 
     def test_min_cell_width_is_never_negative(self):
         for degenerate_cos in (-0.9, -0.25, -4.371e-08, 0.0, 6.123234e-17):

@@ -193,7 +193,7 @@ class TestConsistencyWithAdvection2D:
 
         # Reconstruct from face fluxes
         fe, fn = uv_center_flux(h, u, v, grid, method=method)
-        dx, dy = grid.dx, grid.dy
+        dx, dy = grid.spacing("x"), grid.spacing("y")
         tendency_from_flux = interior(
             -(
                 (fe[2:-2, 2:-2] - fe[2:-2, 1:-3]) / dx
@@ -294,7 +294,7 @@ class TestMaskedFlux:
         tendency = adv(h, u, v, method="weno5")
 
         fe, fn = uv_center_flux(h, u, v, grid, method="weno5", mask=mask)
-        dx, dy = grid.dx, grid.dy
+        dx, dy = grid.spacing("x"), grid.spacing("y")
         tendency_from_flux = interior(
             -(
                 (fe[2:-2, 2:-2] - fe[2:-2, 1:-3]) / dx
@@ -330,7 +330,7 @@ class TestConservation:
         fe, fn = uv_center_flux(h, u, v, grid, method="weno5")
 
         # Divergence at each interior cell should be zero
-        dx, dy = grid.dx, grid.dy
+        dx, dy = grid.spacing("x"), grid.spacing("y")
         div = (fe[2:-2, 2:-2] - fe[2:-2, 1:-3]) / dx + (
             fn[2:-2, 2:-2] - fn[1:-3, 2:-2]
         ) / dy

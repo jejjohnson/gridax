@@ -37,6 +37,7 @@ from gridax._src.backend import set_at
 from gridax._src.grid import CartesianGrid1D, CartesianGrid2D, CartesianGrid3D
 from gridax._src.mask import Mask1D, Mask2D, Mask3D
 from gridax._src.operators._ghost import interior
+from gridax._src.operators._utils import _spacing
 from gridax._src.pytree import array_namespace, pytree_dataclass
 
 if TYPE_CHECKING:
@@ -352,11 +353,15 @@ class Advection1D:
             # reads the ghost ring, then write the full interior [1:-1].
             fe = set_at(fe, np.s_[0], _wall_upwind_flux(u[0], h[0], h[1]))
             fe = set_at(fe, np.s_[-2], _wall_upwind_flux(u[-2], h[-2], h[-1]))
-            out = set_at(out, np.s_[1:-1], -(fe[1:-1] - fe[0:-2]) / self.grid.dx)
+            out = set_at(
+                out, np.s_[1:-1], -(fe[1:-1] - fe[0:-2]) / _spacing(self.grid, "x", fe)
+            )
         else:
             # Only use face fluxes that are defined by the reconstruction
             # scheme, avoiding the ghost-ring entries fe[0] and fe[-1].
-            out = set_at(out, np.s_[2:-2], -(fe[2:-2] - fe[1:-3]) / self.grid.dx)
+            out = set_at(
+                out, np.s_[2:-2], -(fe[2:-2] - fe[1:-3]) / _spacing(self.grid, "x", fe)
+            )
         if self.mask is not None:
             out = xp.where(self.mask.h, out, 0.0)
         return out
@@ -534,8 +539,8 @@ class Advection2D:
                 out,
                 np.s_[1:-1, 1:-1],
                 -(
-                    (fe[1:-1, 1:-1] - fe[1:-1, 0:-2]) / self.grid.dx
-                    + (fn[1:-1, 1:-1] - fn[0:-2, 1:-1]) / self.grid.dy
+                    (fe[1:-1, 1:-1] - fe[1:-1, 0:-2]) / _spacing(self.grid, "x", fe)
+                    + (fn[1:-1, 1:-1] - fn[0:-2, 1:-1]) / _spacing(self.grid, "y", fn)
                 ),
             )
         else:
@@ -543,8 +548,8 @@ class Advection2D:
             # avoiding ghost-ring flux entries.
             out = interior(
                 -(
-                    (fe[2:-2, 2:-2] - fe[2:-2, 1:-3]) / self.grid.dx
-                    + (fn[2:-2, 2:-2] - fn[1:-3, 2:-2]) / self.grid.dy
+                    (fe[2:-2, 2:-2] - fe[2:-2, 1:-3]) / _spacing(self.grid, "x", fe)
+                    + (fn[2:-2, 2:-2] - fn[1:-3, 2:-2]) / _spacing(self.grid, "y", fn)
                 ),
                 h,
                 ghost=2,
@@ -731,8 +736,10 @@ class Advection3D:
                 out,
                 np.s_[1:-1, 1:-1, 1:-1],
                 -(
-                    (fe[1:-1, 1:-1, 1:-1] - fe[1:-1, 1:-1, 0:-2]) / self.grid.dx
-                    + (fn[1:-1, 1:-1, 1:-1] - fn[1:-1, 0:-2, 1:-1]) / self.grid.dy
+                    (fe[1:-1, 1:-1, 1:-1] - fe[1:-1, 1:-1, 0:-2])
+                    / _spacing(self.grid, "x", fe)
+                    + (fn[1:-1, 1:-1, 1:-1] - fn[1:-1, 0:-2, 1:-1])
+                    / _spacing(self.grid, "y", fn)
                 ),
             )
         else:
@@ -745,8 +752,10 @@ class Advection3D:
                 out,
                 np.s_[1:-1, 2:-2, 2:-2],
                 -(
-                    (fe[1:-1, 2:-2, 2:-2] - fe[1:-1, 2:-2, 1:-3]) / self.grid.dx
-                    + (fn[1:-1, 2:-2, 2:-2] - fn[1:-1, 1:-3, 2:-2]) / self.grid.dy
+                    (fe[1:-1, 2:-2, 2:-2] - fe[1:-1, 2:-2, 1:-3])
+                    / _spacing(self.grid, "x", fe)
+                    + (fn[1:-1, 2:-2, 2:-2] - fn[1:-1, 1:-3, 2:-2])
+                    / _spacing(self.grid, "y", fn)
                 ),
             )
         if self.mask is not None:

@@ -192,8 +192,8 @@ def test_qg_geostrophic_velocity_helper_is_nearly_nondivergent() -> None:
     diff = Difference2D(grid=grid)
     interp = Interpolation2D(grid=grid)
 
-    x = (np.arange(config.nx) + 0.5) * grid.dx
-    y = (np.arange(config.ny) + 0.5) * grid.dy
+    x = (np.arange(config.nx) + 0.5) * grid.spacing("x")
+    y = (np.arange(config.ny) + 0.5) * grid.spacing("y")
     x2d, y2d = np.meshgrid(x, y)
     psi_interior = np.sin(2.0 * np.pi * x2d / config.Lx) * np.sin(
         2.0 * np.pi * y2d / config.Ly

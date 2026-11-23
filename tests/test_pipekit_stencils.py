@@ -18,7 +18,6 @@ from pipekit_ops import Graph, Input
 from tests.fixtures.inputs import make_grid_2d, make_mask_2d
 
 GRID = make_grid_2d()
-SPEC = fp.as_grid_spec(GRID)
 MASK = make_mask_2d()
 D = fvx.Difference2D(grid=GRID)
 I = fvx.Interpolation2D(grid=GRID)
@@ -29,7 +28,7 @@ def _field(seed: int) -> jax.Array:
 
 
 def _f_beta(f0: float, beta: float) -> jax.Array:
-    y = jnp.arange(GRID.Ny) * GRID.dy
+    y = jnp.arange(GRID.Ny) * GRID.spacing("y")
     Y = jnp.broadcast_to(y[:, None], (GRID.Ny, GRID.Nx))
     return f0 + beta * (Y - jnp.mean(Y))
 
@@ -39,23 +38,23 @@ CASES = [
     *[
         (
             f"Difference-{a}-{s}{d}",
-            fp.Difference(grid=SPEC, axis=a, src=s, dst=d),
+            fp.Difference(grid=GRID, axis=a, src=s, dst=d),
             getattr(D, m),
             1,
         )
         for (a, s, d), m in sorted(fp.DIFFERENCES.items())
     ],
     *[
-        (f"Interp-{s}{d}", fp.Interp(grid=SPEC, src=s, dst=d), getattr(I, m), 1)
+        (f"Interp-{s}{d}", fp.Interp(grid=GRID, src=s, dst=d), getattr(I, m), 1)
         for (s, d), m in sorted(fp.INTERPOLATIONS.items())
     ],
-    ("Divergence", fp.Divergence(grid=SPEC), D.divergence, 2),
-    ("Curl", fp.Curl(grid=SPEC), D.curl, 2),
-    ("Laplacian", fp.Laplacian(grid=SPEC), D.laplacian, 1),
-    ("GradPerp", fp.GradPerp(grid=SPEC), D.grad_perp, 1),
+    ("Divergence", fp.Divergence(grid=GRID), D.divergence, 2),
+    ("Curl", fp.Curl(grid=GRID), D.curl, 2),
+    ("Laplacian", fp.Laplacian(grid=GRID), D.laplacian, 1),
+    ("GradPerp", fp.GradPerp(grid=GRID), D.grad_perp, 1),
     (
         "Coriolis",
-        fp.Coriolis(grid=SPEC, f0=2.0, beta=0.3),
+        fp.Coriolis(grid=GRID, f0=2.0, beta=0.3),
         lambda u, v: fvx.Coriolis2D(grid=GRID)(u, v, _f_beta(2.0, 0.3)),
         2,
     ),
@@ -114,8 +113,8 @@ def test_tables_cover_every_tier_a_method():
 @pytest.mark.parametrize(
     ("make", "match"),
     [
-        (lambda: fp.Difference(grid=SPEC, axis="x", src="T", dst="V"), "x/T/U"),
-        (lambda: fp.Interp(grid=SPEC, src="T", dst="T"), "T/U"),
+        (lambda: fp.Difference(grid=GRID, axis="x", src="T", dst="V"), "x/T/U"),
+        (lambda: fp.Interp(grid=GRID, src="T", dst="T"), "T/U"),
         (lambda: fp.FillGhosts(kind="reflect"), "periodic"),
         (lambda: fp.ApplyMask(mask=MASK, stagger="W"), "T"),
     ],
@@ -131,12 +130,12 @@ def test_lincomb_checks_its_arity():
 
 
 def test_pick_selects_a_tuple_output():
-    u, v = fp.GradPerp(grid=SPEC)(_field(0))
+    u, v = fp.GradPerp(grid=GRID)(_field(0))
     np.testing.assert_array_equal(fp.Pick(index=1)((u, v)), v)
 
 
 def test_coriolis_parameters_are_learnable():
-    op = fp.Coriolis(grid=SPEC, f0=2.0, beta=0.3)
+    op = fp.Coriolis(grid=GRID, f0=2.0, beta=0.3)
     u, v = _field(0), _field(1)
 
     def loss(o):
@@ -146,8 +145,8 @@ def test_coriolis_parameters_are_learnable():
     grads = eqx.filter_grad(loss)(op)
     eps = 1e-6
     fd = (
-        loss(fp.Coriolis(grid=SPEC, f0=2.0 + eps, beta=0.3))
-        - loss(fp.Coriolis(grid=SPEC, f0=2.0 - eps, beta=0.3))
+        loss(fp.Coriolis(grid=GRID, f0=2.0 + eps, beta=0.3))
+        - loss(fp.Coriolis(grid=GRID, f0=2.0 - eps, beta=0.3))
     ) / (2 * eps)
     np.testing.assert_allclose(grads.f0, fd, rtol=1e-6)
 
@@ -163,10 +162,10 @@ def sw_tendency() -> Graph:
     """
     h, u, v = Input("h"), Input("u"), Input("v")
     hp, up, vp = (fp.FillGhosts(kind="periodic")(x) for x in (h, u, v))
-    dh = fp.LinComb(coeffs=(-H,))(fp.Divergence(grid=SPEC)(up, vp))
-    cor = fp.Coriolis(grid=SPEC, f0=F0)(up, vp)
-    dx_h = fp.Difference(grid=SPEC, axis="x", src="T", dst="U")(hp)
-    dy_h = fp.Difference(grid=SPEC, axis="y", src="T", dst="V")(hp)
+    dh = fp.LinComb(coeffs=(-H,))(fp.Divergence(grid=GRID)(up, vp))
+    cor = fp.Coriolis(grid=GRID, f0=F0)(up, vp)
+    dx_h = fp.Difference(grid=GRID, axis="x", src="T", dst="U")(hp)
+    dy_h = fp.Difference(grid=GRID, axis="y", src="T", dst="V")(hp)
     du = fp.LinComb(coeffs=(1.0, -G))(fp.Pick(index=0)(cor), dx_h)
     dv = fp.LinComb(coeffs=(1.0, -G))(fp.Pick(index=1)(cor), dy_h)
     return Graph(inputs={"h": h, "u": u, "v": v}, outputs={"h": dh, "u": du, "v": dv})

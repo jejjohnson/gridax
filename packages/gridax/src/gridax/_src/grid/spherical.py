@@ -1,31 +1,31 @@
 """Spherical Arakawa C-grid containers (2-D, 3-D).
 
 These grids are concrete subclasses of :class:`CurvilinearGrid2D` /
-:class:`CurvilinearGrid3D` that add spherical metric information:
-angular spacings (``dlon``, ``dlat`` in radians), the planet radius
-``R``, precomputed ``cos(lat)`` at all four staggering locations, and
-coordinate arrays for diagnostics.
+:class:`CurvilinearGrid3D` with the metric of a sphere: the angular
+spacings (``dlon``, ``dlat`` in radians) and the radius ``R`` give
 
-The Cartesian-equivalent metric lengths inherited from
-``CurvilinearGrid*`` are populated as ``dx = R * dlon``,
-``dy = R * dlat``, etc., so spherical grids are drop-in compatible
-with operators that consume ``grid.dx`` / ``grid.dy``.
+    Δx_P = R cos(lat_P) dlon,    Δy_P = R dlat,
 
-The coordinate arrays are built with NumPy in float64. The metric
-properties (``dx_T``, ``min_cell_width``, ...) compute with the namespace of
-the arrays they read, so they run on the NumPy grid and, inside a JAX
-transform, on the traced one.
+through the same accessor as every other grid, ``grid.spacing(axis, at=P)``,
+and ``grid.coords("y")`` / ``grid.coords("x")`` are the latitudes and
+longitudes in radians. The inherited extents are the arc lengths
+``Lx = R (lon_max - lon_min)`` and ``Ly = R (lat_max - lat_min)``.
+
+The arrays are built with NumPy in float64. The metric (``spacing``,
+``min_cell_width``, ...) computes with the namespace of the arrays it reads,
+so it runs on the NumPy grid and, inside a JAX transform, on the traced one.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from geophysix.earth import SPHERE
 from jaxtyping import Float
 import numpy as np
 
-from gridax._src.grid.base import CurvilinearGrid2D, CurvilinearGrid3D
+from gridax._src.grid.base import CurvilinearGrid2D, CurvilinearGrid3D, _as_leaf
+from gridax._src.grid.points import point_axes
 from gridax._src.pytree import array_namespace, pytree_dataclass
 
 # The coordinate arrays are NumPy when a grid is built and JAX arrays (or
@@ -37,18 +37,223 @@ else:
     Array = np.ndarray
 
 
+class _SphericalMetric:
+    """The metric of a longitude-latitude grid.
+
+    Mixed into :class:`SphericalGrid2D` and :class:`SphericalGrid3D`, over
+    the uniform metric it overrides along ``x`` and ``y``.
+    """
+
+    # Fields and methods of the grids this mixes into.
+    axes: tuple[str, ...]
+    dlon: Float[Array, ""]
+    dlat: Float[Array, ""]
+    R: Float[Array, ""]
+    _lat: Float[Array, "Ny"]
+    _lon: Float[Array, "Nx"]
+    _cos_lat_T: Float[Array, "Ny Nx"]
+    _cos_lat_V: Float[Array, "Ny Nx"]
+
+    if TYPE_CHECKING:
+        _size: Any
+        _staggered: Any
+
+    def _cos_lat(self, at: str) -> Float[Array, "Ny Nx"]:
+        """cos(latitude) at the points ``at``, ``[Ny, Nx]``.
+
+        U shares the latitude of T, and X that of V.
+        """
+        return self._cos_lat_V if self._staggered("y", at) else self._cos_lat_T
+
+    def spacing(self, axis: str, *, at: str = "T") -> Float[Array, "..."]:
+        """The grid spacing along ``axis`` at the points ``at``.
+
+        ``R cos(lat_P) dlon`` along ``x``, which shrinks towards the poles,
+        ``R dlat`` along ``y``, and the uniform ``Δz`` along ``z``.
+
+        Parameters
+        ----------
+        axis : str
+            One of ``grid.axes``.
+        at : str
+            The point: ``"T"``, ``"U"``, ``"V"``, ``"X"`` or ``"W"``.
+
+        Returns
+        -------
+        Float[Array, "Ny Nx"] or Float[Array, ""]
+            ``[Ny, Nx]`` along ``x`` (shared by the levels of a 3-D grid),
+            0-d along the other axes, in the units of ``R``.
+
+        Notes
+        -----
+        The zonal spacing is the raw metric and is not clamped, so a row at
+        or past a pole carries a degenerate width that can be zero or
+        slightly negative (in float32 ``cos(pi/2)`` evaluates to
+        ``-4.4e-08``). ``min_cell_width`` and ``max_aspect`` do clamp, so
+        prefer them when the value feeds a CFL or resolution guard.
+
+        Examples
+        --------
+        >>> import gridax
+        >>> grid = gridax.SphericalGrid2D.from_interior(
+        ...     4, 2, (0.0, 90.0), (-60.0, 60.0), R=1.0
+        ... )
+        >>> [round(float(d), 4) for d in grid.spacing("x")[1:-1, 0]]
+        [0.3401, 0.3401]
+        """
+        self._staggered(axis, at)
+        if axis == "x":
+            # Δx_P = R cos(lat_P) dlon
+            return self.R * self._cos_lat(at) * self.dlon
+        if axis == "y":
+            # Δy = R dlat
+            return self.R * self.dlat
+        return super().spacing(axis, at=at)
+
+    def coords(self, axis: str, *, at: str = "T") -> Float[Array, "N"]:
+        """The coordinate of the points ``at`` along ``axis``, ghost ring included.
+
+        The longitude (``x``) and the latitude (``y``) in radians, shifted by
+        half a step at the points staggered along the axis, and ``z`` as on a
+        Cartesian grid.
+
+        Parameters
+        ----------
+        axis : str
+            One of ``grid.axes``.
+        at : str
+            The point: ``"T"``, ``"U"``, ``"V"``, ``"X"`` or ``"W"``.
+
+        Returns
+        -------
+        Float[Array, "N"]
+            One coordinate per index along the axis.
+
+        Examples
+        --------
+        >>> import gridax, numpy as np
+        >>> grid = gridax.SphericalGrid2D.from_interior(
+        ...     4, 2, (0.0, 90.0), (-60.0, 60.0)
+        ... )
+        >>> np.rad2deg(grid.coords("y")).round(6).tolist()
+        [-90.0, -30.0, 30.0, 90.0]
+        """
+        staggered = self._staggered(axis, at)
+        if axis == "x":
+            return self._lon + 0.5 * self.dlon if staggered else self._lon
+        if axis == "y":
+            return self._lat + 0.5 * self.dlat if staggered else self._lat
+        return super().coords(axis, at=at)
+
+    def _area(self, *, at: str = "T", xp: Any = None) -> Float[Array, "Ny Nx"]:
+        """The area of the cell around each point ``at``, exact on the sphere.
+
+        ``A = R² dlon (sin(lat_P + dlat/2) − sin(lat_P − dlat/2))
+        = 2 R² dlon sin(dlat / 2) cos(lat_P)``.
+
+        Summed over the interior T cells of a grid that spans
+        ``[lat_min, lat_max]`` it gives ``R² Lλ (sin lat_max − sin lat_min)``
+        exactly (``4πR²`` for the whole sphere), where the midpoint rule
+        ``R² cos(lat) dlon dlat`` overestimates by ``dlat / (2 sin(dlat/2))``.
+
+        A cell whose ``cos(lat)`` is negative (a ghost row past a pole) or
+        indistinguishable from zero (within ``8 eps`` of the dtype) has area
+        zero, so the area is never negative in float32 or float64.
+        """
+        point_axes(at, self.axes)
+        cos = self._cos_lat(at)
+        if xp is None:
+            xp = array_namespace(cos, self.R, self.dlon, self.dlat)
+        cos = xp.asarray(cos)
+        base = 2.0 * self.R**2 * self.dlon * xp.sin(xp.asarray(0.5 * self.dlat))
+        degenerate = cos <= 8.0 * xp.finfo(cos.dtype).eps
+        return xp.where(degenerate, 0.0, base * cos)
+
+    # ------------------------------------------------------------------
+    # Physical cell widths (for resolution / CFL guards)
+    # ------------------------------------------------------------------
+
+    @property
+    def min_cell_width(self) -> Float[Array, ""]:
+        """Smallest physical *horizontal* cell width over the interior.
+
+        ``min(min(Δx_T[interior]), Δy)`` — the CFL-limiting length of the
+        grid. Only the physical interior ``[1:-1, 1:-1]`` contributes: a
+        ghost row can sit past the pole where ``cos(lat) < 0``, which would
+        otherwise dominate the minimum with a negative width. The vertical
+        spacing is excluded, since the horizontal and vertical CFL
+        conditions are governed by different wave speeds.
+
+        A polar row reports exactly zero.  That needs saying because
+        ``cos(pi/2)`` is not exactly zero in floating point, and its
+        sign is not even consistent: it is ``-4.4e-08`` in float32 and
+        ``+6.1e-17`` in float64.  Clamping at zero would therefore fix
+        the float32 case — where a negative "width" would silently
+        produce a negative CFL time step — while leaving float64 to
+        report a positive width of ``4e-10`` metres, which a CFL guard
+        would accept and then choose an unusable step from.  Both are
+        recognised as degenerate instead: see :func:`_degenerate_width`.
+
+        Returned as a 0-d array rather than a Python ``float`` so the
+        property is usable inside ``jax.jit``; call ``float(...)`` on
+        it in eager code (for example a preflight assertion).
+
+        Returns
+        -------
+        Float[Array, ""]
+            Smallest cell width, never negative.  Zero if the interior
+            reaches a pole, where the zonal width degenerates.
+        """
+        dx_i = self.spacing("x")[1:-1, 1:-1]
+        xp = array_namespace(dx_i)
+        dx_i = xp.where(_degenerate_width(dx_i, self.R * self.dlon), 0.0, dx_i)
+        return xp.minimum(xp.min(dx_i), xp.asarray(self.spacing("y")))
+
+    @property
+    def max_aspect(self) -> Float[Array, ""]:
+        """Largest horizontal cell anisotropy ``Δy / Δx_T`` over the interior.
+
+        Grows without bound towards the poles, where cells become
+        vanishingly narrow in longitude while keeping their full
+        meridional extent.  Useful for warning that an operator or
+        solver is being asked to work on highly anisotropic cells.
+        Ghost cells are excluded, as for :attr:`min_cell_width`.
+
+        Returned as a 0-d array for the same JIT reason as
+        :attr:`min_cell_width`.
+
+        A cell whose zonal width has degenerated at a pole (see
+        :attr:`min_cell_width` for why that width is roundoff of
+        either sign rather than zero) reports ``inf``, so
+        ``max_aspect`` stays monotone in how bad the cell is instead
+        of returning a huge negative ratio in float32 or a merely
+        large positive one in float64.
+
+        Returns
+        -------
+        Float[Array, ""]
+            Maximum aspect ratio, ``inf`` if any interior cell has a
+            degenerate zonal width (interior reaching a pole).
+        """
+        dx_i = self.spacing("x")[1:-1, 1:-1]
+        xp = array_namespace(dx_i)
+        degenerate = _degenerate_width(dx_i, self.R * self.dlon)
+        safe_dx = xp.where(degenerate, 1.0, dx_i)
+        aspect = xp.where(degenerate, np.inf, self.spacing("y") / safe_dx)
+        return xp.max(aspect)
+
+
 @pytree_dataclass
-class SphericalGrid2D(CurvilinearGrid2D):
+class SphericalGrid2D(_SphericalMetric, CurvilinearGrid2D):
     """2-D Arakawa C-grid on a sphere.
 
-    Inherits ``Nx``, ``Ny``, ``Lx``, ``Ly``, ``dx``, ``dy`` from
-    :class:`CurvilinearGrid2D` and adds spherical metric fields.  All
+    Inherits ``Nx``, ``Ny``, ``Lx``, ``Ly`` from
+    :class:`CurvilinearGrid2D` and adds the spherical metric.  All
     field arrays have total shape ``[Ny, Nx]``; the physical interior
     is ``(Ny-2) x (Nx-2)`` (slice ``[1:-1, 1:-1]``); one ghost-cell
-    ring on each side is reserved for boundary conditions.
-    Cartesian-equivalent metric lengths are stored as
-    ``dx = R * dlon``, ``dy = R * dlat``,
-    ``Lx = R * (lon_max - lon_min)``, ``Ly = R * (lat_max - lat_min)``.
+    ring on each side is reserved for boundary conditions. Build one with
+    :meth:`from_interior`; ``Lx = R * (lon_max - lon_min)`` and
+    ``Ly = R * (lat_max - lat_min)``.
 
     Parameters
     ----------
@@ -58,19 +263,6 @@ class SphericalGrid2D(CurvilinearGrid2D):
         Latitudinal grid spacing in radians.
     R : float
         Radius of the sphere (metres).
-    cos_lat_T : Float[Array, "Ny Nx"]
-        cos(latitude) at T-points (cell centres).
-    cos_lat_U : Float[Array, "Ny Nx"]
-        cos(latitude) at U-points (east faces).  Equal to ``cos_lat_T``
-        because U-points sit at the same latitude as T-points.
-    cos_lat_V : Float[Array, "Ny Nx"]
-        cos(latitude) at V-points (north faces), half-cell north of T.
-    cos_lat_X : Float[Array, "Ny Nx"]
-        cos(latitude) at X-points (NE corners).  Equal to ``cos_lat_V``.
-    lat_T : Float[Array, "Ny Nx"]
-        Latitude (radians) at T-points.
-    lon_T : Float[Array, "Ny Nx"]
-        Longitude (radians) at T-points.
 
     Notes
     -----
@@ -89,22 +281,21 @@ class SphericalGrid2D(CurvilinearGrid2D):
     ``V[Ny-2]`` on ``lat_max``. No T row sits on a pole, and a ghost row
     lies at most ``dlat/2`` past one. (Longitude is periodic: ``lon_i``
     keeps the first interior column on ``lon_min``.) Because U-points
-    share the latitude of T-points, ``cos_lat_U == cos_lat_T``;
-    similarly ``cos_lat_X == cos_lat_V``.
+    share the latitude of T-points, and X-points that of V-points.
 
     As in the Cartesian case, array index ``[j, i]`` encodes the
     **south-west** corner of the stencil neighbourhood.
     """
 
-    dlon: float
-    dlat: float
-    R: float
-    cos_lat_T: Float[Array, "Ny Nx"]
-    cos_lat_U: Float[Array, "Ny Nx"]
-    cos_lat_V: Float[Array, "Ny Nx"]
-    cos_lat_X: Float[Array, "Ny Nx"]
-    lat_T: Float[Array, "Ny Nx"]
-    lon_T: Float[Array, "Ny Nx"]
+    dlon: Float[Array, ""]
+    dlat: Float[Array, ""]
+    R: Float[Array, ""]
+    # Latitude and longitude of the T points (radians), and cos(latitude) at
+    # the T (and U) and the V (and X) points.
+    _lat: Float[Array, "Ny"]
+    _lon: Float[Array, "Nx"]
+    _cos_lat_T: Float[Array, "Ny Nx"]
+    _cos_lat_V: Float[Array, "Ny Nx"]
 
     @classmethod
     def from_interior(  # intentionally different signature from Curvilinear
@@ -146,9 +337,7 @@ class SphericalGrid2D(CurvilinearGrid2D):
         Nx = nx_interior + 2
         Ny = ny_interior + 2
 
-        # Cartesian-equivalent metric lengths
-        dx = R * dlon
-        dy = R * dlat
+        # Arc lengths
         Lx = R * float(lon_max_rad - lon_min_rad)
         Ly = R * float(lat_max_rad - lat_min_rad)
 
@@ -161,166 +350,30 @@ class SphericalGrid2D(CurvilinearGrid2D):
         # Longitude is periodic: the first interior column sits on lon_min.
         lon_1d = lon_min_rad + (np.arange(Nx) - 1) * dlon
 
-        # 2-D meshgrid (j, i) ordering
-        lon_2d, lat_2d = np.meshgrid(lon_1d, lat_1d)
-
+        # cos(latitude) at the T (and U) rows and, half a cell north, the V
+        # (and X) rows: [Ny, Nx]
+        lat_2d = np.broadcast_to(lat_1d[:, None], (Ny, Nx))
         cos_lat_T = np.cos(lat_2d)
-        cos_lat_U = cos_lat_T  # U sits at the same latitude as T
-
-        lat_V = lat_2d + 0.5 * dlat
-        cos_lat_V = np.cos(lat_V)
-        cos_lat_X = cos_lat_V  # X sits at the same latitude as V
+        cos_lat_V = np.cos(lat_2d + 0.5 * dlat)
 
         return cls(
             Nx=Nx,
             Ny=Ny,
-            Lx=Lx,
-            Ly=Ly,
-            dx=dx,
-            dy=dy,
-            dlon=dlon,
-            dlat=dlat,
-            R=R,
-            cos_lat_T=cos_lat_T,
-            cos_lat_U=cos_lat_U,
-            cos_lat_V=cos_lat_V,
-            cos_lat_X=cos_lat_X,
-            lat_T=lat_2d,
-            lon_T=lon_2d,
+            Lx=_as_leaf(Lx),
+            Ly=_as_leaf(Ly),
+            dlon=_as_leaf(dlon),
+            dlat=_as_leaf(dlat),
+            R=_as_leaf(R),
+            _lat=_as_leaf(lat_1d),
+            _lon=_as_leaf(lon_1d),
+            _cos_lat_T=_as_leaf(cos_lat_T),
+            _cos_lat_V=_as_leaf(cos_lat_V),
         )
 
-    # ------------------------------------------------------------------
-    # Physical cell widths (metric helpers for resolution / CFL guards)
-    # ------------------------------------------------------------------
 
-    @property
-    def dx_T(self) -> Float[Array, "Ny Nx"]:
-        """Zonal cell width at T-points: ``R * cos_lat_T * dlon``.
-
-        The zonal width of a lat-lon cell shrinks as ``cos(lat)``, so
-        unlike the uniform ``dx = R * dlon`` inherited from
-        :class:`CurvilinearGrid2D` this is the *actual* east-west
-        extent of each cell.  It is the length that limits the zonal
-        CFL condition and that resolution guards must compare a
-        physical scale against.
-
-        Returns
-        -------
-        Float[Array, "Ny Nx"]
-            Zonal cell width in the same units as ``R`` (metres for a
-            default-radius grid; nondimensional arc length when the
-            grid was built with ``R=1``).
-
-        Notes
-        -----
-        This is the raw metric, matching
-        ``spherical_area_weights`` in finitevolX:
-        it is **not** clamped, so a row at or past a pole carries a
-        degenerate width that can be zero or slightly negative (in
-        float32 ``cos(pi/2)`` evaluates to ``-4.4e-08``).  The
-        reductions :attr:`min_cell_width` and :attr:`max_aspect` do
-        clamp, so prefer them when the value feeds a CFL or resolution
-        guard.
-        """
-        return self.R * self.cos_lat_T * self.dlon
-
-    @property
-    def dx_V(self) -> Float[Array, "Ny Nx"]:
-        """Zonal cell width at V-points: ``R * cos_lat_V * dlon``.
-
-        V-points sit half a cell north of T-points, so their latitude
-        (and hence zonal width) differs from :attr:`dx_T`.  Equal to
-        the X-point (NE corner) width, since ``cos_lat_X == cos_lat_V``.
-
-        Returns
-        -------
-        Float[Array, "Ny Nx"]
-        """
-        return self.R * self.cos_lat_V * self.dlon
-
-    @property
-    def dy_T(self) -> float:
-        """Meridional cell width: ``R * dlat``.
-
-        Uniform across the grid — latitude lines are equally spaced —
-        so this is a scalar and equals the inherited ``dy``.
-
-        Returns
-        -------
-        float
-        """
-        return self.R * self.dlat
-
-    @property
-    def min_cell_width(self) -> Float[Array, ""]:
-        """Smallest physical cell width over the interior.
-
-        ``min(min(dx_T[interior]), dy_T)`` — the CFL-limiting length
-        of the grid.  Only the physical interior ``[1:-1, 1:-1]``
-        contributes: a ghost row can sit past the pole where
-        ``cos(lat) < 0``, which would otherwise dominate the minimum
-        with a negative width.
-
-        A polar row reports exactly zero.  That needs saying because
-        ``cos(pi/2)`` is not exactly zero in floating point, and its
-        sign is not even consistent: it is ``-4.4e-08`` in float32 and
-        ``+6.1e-17`` in float64.  Clamping at zero would therefore fix
-        the float32 case — where a negative "width" would silently
-        produce a negative CFL time step — while leaving float64 to
-        report a positive width of ``4e-10`` metres, which a CFL guard
-        would accept and then choose an unusable step from.  Both are
-        recognised as degenerate instead: see :func:`_degenerate_width`.
-
-        Returned as a 0-d array rather than a Python ``float`` so the
-        property is usable inside ``jax.jit``; call ``float(...)`` on
-        it in eager code (for example a preflight assertion).
-
-        Returns
-        -------
-        Float[Array, ""]
-            Smallest cell width, never negative.  Zero if the interior
-            reaches a pole, where the zonal width degenerates.
-        """
-        dx_i = self.dx_T[1:-1, 1:-1]
-        xp = array_namespace(dx_i)
-        dx_i = xp.where(_degenerate_width(dx_i, self.R * self.dlon), 0.0, dx_i)
-        return xp.minimum(xp.min(dx_i), self.dy_T)
-
-    @property
-    def max_aspect(self) -> Float[Array, ""]:
-        """Largest cell anisotropy ``dy_T / dx_T`` over the interior.
-
-        Grows without bound towards the poles, where cells become
-        vanishingly narrow in longitude while keeping their full
-        meridional extent.  Useful for warning that an operator or
-        solver is being asked to work on highly anisotropic cells.
-        Ghost cells are excluded, as for :attr:`min_cell_width`.
-
-        Returned as a 0-d array for the same JIT reason as
-        :attr:`min_cell_width`.
-
-        A cell whose zonal width has degenerated at a pole (see
-        :attr:`min_cell_width` for why that width is roundoff of
-        either sign rather than zero) reports ``inf``, so
-        ``max_aspect`` stays monotone in how bad the cell is instead
-        of returning a huge negative ratio in float32 or a merely
-        large positive one in float64.
-
-        Returns
-        -------
-        Float[Array, ""]
-            Maximum aspect ratio, ``inf`` if any interior cell has a
-            degenerate zonal width (interior reaching a pole).
-        """
-        dx_i = self.dx_T[1:-1, 1:-1]
-        xp = array_namespace(dx_i)
-        degenerate = _degenerate_width(dx_i, self.R * self.dlon)
-        safe_dx = xp.where(degenerate, 1.0, dx_i)
-        aspect = xp.where(degenerate, np.inf, self.dy_T / safe_dx)
-        return xp.max(aspect)
-
-
-def _degenerate_width(dx: Float[Array, "..."], nominal: float) -> Float[Array, "..."]:
+def _degenerate_width(
+    dx: Float[Array, "..."], nominal: Float[Array, ""]
+) -> Float[Array, "..."]:
     """Boolean mask of zonal widths that have collapsed at a pole.
 
     ``dx = R cos(lat) dlon`` vanishes at the poles, but ``cos(pi/2)``
@@ -340,7 +393,7 @@ def _degenerate_width(dx: Float[Array, "..."], nominal: float) -> Float[Array, "
     ----------
     dx : Float[Array, "..."]
         Zonal cell widths.
-    nominal : float
+    nominal : Float[Array, ""]
         The equatorial width ``R * dlon`` these are measured against.
 
     A *genuinely* negative width — a grid whose T rows run past a pole,
@@ -360,17 +413,16 @@ def _degenerate_width(dx: Float[Array, "..."], nominal: float) -> Float[Array, "
 
 
 @pytree_dataclass
-class SphericalGrid3D(CurvilinearGrid3D):
+class SphericalGrid3D(_SphericalMetric, CurvilinearGrid3D):
     """3-D Arakawa C-grid on a sphere.
 
-    Inherits ``Nx``, ``Ny``, ``Nz``, ``Lx``, ``Ly``, ``Lz``, ``dx``,
-    ``dy``, ``dz`` from :class:`CurvilinearGrid3D` and adds spherical
-    metric fields.  Scalar field arrays have total shape
+    Inherits ``Nx``, ``Ny``, ``Nz``, ``Lx``, ``Ly``, ``Lz`` from
+    :class:`CurvilinearGrid3D` and adds the spherical metric.  Scalar field arrays have total shape
     ``[Nz, Ny, Nx]`` with one ghost-cell ring on every axis; the
     physical interior is ``(Nz-2) x (Ny-2) x (Nx-2)`` (slice
-    ``[1:-1, 1:-1, 1:-1]``).  The ``cos_lat_*`` and coordinate arrays
-    are 2-D ``[Ny, Nx]`` — they are shared across all z-levels because
-    the horizontal staggering is independent of depth.
+    ``[1:-1, 1:-1, 1:-1]``).  The horizontal metric is 2-D ``[Ny, Nx]``,
+    shared across all z-levels because the horizontal staggering is
+    independent of depth.
 
     As with the Cartesian :class:`CartesianGrid3D`, only the horizontal
     axes are staggered (T, U, V, X share the same ``k * dz``); W-point fields (vertical velocity at z-interfaces) use the same
@@ -385,18 +437,6 @@ class SphericalGrid3D(CurvilinearGrid3D):
         Latitudinal grid spacing in radians.
     R : float
         Radius of the sphere (metres).
-    cos_lat_T : Float[Array, "Ny Nx"]
-        cos(latitude) at T-points.
-    cos_lat_U : Float[Array, "Ny Nx"]
-        cos(latitude) at U-points.  Equal to ``cos_lat_T``.
-    cos_lat_V : Float[Array, "Ny Nx"]
-        cos(latitude) at V-points (half-cell north of T).
-    cos_lat_X : Float[Array, "Ny Nx"]
-        cos(latitude) at X-points.  Equal to ``cos_lat_V``.
-    lat_T : Float[Array, "Ny Nx"]
-        Latitude (radians) at T-points.
-    lon_T : Float[Array, "Ny Nx"]
-        Longitude (radians) at T-points.
 
     Notes
     -----
@@ -408,19 +448,19 @@ class SphericalGrid3D(CurvilinearGrid3D):
         X[k, j, i]  NE corner    at  ( lon_{i+1/2} ,  lat_{j+1/2}  ,  k * dz )
 
     All four point types share the same z-coordinate ``k * dz``, so the
-    ``cos_lat_*`` arrays are 2-D and broadcast over the leading ``Nz``
+    horizontal metric is 2-D and broadcasts over the leading ``Nz``
     axis when used in operators.
     """
 
-    dlon: float
-    dlat: float
-    R: float
-    cos_lat_T: Float[Array, "Ny Nx"]
-    cos_lat_U: Float[Array, "Ny Nx"]
-    cos_lat_V: Float[Array, "Ny Nx"]
-    cos_lat_X: Float[Array, "Ny Nx"]
-    lat_T: Float[Array, "Ny Nx"]
-    lon_T: Float[Array, "Ny Nx"]
+    dlon: Float[Array, ""]
+    dlat: Float[Array, ""]
+    R: Float[Array, ""]
+    # Latitude and longitude of the T points (radians), and cos(latitude) at
+    # the T (and U) and the V (and X) points.
+    _lat: Float[Array, "Ny"]
+    _lon: Float[Array, "Nx"]
+    _cos_lat_T: Float[Array, "Ny Nx"]
+    _cos_lat_V: Float[Array, "Ny Nx"]
 
     @classmethod
     def from_interior(  # intentionally different signature from Curvilinear
@@ -462,28 +502,20 @@ class SphericalGrid3D(CurvilinearGrid3D):
             nx_interior, ny_interior, lon_range, lat_range, R
         )
 
-        Nz = nz_interior + 2
-        dz = Lz / nz_interior
-
         return cls(
             Nx=h_grid.Nx,
             Ny=h_grid.Ny,
-            Nz=Nz,
+            Nz=nz_interior + 2,
             Lx=h_grid.Lx,
             Ly=h_grid.Ly,
-            Lz=Lz,
-            dx=h_grid.dx,
-            dy=h_grid.dy,
-            dz=dz,
+            Lz=_as_leaf(Lz),
             dlon=h_grid.dlon,
             dlat=h_grid.dlat,
-            R=R,
-            cos_lat_T=h_grid.cos_lat_T,
-            cos_lat_U=h_grid.cos_lat_U,
-            cos_lat_V=h_grid.cos_lat_V,
-            cos_lat_X=h_grid.cos_lat_X,
-            lat_T=h_grid.lat_T,
-            lon_T=h_grid.lon_T,
+            R=h_grid.R,
+            _lat=h_grid._lat,
+            _lon=h_grid._lon,
+            _cos_lat_T=h_grid._cos_lat_T,
+            _cos_lat_V=h_grid._cos_lat_V,
         )
 
     def horizontal_grid(self) -> SphericalGrid2D:
@@ -499,54 +531,12 @@ class SphericalGrid3D(CurvilinearGrid3D):
             Ny=self.Ny,
             Lx=self.Lx,
             Ly=self.Ly,
-            dx=self.dx,
-            dy=self.dy,
             dlon=self.dlon,
             dlat=self.dlat,
             R=self.R,
-            cos_lat_T=self.cos_lat_T,
-            cos_lat_U=self.cos_lat_U,
-            cos_lat_V=self.cos_lat_V,
-            cos_lat_X=self.cos_lat_X,
-            lat_T=self.lat_T,
-            lon_T=self.lon_T,
+            _lat=self._lat,
+            _lon=self._lon,
+            _cos_lat_T=self._cos_lat_T,
+            _cos_lat_V=self._cos_lat_V,
+            ghost=self.ghost,
         )
-
-    # ------------------------------------------------------------------
-    # Physical cell widths — delegate to the horizontal grid
-    # ------------------------------------------------------------------
-
-    @property
-    def dx_T(self) -> Float[Array, "Ny Nx"]:
-        """Zonal cell width at T-points (see :attr:`SphericalGrid2D.dx_T`).
-
-        Horizontal staggering is independent of depth, so the width is
-        2-D and broadcasts over the leading ``Nz`` axis.
-        """
-        return self.horizontal_grid().dx_T
-
-    @property
-    def dx_V(self) -> Float[Array, "Ny Nx"]:
-        """Zonal cell width at V-points (see :attr:`SphericalGrid2D.dx_V`)."""
-        return self.horizontal_grid().dx_V
-
-    @property
-    def dy_T(self) -> float:
-        """Meridional cell width (see :attr:`SphericalGrid2D.dy_T`)."""
-        return self.horizontal_grid().dy_T
-
-    @property
-    def min_cell_width(self) -> Float[Array, ""]:
-        """Smallest *horizontal* cell width over the interior.
-
-        Delegates to :attr:`SphericalGrid2D.min_cell_width`; the
-        vertical spacing ``dz`` is deliberately excluded, since the
-        horizontal and vertical CFL conditions are governed by
-        different wave speeds.
-        """
-        return self.horizontal_grid().min_cell_width
-
-    @property
-    def max_aspect(self) -> Float[Array, ""]:
-        """Largest horizontal cell anisotropy (see :attr:`SphericalGrid2D.max_aspect`)."""
-        return self.horizontal_grid().max_aspect

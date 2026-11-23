@@ -239,7 +239,7 @@ bc_set = BoundaryConditionSet(
     east=Dirichlet1D(face="east",  value=0.0),
 )
 
-psi = bc_set(psi, dx=grid.dx, dy=grid.dy)
+psi = bc_set(psi, dx=grid.spacing("x"), dy=grid.spacing("y"))
 ```
 
 The same set can describe the boundary of an **elliptic solve**: the one-call inversions `streamfunction_from_vorticity`, `pressure_from_divergence` and `pv_inversion` take it as `bc=`.  Those wrappers moved to sesmax-core (`sesmax_core.gfd`); see the [elliptic inversions guide](https://jejjohnson.github.io/sesmax/elliptic-inversions/) for how a set selects the transform and imposes non-zero `Dirichlet1D` values on the wall nodes.

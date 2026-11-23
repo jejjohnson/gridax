@@ -256,8 +256,8 @@ class TestOperatorIdentities:
         from gridax._src.operators.difference import Difference2D
 
         diff = Difference2D(grid=grid2d)
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         phi = x[None, :] ** 2 + y[:, None] ** 2  # ϕ = x² + y²
 
         u = diff.diff_x_T_to_U(phi)  # ∂ϕ/∂x at U-points
@@ -277,8 +277,8 @@ class TestOperatorIdentities:
         from gridax._src.operators.difference import Difference2D
 
         diff = Difference2D(grid=grid2d)
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         h = x[None, :] ** 2 + y[:, None] ** 2
 
         lap = diff.laplacian(h)

@@ -127,7 +127,7 @@ class TestCoriolis2D:
         """Spatially varying f correctly modulates the tendency magnitude."""
         cor = Coriolis2D(grid=grid2d)
         # f linearly varying in x: f[j, i] = i * dx
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
         f = jnp.broadcast_to(x, (grid2d.Ny, grid2d.Nx))
         v = jnp.ones((grid2d.Ny, grid2d.Nx))
         u = jnp.zeros((grid2d.Ny, grid2d.Nx))
@@ -137,7 +137,7 @@ class TestCoriolis2D:
         # f_on_u[j, i] = 0.5 * (x[i] + x[i+1])
         # note: interior [1:-1,1:-1] corresponds to i+1/2 for interior i
         i = jnp.arange(1, grid2d.Nx - 1, dtype=float)
-        expected = 0.5 * (i * grid2d.dx + (i + 1) * grid2d.dx)
+        expected = 0.5 * (i * grid2d.spacing("x") + (i + 1) * grid2d.spacing("x"))
         # du_cor[j, 1:-1] = f_on_u * v_on_u = expected * 1 = expected
         np.testing.assert_allclose(
             np.asarray(du_cor[grid2d.Ny // 2, 1:-1]),
@@ -267,8 +267,8 @@ class TestCoriolis3D:
         cor2d = Coriolis2D(grid=grid2d)
         cor3d = Coriolis3D(grid=grid3d)
 
-        x = jnp.arange(grid3d.Nx, dtype=float) * grid3d.dx
-        y = jnp.arange(grid3d.Ny, dtype=float) * grid3d.dy
+        x = jnp.arange(grid3d.Nx, dtype=float) * grid3d.spacing("x")
+        y = jnp.arange(grid3d.Ny, dtype=float) * grid3d.spacing("y")
         u2d = jnp.broadcast_to(-y[:, None], (grid3d.Ny, grid3d.Nx))
         v2d = jnp.broadcast_to(x, (grid3d.Ny, grid3d.Nx))
         f2d = jnp.ones((grid3d.Ny, grid3d.Nx))
@@ -380,7 +380,7 @@ class TestCoriolisEnergyConservation:
         return CartesianGrid2D.from_interior(self.n, self.n, 1.0, 1.0)
 
     def _beta_f(self, g):
-        y = (jnp.arange(g.Ny, dtype=float) - 0.5) * g.dy
+        y = (jnp.arange(g.Ny, dtype=float) - 0.5) * g.spacing("y")
         return jnp.broadcast_to(1.0 + 5.0 * y[:, None], (g.Ny, g.Nx))
 
     @staticmethod
@@ -392,10 +392,14 @@ class TestCoriolisEnergyConservation:
     def test_closed_basin_beta_plane(self):
         g = self._grid()
         u = BoundaryConditionSet.closed(point="U")(
-            jax.random.normal(jax.random.PRNGKey(1), (g.Ny, g.Nx)), g.dx, g.dy
+            jax.random.normal(jax.random.PRNGKey(1), (g.Ny, g.Nx)),
+            g.spacing("x"),
+            g.spacing("y"),
         )
         v = BoundaryConditionSet.closed(point="V")(
-            jax.random.normal(jax.random.PRNGKey(2), (g.Ny, g.Nx)), g.dx, g.dy
+            jax.random.normal(jax.random.PRNGKey(2), (g.Ny, g.Nx)),
+            g.spacing("x"),
+            g.spacing("y"),
         )
         du, dv = Coriolis2D(grid=g)(u, v, self._beta_f(g))
         assert self._rel_dE(u, v, du, dv) < 1e-13
@@ -405,8 +409,8 @@ class TestCoriolisEnergyConservation:
         g = self._grid()
         psi = enforce_periodic(jax.random.normal(jax.random.PRNGKey(0), (g.Ny, g.Nx)))
         # u[j, i+1/2] = -(psi[j+1/2] - psi[j-1/2]) / dy, v[j+1/2, i] = (psi[i+1/2] - psi[i-1/2]) / dx
-        u = enforce_periodic(interior(-diff_y_bwd_2d(psi) / g.dy, psi))
-        v = enforce_periodic(interior(diff_x_bwd_2d(psi) / g.dx, psi))
+        u = enforce_periodic(interior(-diff_y_bwd_2d(psi) / g.spacing("y"), psi))
+        v = enforce_periodic(interior(diff_x_bwd_2d(psi) / g.spacing("x"), psi))
         du, dv = Coriolis2D(grid=g)(u, v, enforce_periodic(self._beta_f(g)))
         assert self._rel_dE(u, v, du, dv) < 1e-13
 

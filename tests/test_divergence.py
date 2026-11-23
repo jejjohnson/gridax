@@ -43,8 +43,8 @@ class TestDifference2DDivergence:
     def test_linear_field_exact_divergence(self, grid):
         """For u=c*x, v=c*y, divergence = 2c exactly at any resolution."""
         c = 2.0
-        x = jnp.arange(grid.Nx, dtype=float) * grid.dx
-        y = jnp.arange(grid.Ny, dtype=float) * grid.dy
+        x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
+        y = jnp.arange(grid.Ny, dtype=float) * grid.spacing("y")
         u = jnp.broadcast_to(c * x, (grid.Ny, grid.Nx))
         v = jnp.broadcast_to(c * y[:, None], (grid.Ny, grid.Nx))
         result = Difference2D(grid=grid).divergence(u, v)
@@ -63,7 +63,7 @@ class TestDifference2DDivergence:
     def test_anisotropic_divergence(self, grid):
         """u varies in x, v is zero → divergence = c_x exactly."""
         c_x = 3.0
-        x = jnp.arange(grid.Nx, dtype=float) * grid.dx
+        x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
         u = jnp.broadcast_to(c_x * x, (grid.Ny, grid.Nx))
         v = jnp.zeros((grid.Ny, grid.Nx))
         result = Difference2D(grid=grid).divergence(u, v)
@@ -100,8 +100,8 @@ class TestDivergence2DClass:
     def test_linear_field_exact_divergence(self, div_op, grid):
         """For u=c*x, v=c*y, divergence = 2c exactly."""
         c = 1.5
-        x = jnp.arange(grid.Nx, dtype=float) * grid.dx
-        y = jnp.arange(grid.Ny, dtype=float) * grid.dy
+        x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
+        y = jnp.arange(grid.Ny, dtype=float) * grid.spacing("y")
         u = jnp.broadcast_to(c * x, (grid.Ny, grid.Nx))
         v = jnp.broadcast_to(c * y[:, None], (grid.Ny, grid.Nx))
         result = div_op(u, v)
@@ -110,8 +110,8 @@ class TestDivergence2DClass:
     def test_matches_difference2d_divergence(self, div_op, grid):
         """Divergence2D.__call__ must match Difference2D.divergence."""
         diff = Difference2D(grid=grid)
-        x = jnp.arange(grid.Nx, dtype=float) * grid.dx
-        y = jnp.arange(grid.Ny, dtype=float) * grid.dy
+        x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
+        y = jnp.arange(grid.Ny, dtype=float) * grid.spacing("y")
         u = jnp.broadcast_to(x, (grid.Ny, grid.Nx))
         v = jnp.broadcast_to(y[:, None], (grid.Ny, grid.Nx))
         np.testing.assert_allclose(div_op(u, v), diff.divergence(u, v), atol=1e-12)
@@ -124,7 +124,8 @@ class TestDivergence2DClass:
         with pytest.warns(DeprecationWarning, match="Difference2D"):
             divergence_2d = gridax.divergence_2d
         np.testing.assert_array_equal(
-            div_op(u, v), divergence_2d(u, v, dx=grid.dx, dy=grid.dy)
+            div_op(u, v),
+            divergence_2d(u, v, dx=grid.spacing("x"), dy=grid.spacing("y")),
         )
 
     def test_geostrophic_velocity_nondivergent(self):
@@ -140,8 +141,8 @@ class TestDivergence2DClass:
         div_op = Divergence2D(grid=grid)
 
         # Arbitrary streamfunction at X-points (corners)
-        x = jnp.arange(grid.Nx, dtype=float) * grid.dx
-        y = jnp.arange(grid.Ny, dtype=float) * grid.dy
+        x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
+        y = jnp.arange(grid.Ny, dtype=float) * grid.spacing("y")
         psi = jnp.sin(x[None, :]) * jnp.cos(y[:, None])
 
         u = -diff.diff_y_X_to_U(psi)  # u = -dpsi/dy  at U-points

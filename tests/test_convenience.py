@@ -83,11 +83,18 @@ class TestPotentialVorticityMultilayer:
         psi = jnp.zeros((nl, grid2d.Ny, grid2d.Nx))
         A = 0.01 * jnp.eye(nl)
         y = jnp.broadcast_to(
-            jnp.arange(grid2d.Ny, dtype=float)[:, None] * grid2d.dy,
+            jnp.arange(grid2d.Ny, dtype=float)[:, None] * grid2d.spacing("y"),
             (grid2d.Ny, grid2d.Nx),
         )
         result = potential_vorticity_multilayer(
-            psi, A, f0=1e-4, beta=1e-11, dx=grid2d.dx, dy=grid2d.dy, y=y, y0=0.0
+            psi,
+            A,
+            f0=1e-4,
+            beta=1e-11,
+            dx=grid2d.spacing("x"),
+            dy=grid2d.spacing("y"),
+            y=y,
+            y0=0.0,
         )
         assert result.shape == (nl, grid2d.Ny, grid2d.Nx)
 
@@ -98,7 +105,14 @@ class TestPotentialVorticityMultilayer:
         A = 0.01 * jnp.eye(nl)
         y = jnp.zeros((grid2d.Ny, grid2d.Nx))
         result = potential_vorticity_multilayer(
-            psi, A, f0=1.0, beta=0.0, dx=grid2d.dx, dy=grid2d.dy, y=y, y0=0.0
+            psi,
+            A,
+            f0=1.0,
+            beta=0.0,
+            dx=grid2d.spacing("x"),
+            dy=grid2d.spacing("y"),
+            y=y,
+            y0=0.0,
         )
         for layer in range(nl):
             np.testing.assert_allclose(result[layer, 0, :], 0.0, atol=1e-10)
@@ -112,7 +126,7 @@ class TestPotentialVorticityMultilayer:
         nl = 2
         f0, beta, y0 = 2.0, 1e-11, 0.5
         y = jnp.broadcast_to(
-            jnp.arange(grid2d.Ny, dtype=float)[:, None] * grid2d.dy,
+            jnp.arange(grid2d.Ny, dtype=float)[:, None] * grid2d.spacing("y"),
             (grid2d.Ny, grid2d.Nx),
         )
         key = jax.random.PRNGKey(42)
@@ -120,12 +134,21 @@ class TestPotentialVorticityMultilayer:
         A = jnp.array([[0.02, -0.01], [-0.01, 0.02]])
 
         result = potential_vorticity_multilayer(
-            psi, A, f0=f0, beta=beta, dx=grid2d.dx, dy=grid2d.dy, y=y, y0=y0
+            psi,
+            A,
+            f0=f0,
+            beta=beta,
+            dx=grid2d.spacing("x"),
+            dy=grid2d.spacing("y"),
+            y=y,
+            y0=y0,
         )
 
         # Manual composition
         qg_pv = jax.vmap(
-            lambda p: qg_potential_vorticity(p, f0, beta, grid2d.dx, grid2d.dy, y, y0)
+            lambda p: qg_potential_vorticity(
+                p, f0, beta, grid2d.spacing("x"), grid2d.spacing("y"), y, y0
+            )
         )
         expected = qg_pv(psi) - f0 * stretching_term(A, psi)
 
@@ -136,15 +159,22 @@ class TestPotentialVorticityMultilayer:
         """Single-layer case: A is 1x1, should match qg_pv - A*psi."""
         f0, beta, y0 = 1.0, 0.0, 0.0
         y = jnp.zeros((grid2d.Ny, grid2d.Nx))
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y_arr = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y_arr = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         X, Y = jnp.meshgrid(x, y_arr)
         psi = 0.5 * (X**2 + Y**2)
         psi = psi[None, :, :]  # [1, Ny, Nx]
         a_val = 0.05
         A = jnp.array([[a_val]])
         result = potential_vorticity_multilayer(
-            psi, A, f0=f0, beta=beta, dx=grid2d.dx, dy=grid2d.dy, y=y, y0=y0
+            psi,
+            A,
+            f0=f0,
+            beta=beta,
+            dx=grid2d.spacing("x"),
+            dy=grid2d.spacing("y"),
+            y=y,
+            y0=y0,
         )
         # laplacian of 0.5*(x^2+y^2) = 2.0, so qg_pv interior = 2.0/f0 = 2.0
         # stretching interior = a_val * psi
@@ -159,16 +189,25 @@ class TestPotentialVorticityMultilayer:
         nl = 2
         f0, beta, y0 = 1.0, 2e-11, 0.0
         y = jnp.broadcast_to(
-            jnp.arange(grid2d.Ny, dtype=float)[:, None] * grid2d.dy,
+            jnp.arange(grid2d.Ny, dtype=float)[:, None] * grid2d.spacing("y"),
             (grid2d.Ny, grid2d.Nx),
         )
         psi = jnp.ones((nl, grid2d.Ny, grid2d.Nx))
         A = jnp.zeros((nl, nl))
         result = potential_vorticity_multilayer(
-            psi, A, f0=f0, beta=beta, dx=grid2d.dx, dy=grid2d.dy, y=y, y0=y0
+            psi,
+            A,
+            f0=f0,
+            beta=beta,
+            dx=grid2d.spacing("x"),
+            dy=grid2d.spacing("y"),
+            y=y,
+            y0=y0,
         )
         qg_pv = jax.vmap(
-            lambda p: qg_potential_vorticity(p, f0, beta, grid2d.dx, grid2d.dy, y, y0)
+            lambda p: qg_potential_vorticity(
+                p, f0, beta, grid2d.spacing("x"), grid2d.spacing("y"), y, y0
+            )
         )
         expected = qg_pv(psi)
         np.testing.assert_allclose(result, expected, atol=1e-12)
@@ -185,7 +224,9 @@ class TestSWPotentialVorticity:
         v = jnp.ones((grid2d.Ny, grid2d.Nx))
         h = 10.0 * jnp.ones((grid2d.Ny, grid2d.Nx))
         f = 1e-4 * jnp.ones((grid2d.Ny, grid2d.Nx))
-        result = sw_potential_vorticity(u, v, h, f, grid2d.dx, grid2d.dy)
+        result = sw_potential_vorticity(
+            u, v, h, f, grid2d.spacing("x"), grid2d.spacing("y")
+        )
         assert result.shape == (grid2d.Ny, grid2d.Nx)
 
     def test_ghost_ring_zero(self, grid2d):
@@ -193,7 +234,9 @@ class TestSWPotentialVorticity:
         v = jnp.ones((grid2d.Ny, grid2d.Nx))
         h = 10.0 * jnp.ones((grid2d.Ny, grid2d.Nx))
         f = 1e-4 * jnp.ones((grid2d.Ny, grid2d.Nx))
-        result = sw_potential_vorticity(u, v, h, f, grid2d.dx, grid2d.dy)
+        result = sw_potential_vorticity(
+            u, v, h, f, grid2d.spacing("x"), grid2d.spacing("y")
+        )
         np.testing.assert_allclose(result[0, :], 0.0, atol=1e-15)
         np.testing.assert_allclose(result[-1, :], 0.0, atol=1e-15)
         np.testing.assert_allclose(result[:, 0], 0.0, atol=1e-15)
@@ -205,21 +248,25 @@ class TestSWPotentialVorticity:
         v = 3.0 * jnp.ones((grid2d.Ny, grid2d.Nx))
         h = 10.0 * jnp.ones((grid2d.Ny, grid2d.Nx))
         f = 1e-4 * jnp.ones((grid2d.Ny, grid2d.Nx))
-        result = sw_potential_vorticity(u, v, h, f, grid2d.dx, grid2d.dy)
+        result = sw_potential_vorticity(
+            u, v, h, f, grid2d.spacing("x"), grid2d.spacing("y")
+        )
         expected = 1e-4 / 10.0
         np.testing.assert_allclose(result[1:-1, 1:-1], expected, rtol=1e-10)
 
     def test_matches_manual_composition(self, grid2d):
         """Must match relative_vorticity + interp + pointwise PV."""
         c = 1.5
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         u = jnp.broadcast_to(-c * y[:, None], (grid2d.Ny, grid2d.Nx))
         v = jnp.broadcast_to(c * x, (grid2d.Ny, grid2d.Nx))
         h = 5.0 * jnp.ones((grid2d.Ny, grid2d.Nx))
         f = 1e-4 * jnp.ones((grid2d.Ny, grid2d.Nx))
 
-        result = sw_potential_vorticity(u, v, h, f, grid2d.dx, grid2d.dy)
+        result = sw_potential_vorticity(
+            u, v, h, f, grid2d.spacing("x"), grid2d.spacing("y")
+        )
 
         # Vorticity of solid body rotation = 2c at interior X-points
         omega = Difference2D(grid=grid2d).curl(u, v)
@@ -235,7 +282,9 @@ class TestSWPotentialVorticityMultilayer:
         v = jnp.ones((nl, grid2d.Ny, grid2d.Nx))
         h = 10.0 * jnp.ones((nl, grid2d.Ny, grid2d.Nx))
         f = 1e-4 * jnp.ones((grid2d.Ny, grid2d.Nx))
-        result = sw_potential_vorticity_multilayer(u, v, h, f, grid2d.dx, grid2d.dy)
+        result = sw_potential_vorticity_multilayer(
+            u, v, h, f, grid2d.spacing("x"), grid2d.spacing("y")
+        )
         assert result.shape == (nl, grid2d.Ny, grid2d.Nx)
 
     def test_matches_single_layer(self, grid2d):
@@ -248,10 +297,14 @@ class TestSWPotentialVorticityMultilayer:
         h = 5.0 + jax.random.normal(k3, (nl, grid2d.Ny, grid2d.Nx)) * 0.1
         f = 1e-4 * jnp.ones((grid2d.Ny, grid2d.Nx))
 
-        result = sw_potential_vorticity_multilayer(u, v, h, f, grid2d.dx, grid2d.dy)
+        result = sw_potential_vorticity_multilayer(
+            u, v, h, f, grid2d.spacing("x"), grid2d.spacing("y")
+        )
 
         for k in range(nl):
-            expected = sw_potential_vorticity(u[k], v[k], h[k], f, grid2d.dx, grid2d.dy)
+            expected = sw_potential_vorticity(
+                u[k], v[k], h[k], f, grid2d.spacing("x"), grid2d.spacing("y")
+            )
             np.testing.assert_allclose(result[k], expected, atol=1e-12)
 
     def test_ghost_ring_zero(self, grid2d):
@@ -260,7 +313,9 @@ class TestSWPotentialVorticityMultilayer:
         v = jnp.ones((nl, grid2d.Ny, grid2d.Nx))
         h = 10.0 * jnp.ones((nl, grid2d.Ny, grid2d.Nx))
         f = 1e-4 * jnp.ones((grid2d.Ny, grid2d.Nx))
-        result = sw_potential_vorticity_multilayer(u, v, h, f, grid2d.dx, grid2d.dy)
+        result = sw_potential_vorticity_multilayer(
+            u, v, h, f, grid2d.spacing("x"), grid2d.spacing("y")
+        )
         for k in range(nl):
             np.testing.assert_allclose(result[k, 0, :], 0.0, atol=1e-15)
             np.testing.assert_allclose(result[k, -1, :], 0.0, atol=1e-15)
@@ -290,7 +345,14 @@ class TestJITCompatibility:
         A = 0.01 * jnp.eye(nl)
         y = jnp.zeros((grid2d.Ny, grid2d.Nx))
         fn = lambda p: potential_vorticity_multilayer(
-            p, A, f0=1.0, beta=0.0, dx=grid2d.dx, dy=grid2d.dy, y=y, y0=0.0
+            p,
+            A,
+            f0=1.0,
+            beta=0.0,
+            dx=grid2d.spacing("x"),
+            dy=grid2d.spacing("y"),
+            y=y,
+            y0=0.0,
         )
         result = fn(psi)
         result_jit = jax.jit(fn)(psi)
@@ -301,7 +363,9 @@ class TestJITCompatibility:
         v = jnp.ones((grid2d.Ny, grid2d.Nx))
         h = 10.0 * jnp.ones((grid2d.Ny, grid2d.Nx))
         f = 1e-4 * jnp.ones((grid2d.Ny, grid2d.Nx))
-        fn = lambda u, v: sw_potential_vorticity(u, v, h, f, grid2d.dx, grid2d.dy)
+        fn = lambda u, v: sw_potential_vorticity(
+            u, v, h, f, grid2d.spacing("x"), grid2d.spacing("y")
+        )
         np.testing.assert_allclose(jax.jit(fn)(u, v), fn(u, v), atol=1e-15)
 
     def test_sw_potential_vorticity_multilayer_jit(self, grid2d):
@@ -311,6 +375,6 @@ class TestJITCompatibility:
         h = 10.0 * jnp.ones((nl, grid2d.Ny, grid2d.Nx))
         f = 1e-4 * jnp.ones((grid2d.Ny, grid2d.Nx))
         fn = lambda u, v: sw_potential_vorticity_multilayer(
-            u, v, h, f, grid2d.dx, grid2d.dy
+            u, v, h, f, grid2d.spacing("x"), grid2d.spacing("y")
         )
         np.testing.assert_allclose(jax.jit(fn)(u, v), fn(u, v), atol=1e-15)

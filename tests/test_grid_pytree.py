@@ -59,14 +59,14 @@ class TestDataclass:
     def test_arrays_are_numpy(self, grid):
         for field in dataclasses.fields(grid):
             value = getattr(grid, field.name)
-            assert isinstance(value, int | float | np.ndarray), field.name
+            assert isinstance(value, int | tuple | np.ndarray), field.name
 
     def test_equal_when_built_the_same_way(self, grid):
         name = type(grid).__name__
         twin = GRIDS[name]()
         assert grid == twin
         assert hash(grid) == hash(twin)
-        assert grid != dataclasses.replace(grid, dx=2.0 * grid.dx)
+        assert grid != dataclasses.replace(grid, Lx=2.0 * grid.Lx)
 
 
 class TestPytree:
@@ -86,7 +86,7 @@ class TestPytree:
             jax.tree_util.keystr(path)
             for path, _ in jax.tree_util.tree_flatten_with_path(grid)[0]
         ]
-        assert ".dx" in paths
+        assert ".Lx" in paths
 
     def test_plain_jit_sees_concrete_shapes(self, grid):
         def zeros_like_grid(g):
@@ -99,7 +99,7 @@ class TestPytree:
     def test_tree_map_leaves_the_constructor_alone(self, grid):
         """Unflattening with non-array leaves (``None``) must not run checks."""
         emptied = jax.tree_util.tree_map(lambda _: None, grid)
-        assert emptied.dx is None
+        assert emptied.Lx is None
         assert emptied.Nx == grid.Nx
 
 
@@ -137,3 +137,35 @@ def test_spherical_metric_properties_run_under_jit():
         eager = getattr(grid, prop)
         traced = jax.jit(lambda g, prop=prop: getattr(g, prop))(grid)
         np.testing.assert_allclose(traced, eager, rtol=1e-12)
+
+
+@pytest.mark.parametrize("jit", [jax.jit, eqx.filter_jit], ids=["jit", "filter_jit"])
+def test_one_compile_for_two_grids_of_one_shape(jit):
+    """The extents are array leaves, so a new Δx does not retrace."""
+    traces = []
+
+    @jit
+    def diff(grid, h):
+        traces.append(1)
+        return Difference2D(grid=grid).diff_x_T_to_U(h)
+
+    h = jnp.sin(jnp.arange(80.0)).reshape(8, 10)
+    out = [
+        diff(CartesianGrid2D.from_interior(8, 6, length, 1.0), h)
+        for length in (1.0, 2.0)
+    ]
+    assert len(traces) == 1
+    np.testing.assert_allclose(out[0], 2.0 * out[1], rtol=1e-15)
+
+
+def test_gradient_of_a_spherical_area_sum_with_respect_to_the_radius():
+    """A ∝ R², so d(∑A)/dR = (2 / R) ∑A."""
+    grid = GRIDS["SphericalGrid2D"]()
+
+    def total(radius):
+        return jnp.sum(dataclasses.replace(grid, R=radius).area()[1:-1, 1:-1])
+
+    radius = jnp.asarray(grid.R)
+    np.testing.assert_allclose(
+        jax.grad(total)(radius), 2.0 / radius * total(radius), rtol=1e-12
+    )

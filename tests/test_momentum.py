@@ -77,8 +77,8 @@ class TestMomentumAdvection2D:
     def test_no_nan_output(self, grid2d):
         """Tendencies must not contain NaN for well-defined inputs."""
         madv = MomentumAdvection2D(grid=grid2d)
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         u = jnp.broadcast_to(-y[:, None], (grid2d.Ny, grid2d.Nx))
         v = jnp.broadcast_to(x, (grid2d.Ny, grid2d.Nx))
         for scheme in ("energy", "enstrophy", "blend"):
@@ -89,8 +89,8 @@ class TestMomentumAdvection2D:
     def test_al_is_blend_of_energy_and_enstrophy(self, grid2d):
         """AL scheme = ⅓ energy + ⅔ enstrophy."""
         madv = MomentumAdvection2D(grid=grid2d)
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         u = jnp.broadcast_to(-y[:, None], (grid2d.Ny, grid2d.Nx))
         v = jnp.broadcast_to(x, (grid2d.Ny, grid2d.Nx))
         du_e, dv_e = madv(u, v, scheme="energy")
@@ -116,8 +116,8 @@ class TestMomentumAdvection2D:
         diff = Difference2D(grid=grid2d)
         interp = Interpolation2D(grid=grid2d)
 
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         # Solid-body rotation: u = -y, v = x  →  constant zeta = 2
         u = jnp.broadcast_to(-y[:, None], (grid2d.Ny, grid2d.Nx))
         v = jnp.broadcast_to(x, (grid2d.Ny, grid2d.Nx))
@@ -148,8 +148,8 @@ class TestMomentumAdvection2D:
     def test_nonzero_tendency_for_nontrivial_field(self, grid2d):
         """Non-trivial velocity field should produce non-zero tendency."""
         madv = MomentumAdvection2D(grid=grid2d)
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         # Solid-body rotation has non-zero ζ and non-zero ∇K.
         u = jnp.broadcast_to(-y[:, None], (grid2d.Ny, grid2d.Nx))
         v = jnp.broadcast_to(x, (grid2d.Ny, grid2d.Nx))
@@ -218,8 +218,8 @@ class TestMomentumAdvection3D:
 
     def test_no_nan_output(self, grid3d):
         madv = MomentumAdvection3D(grid=grid3d)
-        x = jnp.arange(grid3d.Nx, dtype=float) * grid3d.dx
-        y = jnp.arange(grid3d.Ny, dtype=float) * grid3d.dy
+        x = jnp.arange(grid3d.Nx, dtype=float) * grid3d.spacing("x")
+        y = jnp.arange(grid3d.Ny, dtype=float) * grid3d.spacing("y")
         u2d = jnp.broadcast_to(-y[:, None], (grid3d.Ny, grid3d.Nx))
         v2d = jnp.broadcast_to(x, (grid3d.Ny, grid3d.Nx))
         u = jnp.broadcast_to(u2d[None], (grid3d.Nz, grid3d.Ny, grid3d.Nx))
@@ -241,8 +241,8 @@ class TestMomentumAdvection3D:
     def test_al_is_blend_of_energy_and_enstrophy(self, grid3d):
         """AL scheme = ⅓ energy + ⅔ enstrophy (3D)."""
         madv = MomentumAdvection3D(grid=grid3d)
-        x = jnp.arange(grid3d.Nx, dtype=float) * grid3d.dx
-        y = jnp.arange(grid3d.Ny, dtype=float) * grid3d.dy
+        x = jnp.arange(grid3d.Nx, dtype=float) * grid3d.spacing("x")
+        y = jnp.arange(grid3d.Ny, dtype=float) * grid3d.spacing("y")
         u2d = jnp.broadcast_to(-y[:, None], (grid3d.Ny, grid3d.Nx))
         v2d = jnp.broadcast_to(x, (grid3d.Ny, grid3d.Nx))
         u = jnp.broadcast_to(u2d[None], (grid3d.Nz, grid3d.Ny, grid3d.Nx))
@@ -277,12 +277,12 @@ def _compact_nondivergent_flow(n: int = 36, seed: int = 0):
     u = (
         jnp.zeros((n, n))
         .at[1:-1, 1:-1]
-        .set(-(psi[1:-1, 1:-1] - psi[:-2, 1:-1]) / grid.dy)
+        .set(-(psi[1:-1, 1:-1] - psi[:-2, 1:-1]) / grid.spacing("y"))
     )
     v = (
         jnp.zeros((n, n))
         .at[1:-1, 1:-1]
-        .set((psi[1:-1, 1:-1] - psi[1:-1, :-2]) / grid.dx)
+        .set((psi[1:-1, 1:-1] - psi[1:-1, :-2]) / grid.spacing("x"))
     )
     return grid, u, v
 
@@ -331,7 +331,9 @@ class TestVortexForceConservation:
 
         grid, u, v = _compact_nondivergent_flow()
         div = Difference2D(grid=grid).divergence(u, v)
-        assert float(jnp.abs(div).max()) < 1e-10 * float(jnp.abs(u).max()) / grid.dx
+        assert float(jnp.abs(div).max()) < 1e-10 * float(
+            jnp.abs(u).max()
+        ) / grid.spacing("x")
 
 
 class TestBlendSchemeAlias:

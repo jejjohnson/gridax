@@ -59,7 +59,7 @@ class TestJitDifference:
 
     def test_jit_diff_x_T_to_U_matches_eager(self, grid2d):
         diff = Difference2D(grid=grid2d)
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
         h = jnp.broadcast_to(2.0 * x, (grid2d.Ny, grid2d.Nx))
 
         eager = diff.diff_x_T_to_U(h)
@@ -69,7 +69,7 @@ class TestJitDifference:
 
     def test_jit_diff_y_T_to_V_matches_eager(self, grid2d):
         diff = Difference2D(grid=grid2d)
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         h = jnp.broadcast_to(3.0 * y[:, None], (grid2d.Ny, grid2d.Nx))
 
         eager = diff.diff_y_T_to_V(h)
@@ -79,8 +79,8 @@ class TestJitDifference:
 
     def test_jit_laplacian_matches_eager(self, grid2d):
         diff = Difference2D(grid=grid2d)
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         h = x[None, :] ** 2 + y[:, None] ** 2
 
         eager = diff.laplacian(h)
@@ -100,8 +100,8 @@ class TestJitDifference:
 
     def test_jit_curl_matches_eager(self, grid2d):
         diff = Difference2D(grid=grid2d)
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         u = jnp.broadcast_to(-y[:, None], (grid2d.Ny, grid2d.Nx))
         v = jnp.broadcast_to(x, (grid2d.Ny, grid2d.Nx))
 
@@ -112,7 +112,7 @@ class TestJitDifference:
 
     def test_jit_1d_laplacian_matches_eager(self, grid1d):
         diff = Difference1D(grid=grid1d)
-        x = jnp.arange(grid1d.Nx, dtype=float) * grid1d.dx
+        x = jnp.arange(grid1d.Nx, dtype=float) * grid1d.spacing("x")
         h = x**2
 
         eager = diff.laplacian(h)
@@ -122,8 +122,8 @@ class TestJitDifference:
 
     def test_jit_3d_laplacian_matches_eager(self, grid3d):
         diff = Difference3D(grid=grid3d)
-        x = jnp.arange(grid3d.Nx, dtype=float) * grid3d.dx
-        y = jnp.arange(grid3d.Ny, dtype=float) * grid3d.dy
+        x = jnp.arange(grid3d.Nx, dtype=float) * grid3d.spacing("x")
+        y = jnp.arange(grid3d.Ny, dtype=float) * grid3d.spacing("y")
         h2d = x[None, :] ** 2 + y[:, None] ** 2
         h = jnp.broadcast_to(h2d, (grid3d.Nz, grid3d.Ny, grid3d.Nx))
 
@@ -238,8 +238,8 @@ class TestJitVorticity:
 
     def test_jit_relative_vorticity_matches_eager(self, grid2d):
         vort = Vorticity2D(grid=grid2d)
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
-        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.dy
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
+        y = jnp.arange(grid2d.Ny, dtype=float) * grid2d.spacing("y")
         u = jnp.broadcast_to(-y[:, None], (grid2d.Ny, grid2d.Nx))
         v = jnp.broadcast_to(x, (grid2d.Ny, grid2d.Nx))
 
@@ -298,7 +298,7 @@ class TestJitDiffusion:
 
     def test_jit_diffusion2d_matches_eager(self, grid2d):
         diff_op = Diffusion2D(grid=grid2d)
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
         h = jnp.broadcast_to(x**2, (grid2d.Ny, grid2d.Nx))
 
         eager = diff_op(h, kappa=1e-2)
@@ -308,7 +308,7 @@ class TestJitDiffusion:
 
     def test_jit_diffusion2d_fluxes_matches_eager(self, grid2d):
         diff_op = Diffusion2D(grid=grid2d)
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
         h = jnp.broadcast_to(x**2, (grid2d.Ny, grid2d.Nx))
 
         fx_eager, fy_eager = diff_op.fluxes(h, kappa=0.5)
@@ -318,12 +318,14 @@ class TestJitDiffusion:
         np.testing.assert_allclose(fy_jit, fy_eager, rtol=1e-7)
 
     def test_jit_diffusion_2d_functional_matches_eager(self, grid2d):
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
         h = jnp.broadcast_to(x**2, (grid2d.Ny, grid2d.Nx))
 
-        eager = diffusion_2d(h, kappa=1.0, dx=grid2d.dx, dy=grid2d.dy)
+        eager = diffusion_2d(
+            h, kappa=1.0, dx=grid2d.spacing("x"), dy=grid2d.spacing("y")
+        )
         jitted = jax.jit(diffusion_2d, static_argnums=(2, 3))(
-            h, 1.0, grid2d.dx, grid2d.dy
+            h, 1.0, grid2d.spacing("x"), grid2d.spacing("y")
         )
 
         np.testing.assert_allclose(jitted, eager, rtol=1e-7)
@@ -339,7 +341,7 @@ class TestPurityAndDeterminism:
 
     def test_difference_repeated_calls_identical(self, grid2d):
         diff = Difference2D(grid=grid2d)
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
         h = jnp.broadcast_to(x, (grid2d.Ny, grid2d.Nx))
 
         r1 = diff.laplacian(h)
@@ -349,7 +351,7 @@ class TestPurityAndDeterminism:
 
     def test_jit_difference_repeated_calls_identical(self, grid2d):
         diff = Difference2D(grid=grid2d)
-        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.dx
+        x = jnp.arange(grid2d.Nx, dtype=float) * grid2d.spacing("x")
         h = jnp.broadcast_to(x, (grid2d.Ny, grid2d.Nx))
         jitted = jax.jit(diff.laplacian)
 

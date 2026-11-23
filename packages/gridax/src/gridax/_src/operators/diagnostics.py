@@ -126,8 +126,8 @@ def bernoulli_potential(
 def relative_vorticity_cgrid(
     u: Float[Array, "*batch Ny Nx"],
     v: Float[Array, "*batch Ny Nx"],
-    dx: float,
-    dy: float,
+    dx: float | Float[Array, ""],
+    dy: float | Float[Array, ""],
 ) -> Float[Array, "*batch Ny Nx"]:
     """Relative vorticity at X-points (corners) on an Arakawa C-grid.
 
@@ -196,8 +196,8 @@ def potential_vorticity(
 def shear_strain(
     u: Float[Array, "*batch Ny Nx"],
     v: Float[Array, "*batch Ny Nx"],
-    dx: float,
-    dy: float,
+    dx: float | Float[Array, ""],
+    dy: float | Float[Array, ""],
 ) -> Float[Array, "*batch Ny Nx"]:
     """Shear strain at X-points (corners) on an Arakawa C-grid.
 
@@ -228,8 +228,8 @@ def shear_strain(
 def tensor_strain(
     u: Float[Array, "*batch Ny Nx"],
     v: Float[Array, "*batch Ny Nx"],
-    dx: float,
-    dy: float,
+    dx: float | Float[Array, ""],
+    dy: float | Float[Array, ""],
 ) -> Float[Array, "*batch Ny Nx"]:
     """Tensor (normal) strain at T-points on an Arakawa C-grid.
 
@@ -408,10 +408,10 @@ def qg_potential_vorticity(
     psi: Float[Array, "*batch Ny Nx"],
     f0: float | Float[Array, ""],
     beta: float | Float[Array, ""],
-    dx: float,
-    dy: float,
+    dx: float | Float[Array, ""],
+    dy: float | Float[Array, ""],
     y: Float[Array, "*batch Ny Nx"],
-    y0: float,
+    y0: float | Float[Array, ""],
 ) -> Float[Array, "*batch Ny Nx"]:
     """QG potential vorticity at T-points (single layer).
 
@@ -515,8 +515,8 @@ def stretching_term(
 def total_energy(
     ke: Float[Array, "*batch Ny Nx"],
     ape: Float[Array, "*batch Ny Nx"],
-    dx: float,
-    dy: float,
+    dx: float | Float[Array, ""],
+    dy: float | Float[Array, ""],
 ) -> Float[Array, ""]:
     """Domain-integrated total energy.
 
@@ -544,8 +544,8 @@ def total_energy(
 
 def total_enstrophy(
     ens: Float[Array, "*batch Ny Nx"],
-    dx: float,
-    dy: float,
+    dx: float | Float[Array, ""],
+    dy: float | Float[Array, ""],
 ) -> Float[Array, ""]:
     """Domain-integrated enstrophy.
 
@@ -577,8 +577,8 @@ def total_enstrophy(
 def vertical_velocity(
     u: Float[Array, "Nz Ny Nx"],
     v: Float[Array, "Nz Ny Nx"],
-    dx: float,
-    dy: float,
+    dx: float | Float[Array, ""],
+    dy: float | Float[Array, ""],
     dz: float,
     mask: Mask3D | Float[Array, "Nz Ny Nx"] | None = None,
 ) -> Float[Array, "Nz Ny Nx"]:
@@ -629,8 +629,14 @@ def vertical_velocity(
     Examples
     --------
     >>> grid = CartesianGrid3D.from_interior(6, 4, 3, Lx=1.0, Ly=1.0, Lz=1.0)
-    >>> u = jnp.broadcast_to(jnp.arange(grid.Nx) * grid.dx, (grid.Nz, grid.Ny, grid.Nx))
-    >>> w = vertical_velocity(u, jnp.zeros_like(u), grid.dx, grid.dy, grid.dz)
+    >>> u = jnp.broadcast_to(jnp.asarray(grid.coords("x")), (grid.Nz, grid.Ny, grid.Nx))
+    >>> w = vertical_velocity(
+    ...     u,
+    ...     jnp.zeros_like(u),
+    ...     grid.spacing("x"),
+    ...     grid.spacing("y"),
+    ...     grid.spacing("z"),
+    ... )
     >>> w.shape, float(w[0, 2, 2]), float(w[1, 2, 2])  # du/dx = 1
     ((5, 6, 8), 0.0, -0.333...)
     """
@@ -730,10 +736,10 @@ def potential_vorticity_multilayer(
     A: Float[Array, "nl nl"],
     f0: float,
     beta: float,
-    dx: float,
-    dy: float,
+    dx: float | Float[Array, ""],
+    dy: float | Float[Array, ""],
     y: Float[Array, "Ny Nx"],
-    y0: float,
+    y0: float | Float[Array, ""],
 ) -> Float[Array, "nl Ny Nx"]:
     """Multi-layer QG potential vorticity.
 
@@ -800,8 +806,8 @@ def sw_potential_vorticity(
     v: Float[Array, "*batch Ny Nx"],
     h: Float[Array, "*batch Ny Nx"],
     f: Float[Array, "*batch Ny Nx"],
-    dx: float,
-    dy: float,
+    dx: float | Float[Array, ""],
+    dy: float | Float[Array, ""],
 ) -> Float[Array, "*batch Ny Nx"]:
     """Shallow-water potential vorticity at X-points on an Arakawa C-grid.
 
@@ -846,8 +852,8 @@ def sw_potential_vorticity_multilayer(
     v: Float[Array, "nl Ny Nx"],
     h: Float[Array, "nl Ny Nx"],
     f: Float[Array, "Ny Nx"],
-    dx: float,
-    dy: float,
+    dx: float | Float[Array, ""],
+    dy: float | Float[Array, ""],
 ) -> Float[Array, "nl Ny Nx"]:
     """Multi-layer shallow-water potential vorticity at X-points.
 

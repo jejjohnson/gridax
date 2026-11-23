@@ -221,9 +221,9 @@ import jax.numpy as jnp
 
 # field, u_T, v_T: [Ny, Nx] T-point fields, velocity in m/s
 nodes = jnp.asarray(gridax.t_point_coordinates(grid))  # [Ny * Nx, 2], (y, x)
-y = jnp.arange(grid.Ny) * grid.dy
-x = jnp.arange(grid.Nx) * grid.dx
-points = fg.RectilinearGrid((fg.Axis(y, period=grid.Ny * grid.dy), fg.Axis(x, period=grid.Nx * grid.dx)))
+y = jnp.arange(grid.Ny) * grid.spacing("y")
+x = jnp.arange(grid.Nx) * grid.spacing("x")
+points = fg.RectilinearGrid((fg.Axis(y, period=grid.Ny * grid.spacing("y")), fg.Axis(x, period=grid.Nx * grid.spacing("x"))))
 
 
 def readout(x_d):

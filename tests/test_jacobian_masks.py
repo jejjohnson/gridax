@@ -56,7 +56,8 @@ class TestArakawaJacobian2DShape:
         assert out.shape == f.shape
         # out[j, i] = J[j-1, i-1] for 1 <= j <= Ny-2, 1 <= i <= Nx-2
         np.testing.assert_array_equal(
-            out[1:-1, 1:-1], arakawa_jacobian(f, g, grid.dx, grid.dy)
+            out[1:-1, 1:-1],
+            arakawa_jacobian(f, g, grid.spacing("x"), grid.spacing("y")),
         )
         ghost = np.ones(out.shape, dtype=bool)
         # ghost[j, i] = False for 1 <= j <= Ny-2, 1 <= i <= Nx-2

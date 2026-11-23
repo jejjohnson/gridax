@@ -37,13 +37,13 @@ def diff_op3d(grid3d):
 class TestDiffusion2DFunctional:
     def test_output_shape(self, grid):
         h = jnp.zeros((grid.Ny, grid.Nx))
-        result = diffusion_2d(h, kappa=1.0, dx=grid.dx, dy=grid.dy)
+        result = diffusion_2d(h, kappa=1.0, dx=grid.spacing("x"), dy=grid.spacing("y"))
         assert result.shape == (grid.Ny, grid.Nx)
 
     def test_ghost_ring_is_zero(self, grid):
         """Ghost ring in the output is always zero."""
         h = jnp.ones((grid.Ny, grid.Nx))
-        result = diffusion_2d(h, kappa=1.0, dx=grid.dx, dy=grid.dy)
+        result = diffusion_2d(h, kappa=1.0, dx=grid.spacing("x"), dy=grid.spacing("y"))
         np.testing.assert_allclose(result[0, :], 0.0)
         np.testing.assert_allclose(result[-1, :], 0.0)
         np.testing.assert_allclose(result[:, 0], 0.0)
@@ -52,15 +52,15 @@ class TestDiffusion2DFunctional:
     def test_constant_tracer_zero_tendency(self, grid):
         """Constant tracer has zero diffusion tendency everywhere."""
         h = jnp.ones((grid.Ny, grid.Nx))
-        result = diffusion_2d(h, kappa=1.0, dx=grid.dx, dy=grid.dy)
+        result = diffusion_2d(h, kappa=1.0, dx=grid.spacing("x"), dy=grid.spacing("y"))
         np.testing.assert_allclose(result[1:-1, 1:-1], 0.0, atol=1e-12)
 
     def test_quadratic_x_gives_constant_tendency(self, grid):
         """For h = c * x^2, ∇²h = 2c/dx^2 exactly (Laplacian = const)."""
         c = 3.0
-        x = jnp.arange(grid.Nx, dtype=float) * grid.dx
+        x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
         h = jnp.broadcast_to(c * x**2, (grid.Ny, grid.Nx))
-        result = diffusion_2d(h, kappa=1.0, dx=grid.dx, dy=grid.dy)
+        result = diffusion_2d(h, kappa=1.0, dx=grid.spacing("x"), dy=grid.spacing("y"))
         # ∂²h/∂x² = 2c everywhere, ∂²h/∂y² = 0  →  tendency = 2c
         # Interior avoids boundary ghost-cell pollution: skip first/last column
         np.testing.assert_allclose(result[1:-1, 2:-2], 2.0 * c, rtol=1e-8)
@@ -68,19 +68,19 @@ class TestDiffusion2DFunctional:
     def test_quadratic_y_gives_constant_tendency(self, grid):
         """For h = c * y^2, ∇²h = 2c/dy^2 exactly."""
         c = 2.5
-        y = jnp.arange(grid.Ny, dtype=float) * grid.dy
+        y = jnp.arange(grid.Ny, dtype=float) * grid.spacing("y")
         h = jnp.broadcast_to(c * y[:, None] ** 2, (grid.Ny, grid.Nx))
-        result = diffusion_2d(h, kappa=1.0, dx=grid.dx, dy=grid.dy)
+        result = diffusion_2d(h, kappa=1.0, dx=grid.spacing("x"), dy=grid.spacing("y"))
         # ∂²h/∂y² = 2c everywhere, ∂²h/∂x² = 0  →  tendency = 2c
         np.testing.assert_allclose(result[2:-2, 1:-1], 2.0 * c, rtol=1e-8)
 
     def test_kappa_scales_tendency(self, grid):
         """Doubling κ doubles the tendency."""
         c = 1.0
-        x = jnp.arange(grid.Nx, dtype=float) * grid.dx
+        x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
         h = jnp.broadcast_to(c * x**2, (grid.Ny, grid.Nx))
-        r1 = diffusion_2d(h, kappa=1.0, dx=grid.dx, dy=grid.dy)
-        r2 = diffusion_2d(h, kappa=2.0, dx=grid.dx, dy=grid.dy)
+        r1 = diffusion_2d(h, kappa=1.0, dx=grid.spacing("x"), dy=grid.spacing("y"))
+        r2 = diffusion_2d(h, kappa=2.0, dx=grid.spacing("x"), dy=grid.spacing("y"))
         np.testing.assert_allclose(r2[1:-1, 1:-1], 2.0 * r1[1:-1, 1:-1], rtol=1e-10)
 
     def test_all_dry_mask_zeros_tendency_via_flux_masks(self, grid):
@@ -95,7 +95,7 @@ class TestDiffusion2DFunctional:
 
         all_dry = Mask2D.from_mask(np.zeros((grid.Ny, grid.Nx), dtype=bool))
         diff = Diffusion2D(grid=grid, mask=all_dry)
-        x = jnp.arange(grid.Nx, dtype=float) * grid.dx
+        x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
         h = jnp.broadcast_to(x**2, (grid.Ny, grid.Nx))
         result = diff(h, kappa=1.0)
         np.testing.assert_allclose(result[1:-1, 1:-1], 0.0, atol=1e-12)
@@ -113,14 +113,14 @@ class TestDiffusion2DFunctional:
         h_mask[3, 3] = False
         mask = Mask2D.from_mask(h_mask)
         diff = Diffusion2D(grid=grid, mask=mask)
-        x = jnp.arange(grid.Nx, dtype=float) * grid.dx
+        x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
         h = jnp.broadcast_to(x**2, (grid.Ny, grid.Nx))
         result = diff(h, kappa=1.0)
         assert float(result[3, 3]) == pytest.approx(0.0, abs=1e-12)
 
     def test_no_nan_output(self, grid):
         h = jnp.ones((grid.Ny, grid.Nx))
-        result = diffusion_2d(h, kappa=1.0, dx=grid.dx, dy=grid.dy)
+        result = diffusion_2d(h, kappa=1.0, dx=grid.spacing("x"), dy=grid.spacing("y"))
         assert jnp.all(jnp.isfinite(result))
 
 
@@ -141,12 +141,12 @@ class TestDiffusion2DClass:
 
     def test_matches_functional_api(self, diff_op, grid):
         """Diffusion2D.__call__ must match diffusion_2d functional form."""
-        x = jnp.arange(grid.Nx, dtype=float) * grid.dx
+        x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
         h = jnp.broadcast_to(x**2, (grid.Ny, grid.Nx))
         kappa = 0.5
         np.testing.assert_allclose(
             diff_op(h, kappa=kappa),
-            diffusion_2d(h, kappa=kappa, dx=grid.dx, dy=grid.dy),
+            diffusion_2d(h, kappa=kappa, dx=grid.spacing("x"), dy=grid.spacing("y")),
             atol=1e-12,
         )
 
@@ -163,7 +163,7 @@ class TestDiffusion2DClass:
         diff_unmasked = Diffusion2D(grid=grid)
         diff_masked = Diffusion2D(grid=grid, mask=mask)
 
-        x = jnp.arange(grid.Nx, dtype=float) * grid.dx
+        x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
         h = jnp.broadcast_to(x**2, (grid.Ny, grid.Nx))
         out_masked = np.asarray(diff_masked(h, kappa=0.7))
         # Dry cells → exact zero via the mask.h final multiply
@@ -214,7 +214,7 @@ class TestDiffusion2DFluxes:
         """For h = c*x, east-face flux = κ*c for all interior-interior faces."""
         c = 2.0
         kappa = 1.5
-        x = jnp.arange(grid.Nx, dtype=float) * grid.dx
+        x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
         h = jnp.broadcast_to(c * x, (grid.Ny, grid.Nx))
         fx, fy = diff_op.fluxes(h, kappa=kappa)
         # flux_x = κ * c for faces i=1 ... Nx-3 (east boundary face i=Nx-2 is 0)
@@ -224,8 +224,8 @@ class TestDiffusion2DFluxes:
 
     def test_flux_divergence_equals_tendency(self, diff_op, grid):
         """∇·(flux_x, flux_y) must equal tendency from __call__."""
-        x = jnp.arange(grid.Nx, dtype=float) * grid.dx
-        y = jnp.arange(grid.Ny, dtype=float) * grid.dy
+        x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
+        y = jnp.arange(grid.Ny, dtype=float) * grid.spacing("y")
         h = jnp.sin(x[None, :]) + jnp.cos(y[:, None])
         kappa = 0.3
 
@@ -233,7 +233,7 @@ class TestDiffusion2DFluxes:
         fx, fy = diff_op.fluxes(h, kappa=kappa)
 
         # Manually compute divergence of fluxes
-        dx, dy = grid.dx, grid.dy
+        dx, dy = grid.spacing("x"), grid.spacing("y")
         div_flux = jnp.zeros_like(h)
         div_flux = div_flux.at[1:-1, 1:-1].set(
             (fx[1:-1, 1:-1] - fx[1:-1, :-2]) / dx
@@ -248,13 +248,13 @@ class TestDiffusion2DFluxes:
         all_dry = Mask2D.from_mask(np.zeros((grid.Ny, grid.Nx), dtype=bool))
         diff_masked = Diffusion2D(grid=grid, mask=all_dry)
         c = 1.0
-        x = jnp.arange(grid.Nx, dtype=float) * grid.dx
+        x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
         h = jnp.broadcast_to(c * x, (grid.Ny, grid.Nx))
         fx, _fy = diff_masked.fluxes(h, kappa=1.0)
         np.testing.assert_allclose(fx, 0.0, atol=1e-12)
 
     def test_ghost_ring_is_zero(self, diff_op, grid):
-        x = jnp.arange(grid.Nx, dtype=float) * grid.dx
+        x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
         h = jnp.broadcast_to(x**2, (grid.Ny, grid.Nx))
         fx, fy = diff_op.fluxes(h, kappa=1.0)
         # Ghost ring of flux arrays is always zero
@@ -298,7 +298,7 @@ class TestDiffusion3DClass:
     def test_quadratic_x_gives_constant_tendency(self, diff_op3d, grid3d):
         """For h = c*x^2, tendency = 2c at interior cells (all z-levels)."""
         c = 2.0
-        x = jnp.arange(grid3d.Nx, dtype=float) * grid3d.dx
+        x = jnp.arange(grid3d.Nx, dtype=float) * grid3d.spacing("x")
         h = jnp.broadcast_to(c * x**2, (grid3d.Nz, grid3d.Ny, grid3d.Nx))
         result = diff_op3d(h, kappa=1.0)
         # Skip boundary z-levels and boundary polluted columns
@@ -356,8 +356,8 @@ class TestBiharmonicDiffusion2D:
         from gridax._src.diffusion.diffusion import BiharmonicDiffusion2D
 
         op = BiharmonicDiffusion2D(grid=grid)
-        ix = jnp.arange(grid.Nx, dtype=float) * grid.dx
-        jy = jnp.arange(grid.Ny, dtype=float) * grid.dy
+        ix = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
+        jy = jnp.arange(grid.Ny, dtype=float) * grid.spacing("y")
         h = ix[None, :] ** 2 + jy[:, None] ** 2
         tend1 = op(h, kappa=1.0)
         tend2 = op(h, kappa=2.0)
@@ -381,8 +381,8 @@ class TestBiharmonicDiffusion2D:
         op = BiharmonicDiffusion2D(grid=grid)
         harm = Diffusion2D(grid=grid)
 
-        ix = jnp.arange(grid.Nx, dtype=float) * grid.dx
-        jy = jnp.arange(grid.Ny, dtype=float) * grid.dy
+        ix = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
+        jy = jnp.arange(grid.Ny, dtype=float) * grid.spacing("y")
         # sin(x)*sin(y): nabla^2 h = -2*sin(x)*sin(y) != const, so nabla^4 h != 0
         h = jnp.sin(ix[None, :]) * jnp.sin(jy[:, None])
         h = enforce_periodic(h)
@@ -426,12 +426,14 @@ class TestBiharmonicDiffusion2D:
         op = BiharmonicDiffusion2D(grid=grid)
 
         k1, k4 = 1, 4
-        x = jnp.arange(grid.Nx, dtype=float) * grid.dx
+        x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
         kappa = 1.0
 
         def disc_lap_eigenvalue(k: int) -> float:
             # Eigenvalue of the discrete Laplacian for wavenumber k
-            return float(-4.0 * jnp.sin(k * grid.dx / 2) ** 2 / grid.dx**2)
+            return float(
+                -4.0 * jnp.sin(k * grid.spacing("x") / 2) ** 2 / grid.spacing("x") ** 2
+            )
 
         for k in [k1, k4]:
             h = jnp.tile(jnp.sin(k * x), (grid.Ny, 1))
@@ -482,7 +484,7 @@ class TestBiharmonicDiffusion2D:
 
         # k = 8: well-resolved, k*dx = 8 * (2*pi/64) = pi/4, |mu_k|^2 > |mu_k|
         k = 8
-        x = jnp.arange(grid.Nx, dtype=float) * grid.dx
+        x = jnp.arange(grid.Nx, dtype=float) * grid.spacing("x")
         h = jnp.tile(jnp.sin(k * x), (grid.Ny, 1))
         h = enforce_periodic(h)
 
@@ -542,8 +544,8 @@ class TestBiharmonicDiffusion3D:
         from gridax._src.diffusion.diffusion import BiharmonicDiffusion3D
 
         op = BiharmonicDiffusion3D(grid=grid3d)
-        ix = jnp.arange(grid3d.Nx, dtype=float) * grid3d.dx
-        jy = jnp.arange(grid3d.Ny, dtype=float) * grid3d.dy
+        ix = jnp.arange(grid3d.Nx, dtype=float) * grid3d.spacing("x")
+        jy = jnp.arange(grid3d.Ny, dtype=float) * grid3d.spacing("y")
         h = jnp.broadcast_to(
             ix[None, None, :] + jy[None, :, None] ** 2,
             (grid3d.Nz, grid3d.Ny, grid3d.Nx),
@@ -591,8 +593,8 @@ def _variable_kappa_error_2d(n: int) -> float:
     grid = CartesianGrid2D.from_interior(n, n, 1.0, 1.0)
     # T[j, i] sits at (i dx, j dy); the closed walls are the faces at dx/2 and
     # (n + 1/2) dx, so shift the coordinates to put the walls at 0 and L
-    ii = (jnp.arange(grid.Nx) - 0.5) * grid.dx
-    jj = (jnp.arange(grid.Ny) - 0.5) * grid.dy
+    ii = (jnp.arange(grid.Nx) - 0.5) * grid.spacing("x")
+    jj = (jnp.arange(grid.Ny) - 0.5) * grid.spacing("y")
     y, x = jnp.meshgrid(jj, ii, indexing="ij")
     kap, q = _kappa_q_2d(x, y, 1.0, 1.0)
     exact = jax.jit(_exact_div_kappa_grad_2d, static_argnums=(2, 3))(x, y, 1.0, 1.0)
@@ -642,8 +644,8 @@ class TestVariableKappa:
         fx, fy = Diffusion2D(grid=grid).fluxes(h, k)
         ex = 0.5 * (k[1:-1, 1:-2] + k[1:-1, 2:-1]) * (h[1:-1, 2:-1] - h[1:-1, 1:-2])
         ey = 0.5 * (k[1:-2, 1:-1] + k[2:-1, 1:-1]) * (h[2:-1, 1:-1] - h[1:-2, 1:-1])
-        np.testing.assert_allclose(fx[1:-1, 1:-2], ex / grid.dx, rtol=1e-14)
-        np.testing.assert_allclose(fy[1:-2, 1:-1], ey / grid.dy, rtol=1e-14)
+        np.testing.assert_allclose(fx[1:-1, 1:-2], ex / grid.spacing("x"), rtol=1e-14)
+        np.testing.assert_allclose(fy[1:-2, 1:-1], ey / grid.spacing("y"), rtol=1e-14)
 
     def test_open_wall_face_reads_kappa_ghost(self, grid):
         """wall="open": the wall-face κ is (κ_edge + κ_ghost) / 2, so a
@@ -658,15 +660,19 @@ class TestVariableKappa:
         fx, fy = Diffusion2D(grid=grid).fluxes(h, k, wall="open")
         # west wall face (j, 1/2) and east wall face (j, Nx-3/2)
         np.testing.assert_allclose(
-            fx[1:-1, 0], k[1:-1, 1] * (h[1:-1, 1] - h[1:-1, 0]) / grid.dx, rtol=1e-14
-        )
-        np.testing.assert_allclose(
-            fx[1:-1, -2],
-            k[1:-1, -2] * (h[1:-1, -1] - h[1:-1, -2]) / grid.dx,
+            fx[1:-1, 0],
+            k[1:-1, 1] * (h[1:-1, 1] - h[1:-1, 0]) / grid.spacing("x"),
             rtol=1e-14,
         )
         np.testing.assert_allclose(
-            fy[0, 1:-1], k[1, 1:-1] * (h[1, 1:-1] - h[0, 1:-1]) / grid.dy, rtol=1e-14
+            fx[1:-1, -2],
+            k[1:-1, -2] * (h[1:-1, -1] - h[1:-1, -2]) / grid.spacing("x"),
+            rtol=1e-14,
+        )
+        np.testing.assert_allclose(
+            fy[0, 1:-1],
+            k[1, 1:-1] * (h[1, 1:-1] - h[0, 1:-1]) / grid.spacing("y"),
+            rtol=1e-14,
         )
 
     @pytest.mark.parametrize("masked", [False, True])
