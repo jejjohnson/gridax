@@ -251,21 +251,27 @@ for arbitrary per-cell values and interior observations.
 
 ### Several fields
 
-A model state with several fields needs one call of `fill_ghosts` per field, each with the `BC` and the point of that field.  A `BC` holds no point, so the same one can be reused:
+A state is filled in one call. Give `fill_ghosts` a pytree of `BC` with the structure of the state (a dict, a NamedTuple, an `eqx.Module`), one per field: each [CField](xref:api#gridax.CField) brings its own point, and `None` leaves a field alone. A `BC` holds no point, so the same one can serve several fields.
 
 ```python
 import numpy as np
 import gridax
 
 grid = gridax.CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
-state = {"u": np.ones(grid.shape), "h": np.ones(grid.shape)}
+state = {
+    "u": gridax.CField(np.ones(grid.shape), ("y", "x"), loc="U"),
+    "h": gridax.CField(np.ones(grid.shape), ("y", "x"), loc="T"),
+}
 
 # Free-slip velocity: zero normal flow on the W/E walls, zero tangential gradient on S/N
-bc_u = gridax.BC(x=gridax.Dirichlet(0.0), y=gridax.Neumann())
-bc_h = gridax.BC(x=gridax.Outflow(), y=gridax.Outflow())
-state["u"] = gridax.fill_ghosts(state["u"], grid, bc_u, stagger="U")
-state["h"] = gridax.fill_ghosts(state["h"], grid, bc_h)
+bcs = {
+    "u": gridax.BC(x=gridax.Dirichlet(0.0), y=gridax.Neumann()),
+    "h": gridax.BC(x=gridax.Outflow(), y=gridax.Outflow()),
+}
+state = gridax.fill_ghosts(state, grid, bcs)
 ```
+
+A state of plain arrays passes its points as a pytree too: `stagger={"u": "U", "h": "T"}`.
 
 ### Corners
 

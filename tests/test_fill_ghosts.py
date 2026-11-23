@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import NamedTuple
 
 import equinox as eqx
 import gridax as g
@@ -378,6 +379,110 @@ class TestValues:
             np.testing.assert_allclose(
                 out[i], fill_ghosts(field(), GRID, BC(x=make(v))), rtol=1e-14
             )
+
+
+class State(eqx.Module):
+    h: CField
+    u: CField
+    v: CField
+
+
+class Triple(NamedTuple):
+    h: object
+    u: object
+    v: object
+
+
+def state_of(make, lead=()):
+    """A state of T, U and V fields, built with ``make``."""
+    dims = (*("member",)[: len(lead)], "y", "x")
+    return make(
+        **{
+            name: CField(field((*lead, *GRID.shape), seed), dims, loc=loc)
+            for seed, (name, loc) in enumerate((("h", "T"), ("u", "U"), ("v", "V")))
+        }
+    )
+
+
+WALL, FLAT = g.Dirichlet(0.0), g.Neumann()
+STATE_BCS = {
+    "h": BC(x=FLAT, y=FLAT),
+    "u": BC(x=WALL, y=FLAT),
+    "v": BC(x=FLAT, y=WALL),
+}
+
+
+class TestState:
+    """One pytree of `BC` per state, matched leaf by leaf."""
+
+    @pytest.mark.parametrize("make", [dict, Triple, State])
+    def test_every_field_is_filled_at_its_point(self, make):
+        state = state_of(make)
+        out = fill_ghosts(state, GRID, make(**STATE_BCS))
+        assert type(out) is type(state)
+        fields = state if isinstance(state, dict) else vars_of(state)
+        filled = out if isinstance(out, dict) else vars_of(out)
+        for name, f in fields.items():
+            want = fill_ghosts(f, GRID, STATE_BCS[name])
+            assert filled[name].loc == f.loc
+            np.testing.assert_array_equal(filled[name].data, want.data)
+
+    def test_plain_arrays_take_their_points_from_stagger(self):
+        state = {name: f.data for name, f in state_of(dict).items()}
+        points = {"h": "T", "u": "U", "v": "V"}
+        out = fill_ghosts(state, GRID, STATE_BCS, stagger=points)
+        for name, f in state_of(dict).items():
+            np.testing.assert_array_equal(
+                out[name], fill_ghosts(f, GRID, STATE_BCS[name]).data
+            )
+
+    def test_none_leaves_a_field_alone(self):
+        state = state_of(dict)
+        out = fill_ghosts(state, GRID, {**STATE_BCS, "u": None})
+        assert out["u"] is state["u"]
+
+    def test_a_nested_state(self):
+        state = {"ocean": state_of(State), "tracers": [state_of(dict)["h"]]}
+        bcs = {"ocean": State(**STATE_BCS), "tracers": [STATE_BCS["h"]]}
+        out = fill_ghosts(state, GRID, bcs)
+        np.testing.assert_array_equal(
+            out["tracers"][0].data,
+            fill_ghosts(state["tracers"][0], GRID, STATE_BCS["h"]).data,
+        )
+
+    @pytest.mark.parametrize("jit", [jax.jit, eqx.filter_jit])
+    def test_an_equinox_state_under_jit(self, jit):
+        state = state_of(State)
+        got = jit(fill_ghosts)(state, GRID, State(**STATE_BCS))
+        want = fill_ghosts(state, GRID, State(**STATE_BCS))
+        assert jax.tree.structure(got) == jax.tree.structure(want)
+        for a, b in zip(jax.tree.leaves(got), jax.tree.leaves(want), strict=True):
+            np.testing.assert_allclose(a, b, rtol=1e-14)
+
+    def test_an_equinox_state_under_vmap_over_members(self):
+        state = state_of(State, (3,))
+        bcs = State(**STATE_BCS)
+        mapped = jax.vmap(lambda s: fill_ghosts(s, GRID, bcs))(state)
+        named = fill_ghosts(state, GRID, bcs)
+        for a, b in zip(jax.tree.leaves(mapped), jax.tree.leaves(named), strict=True):
+            np.testing.assert_array_equal(a, b)
+
+    def test_another_structure_raises(self):
+        with pytest.raises(ValueError):
+            fill_ghosts(state_of(dict), GRID, {"h": STATE_BCS["h"]})
+
+    @pytest.mark.parametrize("bcs", [{**STATE_BCS, "u": 0.0}, {**STATE_BCS, "u": WALL}])
+    def test_a_leaf_that_is_not_a_bc_raises(self, bcs):
+        with pytest.raises(TypeError, match="BC or None"):
+            fill_ghosts(state_of(dict), GRID, bcs)
+
+    def test_one_field_needs_a_bc(self):
+        with pytest.raises(TypeError, match="must be a BC"):
+            fill_ghosts(field(), GRID, {"x": WALL})
+
+
+def vars_of(state):
+    return {name: getattr(state, name) for name in ("h", "u", "v")}
 
 
 class TestErrors:

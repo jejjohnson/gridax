@@ -104,34 +104,38 @@ class BC:
 def fill_ghosts(
     f: Any,
     grid: Any,
-    bc: BC,
+    bc: Any,
     *,
     width: int | None = None,
-    stagger: str | Stagger | None = None,
+    stagger: Any = None,
 ) -> Any:
-    """Fill the ghost ring of a field from its boundary conditions.
+    """Fill the ghost ring of a field, or of every field of a state.
 
     The point of the field says where the wall is (`gridax.BC` conditions
     hold at the wall) and the grid gives the spacing on each face.
 
     Parameters
     ----------
-    f : CField or array
+    f : CField, array or pytree of them
         A field with its ghost ring. A plain array has its grid axes last, in
-        the order of ``grid.axes``.
+        the order of ``grid.axes``. A state (a dict, a NamedTuple, an
+        ``eqx.Module``, …) is filled leaf by leaf, which needs JAX.
     grid : grid
         A Cartesian or spherical C-grid, 1-D, 2-D or 3-D.
-    bc : BC
-        The condition of each face. Faces it leaves out are not written.
+    bc : BC or pytree of BC
+        The condition of each face. Faces it leaves out are not written. For
+        a state, a pytree of its structure with one `BC` per field, or
+        ``None`` to leave the field alone.
     width : int, optional
-        Number of ghost layers of ``f`` on each side: the grid's by default.
+        Number of ghost layers on each side: the grid's by default.
     stagger : str or Stagger, optional
         The point of a plain array, e.g. ``"U"`` (T by default). A `CField`
-        has its own.
+        has its own. For a state, a pytree of its structure with the point of
+        each field (``None`` for the fields that have their own).
 
     Returns
     -------
-    CField or array
+    CField, array or pytree of them
         ``f`` with its ghost layers (and the nodes on a wall) written.
 
     Raises
@@ -139,9 +143,52 @@ def fill_ghosts(
     StaggerMismatchError
         If ``stagger`` is not the point of the `CField`.
     ValueError
-        If ``bc`` has an axis the grid or the field has not, or the field is
-        too small for ``width`` ghost layers.
+        If ``bc`` has an axis the grid or the field has not, the field is
+        too small for ``width`` ghost layers, or the structure of a state and
+        of its ``bc`` differ.
+    TypeError
+        If ``bc`` holds something other than a `BC` for a field.
+
+    Examples
+    --------
+    >>> import gridax, numpy as np
+    >>> grid = gridax.CartesianCGrid2D.from_interior(4, 4, 1.0, 1.0)
+    >>> state = {
+    ...     "h": gridax.CField(np.ones(grid.shape), ("y", "x"), loc="T"),
+    ...     "u": gridax.CField(np.ones(grid.shape), ("y", "x"), loc="U"),
+    ... }
+    >>> wall, flat = gridax.Dirichlet(0.0), gridax.Neumann()
+    >>> bcs = {"h": gridax.BC(x=flat, y=flat), "u": gridax.BC(x=wall, y=flat)}
+    >>> out = gridax.fill_ghosts(state, grid, bcs)
+    >>> float(out["u"].data[2, 0]), float(out["h"].data[2, 0])
+    (0.0, 1.0)
     """
+    if isinstance(bc, BC):
+        return _fill_field(f, grid, bc, width, stagger)
+    if isinstance(f, CField) or hasattr(f, "shape"):
+        raise TypeError(f"bc for one field must be a BC, got {type(bc).__name__}")
+    import jax
+
+    leaves, structure = jax.tree.flatten(f, is_leaf=lambda x: isinstance(x, CField))
+    conditions = structure.flatten_up_to(bc)
+    points = [None] * len(leaves)
+    if stagger is not None:
+        points = structure.flatten_up_to(stagger)
+    filled = []
+    for leaf, condition, point in zip(leaves, conditions, points, strict=True):
+        if condition is None:
+            filled.append(leaf)
+        elif isinstance(condition, BC):
+            filled.append(_fill_field(leaf, grid, condition, width, point))
+        else:
+            raise TypeError(
+                f"each field takes a BC or None, got {type(condition).__name__}"
+            )
+    return structure.unflatten(filled)
+
+
+def _fill_field(f: Any, grid: Any, bc: BC, width: int | None, stagger: Any) -> Any:
+    """`fill_ghosts` of one field."""
     width = grid.ghost if width is None else width
     unknown = [axis for axis in bc.faces if axis not in grid.axes]
     if unknown:
