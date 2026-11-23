@@ -56,8 +56,8 @@ None of it needs JAX. We write gridax against the [array API](https://data-apis.
 
 - 🧱 **Grids and masks as data**: `CartesianCGrid1D/2D/3D` and `SphericalCGrid2D/3D` add the ghost ring, and `Mask2D.from_mask` (or `Mask2D.from_bathymetry`) derives the wet T, U, V and X points, the coast classification and the stencil capability from one T-point mask, with NumPy and SciPy alone.
 - 🔢 **Exact stencil coefficients**: `gridax.stencils.difference_coeffs` solves the Taylor conditions in rational arithmetic, for point values or cell averages, collocated or staggered, and the WENO sub-stencils, optimal weights and smoothness matrices come from the same solver.
-- 🌊 **Advection that is safe at the coast**: `Advection1D/2D/3D` build the fluxes from upwind face values of first to third order, four TVD limiters, or WENO-3, 5, 7 and 9 (and WENO-Z 5), and next to land each face falls back to the widest stencil that fits; `gridax.advect` is the same as a function, and `gridax.reconstruct` along one axis.
-- 🧮 **C-grid operators**: `Difference*`, `Interpolation*`, `Divergence2D`, `Vorticity*`, `Coriolis*`, `Diffusion*`, `BiharmonicDiffusion*`, `MomentumAdvection*` and `ArakawaJacobian2D`, with `Spherical*` forms of the difference, divergence, Laplacian, vorticity, advection, diffusion and momentum operators.
+- 🌊 **Advection that is safe at the coast**: `gridax.advect` builds the fluxes from upwind face values of first to third order, four TVD limiters, or WENO-3, 5, 7 and 9 (and WENO-Z 5), and next to land each face falls back to the widest stencil that fits; `gridax.reconstruct` is the flux along one axis.
+- 🧮 **One function per operation**: `difference`, `interpolate`, `divergence`, `curl`, `laplacian`, `coriolis`, `diffuse`, `biharmonic`, `advect_momentum`, `arakawa_jacobian`, …, for 1-D, 2-D and 3-D, Cartesian, spherical and collocated grids: the type of the grid picks the stencil. `GridOps(grid, mask)` has them all as methods.
 - 🧭 **Boundary conditions per face**: nine conditions, from `Dirichlet` and `Neumann` to `Sponge` and `Outflow`, named per face by `BC` and written into the ghost layers of a field by `fill_ghosts`, so that each condition holds on the face.
 - 📊 **Diagnostics and integrals**: kinetic energy, enstrophy, potential vorticity, strain and the Okubo–Weiss parameter as functions, and area and volume sums and means that skip the dry cells (`area_sum`, `masked_mean`, …), on Cartesian and spherical grids.
 - 🔁 **One code path for NumPy and JAX**: a call returns NumPy arrays for NumPy inputs and traces under `jax.jit` for JAX inputs, and the masked-operator goldens are checked on both (`tests/test_numpy_parity.py`).
@@ -71,7 +71,7 @@ Every derivative and every face value in gridax comes from one stack of four lay
 | 0, coefficients | offsets and exact weights, no arrays | $`(1, -27, 27, -1)/24`$, a fourth-order staggered first derivative | `gridax.stencils`: `difference_offsets`, `difference_coeffs`, `nonuniform_coeffs`, `weno_stencils`, `optimal_weights`, `smoothness_matrix` |
 | 1, raw stencils | index arithmetic, with no metric and no mask | $`h_{j,i+1} - h_{j,i}`$ | `gridax.stencils`: the 32 named stencils (`diff_x_fwd_2d`, `avg_xfwd_yfwd_2d`, …), `staggered_difference`, `staggered_average`, `interior` |
 | 2, canonical functions | one per operation, scaled by the metric | $`(h_{j,i+1} - h_{j,i}) / \Delta x`$ | `difference`, `interpolate`, `divergence`, `curl`, `laplacian`, `advect`, `reconstruct`, `diffuse`, `coriolis`, `arakawa_jacobian`, `kinetic_energy`; on bare arrays `gridax.analysis` |
-| 3, bindings | a grid and a mask, held as fields | $`\mathrm{d}\bar{q}_{j,i}/\mathrm{d}t`$ above, zero on the dry points | `Difference2D`, `Advection2D`, `Diffusion2D`, `Vorticity2D`, `SphericalDifference2D`, … |
+| 3, the binding | a grid and a mask, held as fields | $`\mathrm{d}\bar{q}_{j,i}/\mathrm{d}t`$ above, zero on the dry points | `GridOps` |
 
 Layer 0 is one solver. A stencil with offsets $`s_1, \dots, s_K`$, in units of the grid step, approximates the $`n`$-th derivative with coefficients $`c_1, \dots, c_K`$ that solve
 
@@ -127,23 +127,21 @@ mask = gridax.Mask2D.from_mask(wet)
 # ψ = sin(πx) sin(πy) / π, one gyre
 psi = np.sin(np.pi * x) * np.sin(np.pi * y) / np.pi  # → (N_y, N_x)
 # today (gridax)
-difference = gridax.Difference2D(grid=grid, mask=mask)
+ops = gridax.GridOps(grid, mask)
 # today (gridax)
 # u = −∂ψ/∂y at U points, v = ∂ψ/∂x at V points
-u, v = difference.grad_perp(psi)  # → (N_y, N_x), (N_y, N_x)
+u, v = ops.grad_perp(psi, at="T")  # → (N_y, N_x), (N_y, N_x)
 # a Gaussian blob of tracer west of the island
 q = np.exp(-((x - 0.25) ** 2 + (y - 0.5) ** 2) / 0.01) * wet  # → (N_y, N_x)
 
-# today (gridax)
-advection = gridax.Advection2D(grid=grid, mask=mask)
 # today (gridax)
 # ∑ A_ji q̄_ji over the wet cells
 total = gridax.area_sum(q, grid, mask=mask)  # → ()
 dt = 0.2 * grid.spacing("x")
 for _ in range(200):
     # Heun's method on dq̄/dt, with WENO-5 face values
-    q1 = q + dt * advection(q, u, v, scheme=WENO(5))  # (N_y, N_x) → (N_y, N_x)
-    q = 0.5 * (q + q1 + dt * advection(q1, u, v, scheme=WENO(5)))
+    q1 = q + dt * ops.advect(q, u, v, scheme=WENO(5))  # (N_y, N_x) → (N_y, N_x)
+    q = 0.5 * (q + q1 + dt * ops.advect(q1, u, v, scheme=WENO(5)))
 # today (gridax)
 change = gridax.area_sum(q, grid, mask=mask) / total - 1.0  # → ()
 print(f"{float(change):.1e} {float(q.max()):.3f} {float(q.min()):.1e}")
@@ -151,7 +149,7 @@ print(f"{float(change):.1e} {float(q.max()):.3f} {float(q.min()):.1e}")
 
 This prints `0.0e+00 0.807 -4.8e-14`. After 200 steps the tracer total equals the initial one to the last bit, because every flux leaves one cell and enters the next and the dry faces carry none. The peak has fallen from 0.952 to 0.807 as WENO-5 smooths the blob on this coarse grid, and the smallest value, $`-4.8 \times 10^{-14}`$, is an undershoot at the level of rounding.
 
-Every array in the block is a NumPy array, and nothing in it imports JAX. Pass `jax.numpy` arrays instead and the same lines trace under `jax.jit` and differentiate under `jax.grad`. Swap `"weno5"` for `"upwind1"`, `"van_leer"` or `"weno9"`, or the mask for one from `Mask2D.from_bathymetry`, and the rest of the block stays the same. The [docs quickstart](https://jejjohnson.github.io/gridax/quickstart/) explains each step, says why the basin needs its ring of dry cells, and runs the tendency under `jit` and `grad`.
+Every array in the block is a NumPy array, and nothing in it imports JAX. Pass `jax.numpy` arrays instead and the same lines trace under `jax.jit` and differentiate under `jax.grad`. Swap `WENO(5)` for `Upwind(1)`, `TVD("van_leer")` or `WENO(9)` of `gridax.schemes`, or the mask for one from `Mask2D.from_bathymetry`, and the rest of the block stays the same. The [docs quickstart](https://jejjohnson.github.io/gridax/quickstart/) explains each step, says why the basin needs its ring of dry cells, and runs the tendency under `jit` and `grad`.
 
 ## 🔬 What else is in the box
 
@@ -169,13 +167,13 @@ Each area links to its API page, and the [capability index](https://jejjohnson.g
 | [Grids](https://jejjohnson.github.io/gridax/reference/grids/) | `ArakawaCGrid1D/2D/3D`, `CurvilinearGrid1D/2D/3D`, `CartesianCGrid1D/2D/3D`, `SphericalCGrid2D/3D`, `t_point_coordinates` | topology, then a uniform metric, then the coordinates |
 | [Masks](https://jejjohnson.github.io/gridax/reference/masks/) | `Mask1D/2D/3D`, `StencilCapability1D/2D/3D`; `dilate_mask`, `make_sponge`, `pool_bool`, `h_from_pooled`, `count_contiguous` | built once, eagerly, from a T-point mask |
 | [Coefficients and raw stencils](https://jejjohnson.github.io/gridax/reference/stencils/) | `gridax.stencils`: `difference_offsets`, `difference_coeffs`, `nonuniform_coeffs`, `weno_stencils`, `optimal_weights`, `smoothness_matrix`; `diff_x_fwd_2d`, `avg_y_bwd_3d`, …; `staggered_difference`, `staggered_average`, `interior` | Layers 0 and 1 |
-| [Collocated calculus](https://jejjohnson.github.io/gridax/reference/analysis/) | `gridax.analysis`: `difference`, `adaptive_difference`, `gradient_2d`, `divergence_2d`, `curl_2d`, `laplacian_2d` and their 1-D and 3-D forms; `remap_axis`, `remap_axis_columns`, `Extrapolate` | for fields with every variable at the cell centres |
-| [Differences](https://jejjohnson.github.io/gridax/reference/difference/) and [interpolation](https://jejjohnson.github.io/gridax/reference/interpolation/) | `Difference1D/2D/3D`, `Interpolation1D/2D/3D`, `Divergence2D`; `SphericalDifference2D/3D`, `SphericalDivergence2D/3D`, `SphericalLaplacian2D/3D` | moves between the T, U, V and X points |
-| [Vorticity](https://jejjohnson.github.io/gridax/reference/vorticity/) and [Coriolis](https://jejjohnson.github.io/gridax/reference/coriolis/) | `Vorticity2D/3D`, `SphericalVorticity2D/3D`, `Coriolis2D/3D`; `ArakawaJacobian2D`, `arakawa_jacobian`; `pv_flux_arakawa_lamb`, `pv_flux_blend`, `vorticity_flux_upwind` | the Jacobian conserves energy and enstrophy |
-| [Advection](https://jejjohnson.github.io/gridax/reference/advection/) and [reconstruction](https://jejjohnson.github.io/gridax/reference/reconstruction/) | `Advection1D/2D/3D`, `SphericalAdvection2D/3D`, `Reconstruction1D/2D/3D`; `advect`, `reconstruct`; [`gridax.schemes`](https://jejjohnson.github.io/gridax/schemes/): `Upwind`, `Centred`, `Biased`, `WENO`, `TVD`; `gridax.advection.kernels`; `minmod`, `van_leer`, `superbee`, `mc`; `upwind_flux`, `rusanov_flux` | flux form, closed walls by default |
-| [Diffusion](https://jejjohnson.github.io/gridax/reference/diffusion/) and [momentum](https://jejjohnson.github.io/gridax/reference/momentum/) | `Diffusion2D/3D`, `BiharmonicDiffusion2D/3D`, `diffuse`, `biharmonic`, `MomentumAdvection2D/3D`, and their `Spherical*` forms | harmonic and biharmonic |
+| [Collocated kernels](https://jejjohnson.github.io/gridax/reference/analysis/) | `gridax.analysis`: `difference`, `remap_axis`, `remap_axis_columns`, `Extrapolate` | along one axis of a bare array; the calculus on a `CartesianAGrid` or `SphericalAGrid2D` is the functions below |
+| [Differences](https://jejjohnson.github.io/gridax/reference/difference/) and [interpolation](https://jejjohnson.github.io/gridax/reference/interpolation/) | `difference`, `interpolate`; `gradient`, `divergence`, `curl`, `laplacian`, `grad_perp` | moves between the T, U, V and X points, on any grid |
+| [Vorticity](https://jejjohnson.github.io/gridax/reference/vorticity/) and [Coriolis](https://jejjohnson.github.io/gridax/reference/coriolis/) | `curl`, `pv_flux`, `vorticity_flux_upwind`; `coriolis`; `arakawa_jacobian` | the Jacobian conserves energy and enstrophy |
+| [Advection](https://jejjohnson.github.io/gridax/reference/advection/) and [reconstruction](https://jejjohnson.github.io/gridax/reference/reconstruction/) | `advect`, `reconstruct`; [`gridax.schemes`](https://jejjohnson.github.io/gridax/schemes/): `Upwind`, `Centred`, `Biased`, `WENO`, `TVD`; `gridax.advection.kernels`; `minmod`, `van_leer`, `superbee`, `mc`; `upwind_flux`, `rusanov_flux` | flux form, closed walls by default |
+| [Diffusion](https://jejjohnson.github.io/gridax/reference/diffusion/) and [momentum](https://jejjohnson.github.io/gridax/reference/momentum/) | `diffuse`, `diffusive_fluxes`, `biharmonic`; `advect_momentum` | harmonic and biharmonic; vector-invariant momentum |
 | [Boundary conditions](https://jejjohnson.github.io/gridax/reference/boundary_conditions/) | `Dirichlet`, `Neumann`, `Robin`, `Periodic`, `Slip`, `Sponge`, `Reflective`, `Extrapolation`, `Outflow`; `BC` and its presets (`BC.no_flux`, `BC.periodic`, `BC.wall_normal`, …), `fill_ghosts` | one condition per face, any grid dimension, any number of ghost layers |
-| [Diagnostics](https://jejjohnson.github.io/gridax/reference/diagnostics/) | `Energetics2D`, `Strain2D`, `QGPotentialVorticity2D`; `kinetic_energy`, `enstrophy`, `potential_vorticity`, `okubo_weiss`, `shear_strain`, …; `area_sum`, `area_mean`, `volume_sum`, `volume_mean`, `masked_mean`, `masked_moments`, … | the sums and means skip dry cells |
+| [Diagnostics](https://jejjohnson.github.io/gridax/reference/diagnostics/) | `kinetic_energy`, `bernoulli_potential`, `shear_strain`, `tensor_strain`, `okubo_weiss_parameter`, `sw_potential_vorticity`, `qg_potential_vorticity`, `geostrophic_velocity`, `vertical_velocity`, `enstrophy`, …; `area_sum`, `area_mean`, `volume_sum`, `volume_mean`, `masked_mean`, `masked_moments`, … | the sums and means skip dry cells |
 | Smooth surrogates | `smooth_abs`, `smooth_max`, `smooth_clamp` | for the non-smooth steps on a path you differentiate |
 
 ## 📓 Tutorials
