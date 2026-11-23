@@ -171,6 +171,22 @@ class TestAdvect:
         assert out.loc == "T"
         np.testing.assert_array_equal(out.data, g.advect(q, u, v, C2, scheme=WENO(5)))
 
+    @pytest.mark.parametrize("masked", [False, True])
+    def test_a_class_takes_fields(self, masked):
+        q, u, v = fields(C2, 3)
+        dims = ("y", "x")
+        op = g.Advection2D(C2, mask=island(C2) if masked else None)
+        out = op(
+            g.CField(q, dims, loc="T"),
+            g.CField(u, dims, loc="U"),
+            g.CField(v, dims, loc="V"),
+            scheme=WENO(5),
+        )
+        assert out.loc == "T"
+        np.testing.assert_array_equal(out.data, op(q, u, v, scheme=WENO(5)))
+        with pytest.raises(g.StaggerMismatchError):
+            op(g.CField(q, dims, loc="U"), u, v)
+
     def test_the_point_of_a_flux_is_its_axis(self):
         q, u, _ = fields(C2, 3)
         dims = ("y", "x")

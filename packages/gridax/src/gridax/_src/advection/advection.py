@@ -13,6 +13,7 @@ import numpy as np
 
 from gridax._src.advection.advect import Wall, advect, cache, check_wall
 from gridax._src.advection.reconstruct import check_scheme
+from gridax._src.fields.located import located
 from gridax._src.grid import CartesianCGrid1D, CartesianCGrid2D, CartesianCGrid3D
 from gridax._src.mask import Mask1D, Mask2D, Mask3D
 from gridax._src.pytree import pytree_dataclass
@@ -34,8 +35,18 @@ def tendency(
     """:func:`gridax.advect` on the grid and the mask of ``op``, with its caches."""
     check_scheme(scheme)
     check_wall(wall, op.mask)
+    return _cached(
+        h, u, v, op.grid, scheme=scheme, mask=op.mask, wall=wall, cached=op._hierarchies
+    )
+
+
+@located("T", q="T", u="U", v="V")
+def _cached(
+    q: Any, u: Any, v: Any, grid: Any, *, scheme: Any, mask: Any, wall: Any, cached: Any
+) -> Any:
+    """:func:`gridax.advect` with the adaptive masks given, on arrays or fields."""
     return advect._impl(
-        op.grid, h, u, v, scheme=scheme, mask=op.mask, wall=wall, cached=op._hierarchies
+        grid, q, u, v, scheme=scheme, mask=mask, wall=wall, cached=cached
     )
 
 
