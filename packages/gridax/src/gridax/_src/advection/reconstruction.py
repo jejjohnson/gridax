@@ -1,7 +1,7 @@
 """Face-value reconstruction operators for advective fluxes on Arakawa C-grids.
 
 Every method of ``Reconstruction1D/2D/3D`` is one call of the axis-generic
-:func:`~gridax._src.advection.reconstruct.reconstruct` with a scheme
+:func:`~gridax._src.advection.reconstruct.face_flux` with a scheme
 (``Upwind``, ``Centred``, ``WENO``, ``TVD``; #464): each face takes the widest
 tier of the scheme that fits in the array (and, for the ``_masked`` methods,
 on wet cells), down to first-order upwind. All operators follow the
@@ -15,12 +15,12 @@ Notation
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from jaxtyping import Float
 import numpy as np
 
-from gridax._src.advection.reconstruct import reconstruct
+from gridax._src.advection.reconstruct import face_flux, hierarchy_of
 from gridax._src.grid import ArakawaCGrid1D, ArakawaCGrid2D, ArakawaCGrid3D
 from gridax._src.mask import Mask2D
 from gridax._src.operators._ghost import interior
@@ -33,6 +33,14 @@ if TYPE_CHECKING:
     from jaxtyping import Array
 else:
     Array = np.ndarray
+
+
+def _masked(h: Array, u: Array, mask: Any, *, axis: int, scheme: Scheme) -> Array:
+    """The flux with the tiers of ``scheme`` that read wet cells only."""
+    hierarchy = hierarchy_of(mask, "x" if axis == -1 else "y", scheme)
+    return face_flux(
+        h, u, axis=axis, scheme=scheme, hierarchy=hierarchy, wet=mask.wet()
+    )
 
 
 def _masked_columns(
@@ -58,11 +66,11 @@ def _masked_columns(
         if axis == -1
         else (None, slice(2, None), slice(1, -1))
     )
-    selected = reconstruct(h, u, axis=axis, scheme=Ladder(tiers[-1:], scheme))[inner]
+    selected = face_flux(h, u, axis=axis, scheme=Ladder(tiers[-1:], scheme))[inner]
     for k in range(len(tiers) - 2, -1, -1):
         m = amasks[tiers[k].size]
         use = xp.where(pos_flow, m[None, 1:-1, 1:-1], m[shifted])
-        flux = reconstruct(h, u, axis=axis, scheme=Ladder(tiers[k:], scheme))
+        flux = face_flux(h, u, axis=axis, scheme=Ladder(tiers[k:], scheme))
         selected = xp.where(use, flux[inner], selected)
     return interior(selected, h)
 
@@ -90,7 +98,7 @@ class Reconstruction1D:
 
         fe[i+1/2] = 1/2 * (h[i] + h[i+1]) * u[i+1/2]
         """
-        return reconstruct(h, u, axis=-1, scheme=Centred())
+        return face_flux(h, u, axis=-1, scheme=Centred())
 
     def upwind1_x(
         self,
@@ -102,7 +110,7 @@ class Reconstruction1D:
         fe[i+1/2] = h[i]   * u[i+1/2]   if u[i+1/2] >= 0
                   = h[i+1] * u[i+1/2]   otherwise
         """
-        return reconstruct(h, u, axis=-1, scheme=Upwind(1))
+        return face_flux(h, u, axis=-1, scheme=Upwind(1))
 
     def upwind2_x(
         self,
@@ -115,7 +123,7 @@ class Reconstruction1D:
         Negative flow:  h_face[i+1/2] = 3/2*h[i+1] - 1/2*h[i+2]
         Falls back to 1st-order upwind on east boundary where i+2 unavailable.
         """
-        return reconstruct(h, u, axis=-1, scheme=Upwind(2))
+        return face_flux(h, u, axis=-1, scheme=Upwind(2))
 
     def upwind3_x(
         self,
@@ -128,7 +136,7 @@ class Reconstruction1D:
         Negative flow:  h_face =  1/3*h[i]   + 5/6*h[i+1] - 1/6*h[i+2]
         Falls back to 1st-order upwind on east boundary where i+2 unavailable.
         """
-        return reconstruct(h, u, axis=-1, scheme=Upwind(3))
+        return face_flux(h, u, axis=-1, scheme=Upwind(3))
 
     def weno3_x(
         self,
@@ -141,7 +149,7 @@ class Reconstruction1D:
         Negative flow:  h_face[i+1/2] = WENO3_right(h[i], h[i+1], h[i+2])
         Falls back to 1st-order upwind on east boundary where i+2 unavailable.
         """
-        return reconstruct(h, u, axis=-1, scheme=WENO(3))
+        return face_flux(h, u, axis=-1, scheme=WENO(3))
 
     def wenoz3_x(
         self,
@@ -154,7 +162,7 @@ class Reconstruction1D:
         Negative flow:  h_face[i+1/2] = WENOZ3_right(h[i], h[i+1], h[i+2])
         Falls back to 1st-order upwind on east boundary where i+2 unavailable.
         """
-        return reconstruct(h, u, axis=-1, scheme=WENO(3, "z"))
+        return face_flux(h, u, axis=-1, scheme=WENO(3, "z"))
 
     def weno5_x(
         self,
@@ -168,7 +176,7 @@ class Reconstruction1D:
         Negative flow:  h_face[i+1/2] = WENO5_right(h[i-1], h[i], h[i+1], h[i+2], h[i+3])
             for i = 1..Nx-4; WENO3_right fallback at i = Nx-3; 1st-order upwind at i = Nx-2.
         """
-        return reconstruct(h, u, axis=-1, scheme=WENO(5))
+        return face_flux(h, u, axis=-1, scheme=WENO(5))
 
     def wenoz5_x(
         self,
@@ -182,7 +190,7 @@ class Reconstruction1D:
         Negative flow:  h_face[i+1/2] = WENOZ5_right(h[i-1], h[i], h[i+1], h[i+2], h[i+3])
             for i = 1..Nx-4; WENO-Z-3_right fallback at i = Nx-3; 1st-order upwind at i = Nx-2.
         """
-        return reconstruct(h, u, axis=-1, scheme=WENO(5, "z"))
+        return face_flux(h, u, axis=-1, scheme=WENO(5, "z"))
 
     def weno7_x(
         self,
@@ -198,7 +206,7 @@ class Reconstruction1D:
             for i = 3..Nx-4; WENO3 fallback at i = 1; WENO5 fallback
             at i = 2 and i = Nx-3; 1st-order upwind at i = Nx-2.
         """
-        return reconstruct(h, u, axis=-1, scheme=WENO(7))
+        return face_flux(h, u, axis=-1, scheme=WENO(7))
 
     def weno9_x(
         self,
@@ -216,7 +224,7 @@ class Reconstruction1D:
             WENO5 fallback at i = 2 and i = Nx-3; WENO3 fallback at
             i = 1; 1st-order upwind at i = Nx-2.
         """
-        return reconstruct(h, u, axis=-1, scheme=WENO(9))
+        return face_flux(h, u, axis=-1, scheme=WENO(9))
 
     def tvd_x(
         self,
@@ -253,7 +261,7 @@ class Reconstruction1D:
         Float[Array, "Nx"]
             East-face flux with zero ghost entries.
         """
-        return reconstruct(h, u, axis=-1, scheme=TVD(limiter))
+        return face_flux(h, u, axis=-1, scheme=TVD(limiter))
 
 
 @pytree_dataclass
@@ -280,7 +288,7 @@ class Reconstruction2D:
 
         fe[j, i+1/2] = 1/2 * (h[j, i] + h[j, i+1]) * u[j, i+1/2]
         """
-        return reconstruct(h, u, axis=-1, scheme=Centred())
+        return face_flux(h, u, axis=-1, scheme=Centred())
 
     def naive_y(
         self,
@@ -291,7 +299,7 @@ class Reconstruction2D:
 
         fn[j+1/2, i] = 1/2 * (h[j, i] + h[j+1, i]) * v[j+1/2, i]
         """
-        return reconstruct(h, v, axis=-2, scheme=Centred())
+        return face_flux(h, v, axis=-2, scheme=Centred())
 
     def upwind1_x(
         self,
@@ -303,7 +311,7 @@ class Reconstruction2D:
         fe[j, i+1/2] = h[j, i]   * u  if u >= 0
                      = h[j, i+1] * u  otherwise
         """
-        return reconstruct(h, u, axis=-1, scheme=Upwind(1))
+        return face_flux(h, u, axis=-1, scheme=Upwind(1))
 
     def upwind1_y(
         self,
@@ -315,7 +323,7 @@ class Reconstruction2D:
         fn[j+1/2, i] = h[j, i]   * v  if v >= 0
                      = h[j+1, i] * v  otherwise
         """
-        return reconstruct(h, v, axis=-2, scheme=Upwind(1))
+        return face_flux(h, v, axis=-2, scheme=Upwind(1))
 
     def upwind2_x(
         self,
@@ -328,7 +336,7 @@ class Reconstruction2D:
         Negative: h_face = 3/2*h[j,i+1] - 1/2*h[j,i+2]
         Falls back to 1st-order upwind on east boundary where i+2 unavailable.
         """
-        return reconstruct(h, u, axis=-1, scheme=Upwind(2))
+        return face_flux(h, u, axis=-1, scheme=Upwind(2))
 
     def upwind2_y(
         self,
@@ -341,7 +349,7 @@ class Reconstruction2D:
         Negative: h_face = 3/2*h[j+1,i] - 1/2*h[j+2,i]
         Falls back to 1st-order upwind on north boundary where j+2 unavailable.
         """
-        return reconstruct(h, v, axis=-2, scheme=Upwind(2))
+        return face_flux(h, v, axis=-2, scheme=Upwind(2))
 
     def upwind3_x(
         self,
@@ -354,7 +362,7 @@ class Reconstruction2D:
         Negative: h_face =  1/3*h[j,i]   + 5/6*h[j,i+1] - 1/6*h[j,i+2]
         Falls back to 1st-order upwind on east boundary where i+2 unavailable.
         """
-        return reconstruct(h, u, axis=-1, scheme=Upwind(3))
+        return face_flux(h, u, axis=-1, scheme=Upwind(3))
 
     def upwind3_y(
         self,
@@ -367,7 +375,7 @@ class Reconstruction2D:
         Negative: h_face =  1/3*h[j,i]   + 5/6*h[j+1,i] - 1/6*h[j+2,i]
         Falls back to 1st-order upwind on north boundary where j+2 unavailable.
         """
-        return reconstruct(h, v, axis=-2, scheme=Upwind(3))
+        return face_flux(h, v, axis=-2, scheme=Upwind(3))
 
     def weno3_x(
         self,
@@ -380,7 +388,7 @@ class Reconstruction2D:
         Negative flow:  fe[j,i+1/2] = WENO3_right(h[j,i], h[j,i+1], h[j,i+2]) * u
         Falls back to 1st-order upwind on east boundary where i+2 unavailable.
         """
-        return reconstruct(h, u, axis=-1, scheme=WENO(3))
+        return face_flux(h, u, axis=-1, scheme=WENO(3))
 
     def weno3_y(
         self,
@@ -393,7 +401,7 @@ class Reconstruction2D:
         Negative flow:  fn[j+1/2,i] = WENO3_right(h[j,i], h[j+1,i], h[j+2,i]) * v
         Falls back to 1st-order upwind on north boundary where j+2 unavailable.
         """
-        return reconstruct(h, v, axis=-2, scheme=WENO(3))
+        return face_flux(h, v, axis=-2, scheme=WENO(3))
 
     def wenoz3_x(
         self,
@@ -406,7 +414,7 @@ class Reconstruction2D:
         Negative flow:  fe[j,i+1/2] = WENOZ3_right(h[j,i], h[j,i+1], h[j,i+2]) * u
         Falls back to 1st-order upwind on east boundary where i+2 unavailable.
         """
-        return reconstruct(h, u, axis=-1, scheme=WENO(3, "z"))
+        return face_flux(h, u, axis=-1, scheme=WENO(3, "z"))
 
     def wenoz3_y(
         self,
@@ -419,7 +427,7 @@ class Reconstruction2D:
         Negative flow:  fn[j+1/2,i] = WENOZ3_right(h[j,i], h[j+1,i], h[j+2,i]) * v
         Falls back to 1st-order upwind on north boundary where j+2 unavailable.
         """
-        return reconstruct(h, v, axis=-2, scheme=WENO(3, "z"))
+        return face_flux(h, v, axis=-2, scheme=WENO(3, "z"))
 
     def weno5_x(
         self,
@@ -433,7 +441,7 @@ class Reconstruction2D:
         Negative flow:  fe[j,i+1/2] = WENO5_right(h[j,i-1], h[j,i], h[j,i+1], h[j,i+2], h[j,i+3]) * u
             for i = 1..Nx-4; WENO3_right fallback at i = Nx-3; 1st-order upwind at i = Nx-2.
         """
-        return reconstruct(h, u, axis=-1, scheme=WENO(5))
+        return face_flux(h, u, axis=-1, scheme=WENO(5))
 
     def weno5_y(
         self,
@@ -447,7 +455,7 @@ class Reconstruction2D:
         Negative flow:  fn[j+1/2,i] = WENO5_right(h[j-1,i], h[j,i], h[j+1,i], h[j+2,i], h[j+3,i]) * v
             for j = 1..Ny-4; WENO3_right fallback at j = Ny-3; 1st-order upwind at j = Ny-2.
         """
-        return reconstruct(h, v, axis=-2, scheme=WENO(5))
+        return face_flux(h, v, axis=-2, scheme=WENO(5))
 
     def wenoz5_x(
         self,
@@ -461,7 +469,7 @@ class Reconstruction2D:
         Negative flow:  fe[j,i+1/2] = WENOZ5_right(h[j,i-1], h[j,i], h[j,i+1], h[j,i+2], h[j,i+3]) * u
             for i = 1..Nx-4; WENO-Z-3_right fallback at i = Nx-3; 1st-order upwind at i = Nx-2.
         """
-        return reconstruct(h, u, axis=-1, scheme=WENO(5, "z"))
+        return face_flux(h, u, axis=-1, scheme=WENO(5, "z"))
 
     def wenoz5_y(
         self,
@@ -475,7 +483,7 @@ class Reconstruction2D:
         Negative flow:  fn[j+1/2,i] = WENOZ5_right(h[j-1,i], h[j,i], h[j+1,i], h[j+2,i], h[j+3,i]) * v
             for j = 1..Ny-4; WENO-Z-3_right fallback at j = Ny-3; 1st-order upwind at j = Ny-2.
         """
-        return reconstruct(h, v, axis=-2, scheme=WENO(5, "z"))
+        return face_flux(h, v, axis=-2, scheme=WENO(5, "z"))
 
     def weno7_x(
         self,
@@ -483,7 +491,7 @@ class Reconstruction2D:
         u: Float[Array, "Ny Nx"],
     ) -> Float[Array, "Ny Nx"]:
         """7-point WENO east-face flux with hierarchical boundary fallbacks."""
-        return reconstruct(h, u, axis=-1, scheme=WENO(7))
+        return face_flux(h, u, axis=-1, scheme=WENO(7))
 
     def weno7_y(
         self,
@@ -491,7 +499,7 @@ class Reconstruction2D:
         v: Float[Array, "Ny Nx"],
     ) -> Float[Array, "Ny Nx"]:
         """7-point WENO north-face flux with hierarchical boundary fallbacks."""
-        return reconstruct(h, v, axis=-2, scheme=WENO(7))
+        return face_flux(h, v, axis=-2, scheme=WENO(7))
 
     def weno9_x(
         self,
@@ -499,7 +507,7 @@ class Reconstruction2D:
         u: Float[Array, "Ny Nx"],
     ) -> Float[Array, "Ny Nx"]:
         """9-point WENO east-face flux with hierarchical boundary fallbacks."""
-        return reconstruct(h, u, axis=-1, scheme=WENO(9))
+        return face_flux(h, u, axis=-1, scheme=WENO(9))
 
     def weno9_y(
         self,
@@ -507,7 +515,7 @@ class Reconstruction2D:
         v: Float[Array, "Ny Nx"],
     ) -> Float[Array, "Ny Nx"]:
         """9-point WENO north-face flux with hierarchical boundary fallbacks."""
-        return reconstruct(h, v, axis=-2, scheme=WENO(9))
+        return face_flux(h, v, axis=-2, scheme=WENO(9))
 
     def tvd_x(
         self,
@@ -541,7 +549,7 @@ class Reconstruction2D:
         Float[Array, "Ny Nx"]
             East-face flux with zero ghost ring.
         """
-        return reconstruct(h, u, axis=-1, scheme=TVD(limiter))
+        return face_flux(h, u, axis=-1, scheme=TVD(limiter))
 
     def tvd_y(
         self,
@@ -575,7 +583,7 @@ class Reconstruction2D:
         Float[Array, "Ny Nx"]
             North-face flux with zero ghost ring.
         """
-        return reconstruct(h, v, axis=-2, scheme=TVD(limiter))
+        return face_flux(h, v, axis=-2, scheme=TVD(limiter))
 
     def tvd_x_masked(
         self,
@@ -606,7 +614,7 @@ class Reconstruction2D:
         Float[Array, "Ny Nx"]
             East-face flux with zero ghost ring.
         """
-        return reconstruct(h, u, axis=-1, scheme=TVD(limiter), mask=mask)
+        return _masked(h, u, mask, axis=-1, scheme=TVD(limiter))
 
     def tvd_y_masked(
         self,
@@ -637,7 +645,7 @@ class Reconstruction2D:
         Float[Array, "Ny Nx"]
             North-face flux with zero ghost ring.
         """
-        return reconstruct(h, v, axis=-2, scheme=TVD(limiter), mask=mask)
+        return _masked(h, v, mask, axis=-2, scheme=TVD(limiter))
 
     def weno5_x_masked(
         self,
@@ -664,7 +672,7 @@ class Reconstruction2D:
         Float[Array, "Ny Nx"]
             East-face flux with zero ghost ring.
         """
-        return reconstruct(h, u, axis=-1, scheme=WENO(5), mask=mask)
+        return _masked(h, u, mask, axis=-1, scheme=WENO(5))
 
     def weno5_y_masked(
         self,
@@ -691,7 +699,7 @@ class Reconstruction2D:
         Float[Array, "Ny Nx"]
             North-face flux with zero ghost ring.
         """
-        return reconstruct(h, v, axis=-2, scheme=WENO(5), mask=mask)
+        return _masked(h, v, mask, axis=-2, scheme=WENO(5))
 
     def wenoz5_x_masked(
         self,
@@ -718,7 +726,7 @@ class Reconstruction2D:
         Float[Array, "Ny Nx"]
             East-face flux with zero ghost ring.
         """
-        return reconstruct(h, u, axis=-1, scheme=WENO(5, "z"), mask=mask)
+        return _masked(h, u, mask, axis=-1, scheme=WENO(5, "z"))
 
     def wenoz5_y_masked(
         self,
@@ -745,7 +753,7 @@ class Reconstruction2D:
         Float[Array, "Ny Nx"]
             North-face flux with zero ghost ring.
         """
-        return reconstruct(h, v, axis=-2, scheme=WENO(5, "z"), mask=mask)
+        return _masked(h, v, mask, axis=-2, scheme=WENO(5, "z"))
 
 
 @pytree_dataclass
@@ -771,7 +779,7 @@ class Reconstruction3D:
 
         fe[k, j, i+1/2] = 1/2 * (h[k,j,i] + h[k,j,i+1]) * u[k,j,i+1/2]
         """
-        return reconstruct(h, u, axis=-1, scheme=Centred())
+        return face_flux(h, u, axis=-1, scheme=Centred())
 
     def naive_y(
         self,
@@ -782,7 +790,7 @@ class Reconstruction3D:
 
         fn[k, j+1/2, i] = 1/2 * (h[k,j,i] + h[k,j+1,i]) * v[k,j+1/2,i]
         """
-        return reconstruct(h, v, axis=-2, scheme=Centred())
+        return face_flux(h, v, axis=-2, scheme=Centred())
 
     def upwind1_x(
         self,
@@ -790,7 +798,7 @@ class Reconstruction3D:
         u: Float[Array, "Nz Ny Nx"],
     ) -> Float[Array, "Nz Ny Nx"]:
         """1st-order upwind east-face flux over all z-levels."""
-        return reconstruct(h, u, axis=-1, scheme=Upwind(1))
+        return face_flux(h, u, axis=-1, scheme=Upwind(1))
 
     def upwind1_y(
         self,
@@ -798,7 +806,7 @@ class Reconstruction3D:
         v: Float[Array, "Nz Ny Nx"],
     ) -> Float[Array, "Nz Ny Nx"]:
         """1st-order upwind north-face flux over all z-levels."""
-        return reconstruct(h, v, axis=-2, scheme=Upwind(1))
+        return face_flux(h, v, axis=-2, scheme=Upwind(1))
 
     def weno3_x(
         self,
@@ -811,7 +819,7 @@ class Reconstruction3D:
         Negative flow:  fe[k,j,i+1/2] = WENO3_right(h[k,j,i], h[k,j,i+1], h[k,j,i+2]) * u
         Falls back to 1st-order upwind on east boundary where i+2 unavailable.
         """
-        return reconstruct(h, u, axis=-1, scheme=WENO(3))
+        return face_flux(h, u, axis=-1, scheme=WENO(3))
 
     def weno3_y(
         self,
@@ -824,7 +832,7 @@ class Reconstruction3D:
         Negative flow:  fn[k,j+1/2,i] = WENO3_right(h[k,j,i], h[k,j+1,i], h[k,j+2,i]) * v
         Falls back to 1st-order upwind on north boundary where j+2 unavailable.
         """
-        return reconstruct(h, v, axis=-2, scheme=WENO(3))
+        return face_flux(h, v, axis=-2, scheme=WENO(3))
 
     def wenoz3_x(
         self,
@@ -837,7 +845,7 @@ class Reconstruction3D:
         Negative flow:  fe[k,j,i+1/2] = WENOZ3_right(h[k,j,i], h[k,j,i+1], h[k,j,i+2]) * u
         Falls back to 1st-order upwind on east boundary where i+2 unavailable.
         """
-        return reconstruct(h, u, axis=-1, scheme=WENO(3, "z"))
+        return face_flux(h, u, axis=-1, scheme=WENO(3, "z"))
 
     def wenoz3_y(
         self,
@@ -850,7 +858,7 @@ class Reconstruction3D:
         Negative flow:  fn[k,j+1/2,i] = WENOZ3_right(h[k,j,i], h[k,j+1,i], h[k,j+2,i]) * v
         Falls back to 1st-order upwind on north boundary where j+2 unavailable.
         """
-        return reconstruct(h, v, axis=-2, scheme=WENO(3, "z"))
+        return face_flux(h, v, axis=-2, scheme=WENO(3, "z"))
 
     def weno5_x(
         self,
@@ -864,7 +872,7 @@ class Reconstruction3D:
         Negative flow:  fe[k,j,i+1/2] = WENO5_right(h[k,j,i-1], h[k,j,i], h[k,j,i+1], h[k,j,i+2], h[k,j,i+3]) * u
             for i = 1..Nx-4; WENO3_right fallback at i = Nx-3; 1st-order upwind at i = Nx-2.
         """
-        return reconstruct(h, u, axis=-1, scheme=WENO(5))
+        return face_flux(h, u, axis=-1, scheme=WENO(5))
 
     def weno5_y(
         self,
@@ -878,7 +886,7 @@ class Reconstruction3D:
         Negative flow:  fn[k,j+1/2,i] = WENO5_right(h[k,j-1,i], h[k,j,i], h[k,j+1,i], h[k,j+2,i], h[k,j+3,i]) * v
             for j = 1..Ny-4; WENO3_right fallback at j = Ny-3; 1st-order upwind at j = Ny-2.
         """
-        return reconstruct(h, v, axis=-2, scheme=WENO(5))
+        return face_flux(h, v, axis=-2, scheme=WENO(5))
 
     def wenoz5_x(
         self,
@@ -892,7 +900,7 @@ class Reconstruction3D:
         Negative flow:  fe[k,j,i+1/2] = WENOZ5_right(h[k,j,i-1], h[k,j,i], h[k,j,i+1], h[k,j,i+2], h[k,j,i+3]) * u
             for i = 1..Nx-4; WENO-Z-3_right fallback at i = Nx-3; 1st-order upwind at i = Nx-2.
         """
-        return reconstruct(h, u, axis=-1, scheme=WENO(5, "z"))
+        return face_flux(h, u, axis=-1, scheme=WENO(5, "z"))
 
     def wenoz5_y(
         self,
@@ -906,7 +914,7 @@ class Reconstruction3D:
         Negative flow:  fn[k,j+1/2,i] = WENOZ5_right(h[k,j-1,i], h[k,j,i], h[k,j+1,i], h[k,j+2,i], h[k,j+3,i]) * v
             for j = 1..Ny-4; WENO-Z-3_right fallback at j = Ny-3; 1st-order upwind at j = Ny-2.
         """
-        return reconstruct(h, v, axis=-2, scheme=WENO(5, "z"))
+        return face_flux(h, v, axis=-2, scheme=WENO(5, "z"))
 
     def weno7_x(
         self,
@@ -914,7 +922,7 @@ class Reconstruction3D:
         u: Float[Array, "Nz Ny Nx"],
     ) -> Float[Array, "Nz Ny Nx"]:
         """7-point WENO east-face flux over all z-levels with hierarchical fallbacks."""
-        return reconstruct(h, u, axis=-1, scheme=WENO(7))
+        return face_flux(h, u, axis=-1, scheme=WENO(7))
 
     def weno7_y(
         self,
@@ -922,7 +930,7 @@ class Reconstruction3D:
         v: Float[Array, "Nz Ny Nx"],
     ) -> Float[Array, "Nz Ny Nx"]:
         """7-point WENO north-face flux over all z-levels with hierarchical fallbacks."""
-        return reconstruct(h, v, axis=-2, scheme=WENO(7))
+        return face_flux(h, v, axis=-2, scheme=WENO(7))
 
     def weno9_x(
         self,
@@ -930,7 +938,7 @@ class Reconstruction3D:
         u: Float[Array, "Nz Ny Nx"],
     ) -> Float[Array, "Nz Ny Nx"]:
         """9-point WENO east-face flux over all z-levels with hierarchical fallbacks."""
-        return reconstruct(h, u, axis=-1, scheme=WENO(9))
+        return face_flux(h, u, axis=-1, scheme=WENO(9))
 
     def weno9_y(
         self,
@@ -938,7 +946,7 @@ class Reconstruction3D:
         v: Float[Array, "Nz Ny Nx"],
     ) -> Float[Array, "Nz Ny Nx"]:
         """9-point WENO north-face flux over all z-levels with hierarchical fallbacks."""
-        return reconstruct(h, v, axis=-2, scheme=WENO(9))
+        return face_flux(h, v, axis=-2, scheme=WENO(9))
 
     def tvd_x(
         self,
@@ -972,7 +980,7 @@ class Reconstruction3D:
         Float[Array, "Nz Ny Nx"]
             East-face flux with zero ghost ring.
         """
-        return reconstruct(h, u, axis=-1, scheme=TVD(limiter))
+        return face_flux(h, u, axis=-1, scheme=TVD(limiter))
 
     def tvd_y(
         self,
@@ -1006,7 +1014,7 @@ class Reconstruction3D:
         Float[Array, "Nz Ny Nx"]
             North-face flux with zero ghost ring.
         """
-        return reconstruct(h, v, axis=-2, scheme=TVD(limiter))
+        return face_flux(h, v, axis=-2, scheme=TVD(limiter))
 
     def tvd_x_masked(
         self,
@@ -1242,7 +1250,7 @@ class Reconstruction3D:
         u: Float[Array, "Nz Ny Nx"],
     ) -> Float[Array, "Nz Ny Nx"]:
         """2nd-order upwind east-face flux over all z-levels (as ``Reconstruction2D.upwind2_x``)."""
-        return reconstruct(h, u, axis=-1, scheme=Upwind(2))
+        return face_flux(h, u, axis=-1, scheme=Upwind(2))
 
     def upwind2_y(
         self,
@@ -1250,7 +1258,7 @@ class Reconstruction3D:
         v: Float[Array, "Nz Ny Nx"],
     ) -> Float[Array, "Nz Ny Nx"]:
         """2nd-order upwind north-face flux over all z-levels (as ``Reconstruction2D.upwind2_y``)."""
-        return reconstruct(h, v, axis=-2, scheme=Upwind(2))
+        return face_flux(h, v, axis=-2, scheme=Upwind(2))
 
     def upwind3_x(
         self,
@@ -1258,7 +1266,7 @@ class Reconstruction3D:
         u: Float[Array, "Nz Ny Nx"],
     ) -> Float[Array, "Nz Ny Nx"]:
         """3rd-order upwind east-face flux over all z-levels (as ``Reconstruction2D.upwind3_x``)."""
-        return reconstruct(h, u, axis=-1, scheme=Upwind(3))
+        return face_flux(h, u, axis=-1, scheme=Upwind(3))
 
     def upwind3_y(
         self,
@@ -1266,4 +1274,4 @@ class Reconstruction3D:
         v: Float[Array, "Nz Ny Nx"],
     ) -> Float[Array, "Nz Ny Nx"]:
         """3rd-order upwind north-face flux over all z-levels (as ``Reconstruction2D.upwind3_y``)."""
-        return reconstruct(h, v, axis=-2, scheme=Upwind(3))
+        return face_flux(h, v, axis=-2, scheme=Upwind(3))

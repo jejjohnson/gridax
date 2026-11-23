@@ -1,12 +1,12 @@
-"""One axis-generic upwind reconstruction (Layer 2), for every scheme and rank.
+"""One axis-generic face flux (Layer 1) and the canonical ``reconstruct``.
 
-``reconstruct(q, u, axis=..., scheme=...)`` returns the advective flux
-``F[i+1/2] = q[i+1/2] u[i+1/2]`` on the faces along ``axis`` of a C-grid
-array with one ghost ring. The face value comes from the widest tier of
+``face_flux(q, u, axis=..., scheme=...)`` is the advective flux ``F[i+1/2] =
+q[i+1/2] u[i+1/2]`` on the faces along ``axis`` of a C-grid array with one
+ghost ring, on bare arrays. The face value comes from the widest tier of
 ``scheme`` that fits: inside the array, and with ``mask`` on wet cells too.
-Upwind reconstructions narrow at a wall rather than shift, so they never
-read a cell downwind of the face. Every ``Reconstruction1D/2D/3D`` method is
-a call of this function.
+Upwind reconstructions narrow at a wall rather than shift, so they never read a
+cell downwind of the face. Every ``Reconstruction1D/2D/3D`` method, and
+:func:`reconstruct` and :func:`~gridax.advect`, are calls of this function.
 """
 
 from __future__ import annotations
@@ -16,7 +16,16 @@ from typing import TYPE_CHECKING, Any
 from jaxtyping import Float
 import numpy as np
 
-from gridax._src.advection.flux import upwind_flux
+from gridax._src.advection.flux import narrow_mask_hierarchy, upwind_flux
+from gridax._src.api import grid_dispatch
+from gridax._src.fields.located import located
+from gridax._src.grid import (
+    CartesianCGrid1D,
+    CartesianCGrid2D,
+    CartesianCGrid3D,
+    SphericalCGrid2D,
+    SphericalCGrid3D,
+)
 from gridax._src.operators._ghost import interior
 from gridax._src.pytree import array_namespace
 from gridax._src.schemes.base import Ladder, Scheme, Tier
@@ -26,77 +35,160 @@ if TYPE_CHECKING:
 else:
     Array = np.ndarray
 
-__all__ = ["reconstruct"]
+__all__ = ["face_flux", "reconstruct"]
 
 _DIRECTIONS = {-1: "x", -2: "y", -3: "z"}
 
+#: ``{size: mask}``, the output of ``mask.get_adaptive_masks``.
+type Hierarchy = dict[int, Any]
 
+
+@grid_dispatch
+@located("axis", q="T", u="axis")
 def reconstruct(
-    q: Float[Array, "*spatial"],
-    u: Float[Array, "*spatial"],
+    q: Float[Array, "..."],
+    u: Float[Array, "..."],
+    grid: Any,
+    *,
+    axis: str,
+    scheme: Scheme,
+    mask: Any = None,
+) -> Float[Array, "..."]:
+    """The advective flux ``q̂ u`` on the faces along ``axis``.
+
+    ``q̂`` is the face value of the cell averages ``q`` by ``scheme``. For flow
+    towards ``+axis`` the face ``i + 1/2`` takes the cells ``i + lo … i + hi``
+    of the widest tier of the scheme that fits, and for flow towards ``-axis``
+    their mirror; a scheme that is not upwinded takes the same cells for
+    either. A tier fits if its cells are inside the array and, with ``mask``,
+    wet, so no face reads a dry cell, and a face between two wet cells always
+    has a flux.
+
+    Parameters
+    ----------
+    q : CField or Float[Array, "*batch *grid"]
+        Cell averages at T, with one ghost ring.
+    u : CField or Float[Array, "*batch *grid"]
+        The velocity normal to the faces: at U for x, V for y, W for z.
+    grid : grid
+        A C-grid. The metric does not enter.
+    axis : str
+        One of ``grid.axes``.
+    scheme : Scheme
+        Any of `gridax.schemes`.
+    mask : Mask1D, Mask2D or Mask3D, optional
+        The wet cells.
+
+    Returns
+    -------
+    CField or Float[Array, "*batch *grid"]
+        The flux, at U, V or W, with a zero ghost ring.
+
+    Examples
+    --------
+    >>> import gridax, numpy as np
+    >>> from gridax.schemes import Upwind
+    >>> grid = gridax.CartesianCGrid1D.from_interior(4, 4.0)
+    >>> q, u = np.arange(6.0), np.ones(6)
+    >>> gridax.reconstruct(q, u, grid, axis="x", scheme=Upwind(1)).tolist()
+    [0.0, 1.0, 2.0, 3.0, 4.0, 0.0]
+    """
+    check_scheme(scheme)
+    return reconstruct._impl(grid, q, u, axis=axis, scheme=scheme, mask=mask)
+
+
+@reconstruct.register(CartesianCGrid1D)
+@reconstruct.register(CartesianCGrid2D)
+@reconstruct.register(CartesianCGrid3D)
+@reconstruct.register(SphericalCGrid2D)
+@reconstruct.register(SphericalCGrid3D)
+def _reconstruct_staggered(
+    grid: Any, q: Any, u: Any, *, axis: str, scheme: Scheme, mask: Any
+) -> Any:
+    if axis not in grid.axes:
+        raise ValueError(f"axis must be one of {grid.axes}; got {axis!r}")
+    rank = len(grid.axes)
+    return face_flux(
+        q,
+        u,
+        axis=grid.axes.index(axis) - rank,
+        scheme=scheme,
+        rank=rank,
+        hierarchy=None if mask is None else hierarchy_of(mask, axis, scheme),
+        wet=None if mask is None else mask.wet(),
+    )
+
+
+def check_scheme(scheme: Any) -> None:
+    """Raise unless ``scheme`` is a scheme."""
+    if not isinstance(scheme, Scheme):
+        raise TypeError(
+            f"scheme must be one of gridax.schemes, e.g. WENO(5); got {scheme!r}"
+        )
+
+
+def hierarchy_of(
+    mask: Any, axis: str, scheme: Scheme, cached: Hierarchy | None = None
+) -> Hierarchy | None:
+    """The adaptive masks of the tiers of ``scheme``, from a cached set if it holds them."""
+    if not scheme.upwinded:
+        return None
+    sizes = tuple(sorted({tier.size for tier in scheme.tiers()}))
+    if cached is not None and set(sizes) <= set(cached):
+        return narrow_mask_hierarchy(cached, sizes)
+    direction = {} if mask.wet().ndim == 1 else {"direction": axis}
+    return mask.get_adaptive_masks(stencil_sizes=sizes, **direction)
+
+
+def face_flux(
+    q: Float[Array, "*batch *spatial"],
+    u: Float[Array, "*batch *spatial"],
     *,
     axis: int,
     scheme: Scheme,
-    mask: Any = None,
-) -> Float[Array, "*spatial"]:
-    """The upwind advective flux ``q_face * u`` on the faces along ``axis``.
-
-    For flow towards ``+axis`` the face ``i + 1/2`` takes the cell averages
-    ``q[i + lo] … q[i + hi]`` of the widest tier of ``scheme`` that fits; for
-    flow towards ``-axis`` it takes their mirror ``q[i + 1 - hi] … q[i + 1 -
-    lo]``. Each face takes the widest tier whose cells are inside the array
-    and, when ``mask`` is given, wet (``mask.get_adaptive_masks``, as
-    ``Advection*D`` uses it); the last tier, first-order upwind, always fits.
-    A scheme that is not upwinded (``Centred``, ``Biased``) reads the same
-    cells for either sign, and a face between two wet cells always has a flux.
+    rank: int | None = None,
+    hierarchy: Hierarchy | None = None,
+    wet: Float[Array, "*spatial"] | None = None,
+) -> Float[Array, "*batch *spatial"]:
+    """The advective flux ``q_face * u`` on the faces along ``axis``, on arrays.
 
         F[i+1/2] = u[i+1/2] * R+(q[i+lo .. i+hi])        u[i+1/2] >= 0
                  = u[i+1/2] * R-(q[i+1-hi .. i+1-lo])    u[i+1/2] <  0
 
     Parameters
     ----------
-    q : Float[Array, "*spatial"]
-        Cell averages at T points, with one ghost ring on every axis.
-    u : Float[Array, "*spatial"]
-        The velocity normal to the faces along ``axis``, on ``q``'s shape
-        (U points for x, V points for y).
+    q : Float[Array, "*batch *spatial"]
+        Cell averages at T points, with one ghost ring on every spatial axis.
+    u : Float[Array, "*batch *spatial"]
+        The velocity normal to the faces along ``axis``, on ``q``'s shape.
     axis : int
-        The axis of the faces: ``-1`` (x), ``-2`` (y) or ``-3`` (z), or the
-        same as a non-negative index.
+        The axis of the faces, of the array.
     scheme : Scheme
-        One of ``gridax.schemes``: ``Upwind(order)``, ``Centred(order)``,
-        ``Biased(order, side)``, ``WENO(order, variant)`` or ``TVD(limiter)``.
-    mask : Mask1D, Mask2D or Mask3D, optional
-        A wet mask of ``q``'s rank; the tiers then also stop at the coast.
+        Any of `gridax.schemes`.
+    rank : int, optional
+        The number of spatial axes, the last ones; all of them by default.
+    hierarchy : dict, optional
+        The adaptive masks of the tiers of an upwinded scheme
+        (`hierarchy_of`).
+    wet : Float[Array, "*spatial"], optional
+        The wet cells, for a scheme that is not upwinded.
 
     Returns
     -------
-    Float[Array, "*spatial"]
-        The flux on the faces along ``axis``, ``q``'s shape, with a zero
-        ghost ring.
-
-    Examples
-    --------
-    >>> import numpy as np
-    >>> import gridax.advection as gadv
-    >>> from gridax.schemes import WENO
-    >>> q, u = np.ones((6, 8)), np.ones((6, 8))
-    >>> flux = gadv.reconstruct(q, u, axis=-1, scheme=WENO(5))
-    >>> flux.shape, float(flux[2, 3])
-    ((6, 8), 1.0)
+    Float[Array, "*batch *spatial"]
+        The flux on the faces along ``axis``, with a zero ghost ring.
     """
-    if not isinstance(scheme, Scheme):
-        raise TypeError(
-            f"scheme must be one of gridax.schemes, e.g. WENO(5); got {scheme!r}"
-        )
+    rank = q.ndim if rank is None else rank
     position = axis % q.ndim
-    if mask is not None:
-        return _masked(q, u, position, scheme, mask)
+    if scheme.upwinded and hierarchy is not None:
+        return _masked_upwind(q, u, position, scheme, rank, hierarchy)
+    if not scheme.upwinded and wet is not None:
+        return _masked_fixed(q, u, position, scheme, rank, wet)
     xp = array_namespace(q, u)
     last = xp.moveaxis(q, position, -1)
     velocity = xp.moveaxis(u, position, -1)
-    # the other axes keep their interior only; the faces along `axis` are 1 .. N-2
-    crop = (*([slice(1, -1)] * (q.ndim - 1)), slice(None))
+    # the other spatial axes keep their interior; the faces along `axis` are 1 .. N-2
+    crop = (..., *([slice(1, -1)] * (rank - 1)), slice(None))
     last, velocity = last[crop], velocity[crop][..., 1:-1]
     tiers = scheme.tiers()
     positive = _faces(xp, last, tiers, upwind="left")
@@ -145,25 +237,18 @@ def _reads(tier: Tier, upwind: str) -> tuple[int, int]:
     return 1 - tier.hi, 1 - tier.lo
 
 
-def _masked(q: Array, u: Array, position: int, scheme: Scheme, mask: Any) -> Array:
-    """Blend the tiers by the mask's adaptive hierarchy, as ``Advection*D`` does."""
-    if not scheme.upwinded:
-        return _masked_fixed(q, u, position, scheme, mask)
+def _masked_upwind(
+    q: Array, u: Array, position: int, scheme: Scheme, rank: int, hierarchy: Hierarchy
+) -> Array:
+    """Blend the tiers by the adaptive masks at the upwind cell."""
     tiers = scheme.tiers()
-    sizes = tuple(sorted({tier.size for tier in tiers}))
-    if q.ndim == 1:
-        hierarchy = mask.get_adaptive_masks(stencil_sizes=sizes)
-    else:
-        hierarchy = mask.get_adaptive_masks(
-            direction=_DIRECTIONS[position - q.ndim], stencil_sizes=sizes
-        )
     # each size reconstructs with that rung and the narrower ones below it
     rec_funcs = {}
     for k, tier in enumerate(tiers):
         rung = Ladder(tiers[k:], scheme)
 
         def rec(field: Array, vel: Array, _rung: Scheme = rung) -> Array:
-            return reconstruct(field, vel, axis=position, scheme=_rung)
+            return face_flux(field, vel, axis=position, scheme=_rung, rank=rank)
 
         rec_funcs.setdefault(tier.size, rec)
     return upwind_flux(
@@ -172,7 +257,7 @@ def _masked(q: Array, u: Array, position: int, scheme: Scheme, mask: Any) -> Arr
 
 
 def _masked_fixed(
-    q: Array, u: Array, position: int, scheme: Scheme, mask: Any
+    q: Array, u: Array, position: int, scheme: Scheme, rank: int, wet: Array
 ) -> Array:
     """The widest tier whose cells are all wet, for a scheme that is not upwinded.
 
@@ -182,10 +267,11 @@ def _masked_fixed(
     """
     xp = array_namespace(q, u)
     tiers = scheme.tiers()
-    wet = xp.moveaxis(xp.asarray(mask.wet(), dtype=bool), position, -1)
+    along = position - q.ndim
+    last = xp.moveaxis(xp.asarray(wet, dtype=bool), along, -1)
     reach = max(max(-tier.lo, tier.hi) for tier in tiers)
-    land = xp.zeros((*wet.shape[:-1], reach), dtype=bool)
-    padded = xp.concat([land, wet, land], axis=-1)
+    land = xp.zeros((*last.shape[:-1], reach), dtype=bool)
+    padded = xp.concat([land, last, land], axis=-1)
     size = q.shape[position]
 
     def cells(offset: int) -> Array:
@@ -197,6 +283,7 @@ def _masked_fixed(
         fits = cells(0) & cells(1)
         for offset in range(tiers[k].lo, tiers[k].hi + 1):
             fits = fits & cells(offset)
-        rung = reconstruct(q, u, axis=position, scheme=Ladder(tiers[k:], scheme))
-        flux = xp.where(fits, xp.moveaxis(rung, position, -1), flux)
+        rung = Ladder(tiers[k:], scheme)
+        rung_flux = face_flux(q, u, axis=position, scheme=rung, rank=rank)
+        flux = xp.where(fits, xp.moveaxis(rung_flux, position, -1), flux)
     return xp.moveaxis(flux, -1, position)

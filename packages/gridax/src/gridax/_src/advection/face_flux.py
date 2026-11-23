@@ -25,17 +25,13 @@ from typing import TYPE_CHECKING
 from jaxtyping import Float
 import numpy as np
 
-from gridax._src.advection.advection import (
-    _MASK_DISPATCHABLE_2D,
-    _TVD_LIMITERS,
-    _rec_funcs_for_method_2d,
-)
-from gridax._src.advection.flux import upwind_flux
-from gridax._src.advection.reconstruction import Reconstruction2D
+from gridax._src.advection.reconstruct import check_scheme, face_flux, hierarchy_of
 from gridax._src.grid import CartesianCGrid2D
 from gridax._src.mask import Mask2D
 from gridax._src.operators.differentiable import smooth_abs
 from gridax._src.pytree import array_namespace
+from gridax._src.schemes.base import Scheme
+from gridax._src.schemes.linear import Upwind
 
 if TYPE_CHECKING:
     from jaxtyping import Array
@@ -43,12 +39,16 @@ else:
     Array = np.ndarray
 
 
+#: The default scheme.
+UPWIND = Upwind(1)
+
+
 def uv_center_flux(
     h: Float[Array, "Ny Nx"],
     u: Float[Array, "Ny Nx"],
     v: Float[Array, "Ny Nx"],
     grid: CartesianCGrid2D,
-    method: str = "upwind1",
+    scheme: Scheme = UPWIND,
     mask: Mask2D | None = None,
 ) -> tuple[Float[Array, "Ny Nx"], Float[Array, "Ny Nx"]]:
     """Compute raw face fluxes for a cell-centred scalar on a C-grid.
@@ -74,15 +74,12 @@ def uv_center_flux(
     v : Float[Array, "Ny Nx"]
         y-velocity at V-points.
     grid : CartesianCGrid2D
-        Grid object (used only for creating the reconstruction engine).
-    method : str
-        Reconstruction method: ``'naive'``, ``'upwind1'``, ``'upwind2'``,
-        ``'upwind3'``, ``'weno3'``, ``'weno5'``, ``'wenoz5'``, ``'weno7'``,
-        ``'weno9'``, or a TVD limiter: ``'minmod'``, ``'van_leer'``,
-        ``'superbee'``, ``'mc'``.
+        The grid; the metric does not enter.
+    scheme : Scheme, default Upwind(1)
+        Any of `gridax.schemes`.
     mask : Mask2D | None
-        When provided and *method* supports mask dispatch, stencil-width
-        fallback is applied via :func:`~gridax.upwind_flux`.
+        The wet cells: a face takes the widest tier of the scheme that reads
+        wet cells only.
 
     Returns
     -------
@@ -91,8 +88,7 @@ def uv_center_flux(
     fn : Float[Array, "Ny Nx"]
         North-face flux (h * v reconstructed at north faces).
     """
-    recon = Reconstruction2D(grid=grid)
-    return _compute_face_fluxes(recon, h, u, v, method, mask)
+    return _face_fluxes(h, u, v, scheme, mask)
 
 
 def uv_node_flux(
@@ -100,16 +96,15 @@ def uv_node_flux(
     u: Float[Array, "Ny Nx"],
     v: Float[Array, "Ny Nx"],
     grid: CartesianCGrid2D,
-    method: str = "upwind1",
+    scheme: Scheme = UPWIND,
     mask: Mask2D | None = None,
 ) -> tuple[Float[Array, "Ny Nx"], Float[Array, "Ny Nx"]]:
     """Compute raw face fluxes for a node-centred tracer on a C-grid.
 
     Analogous to :func:`uv_center_flux` but for a tracer *q* that lives at
     grid nodes (vorticity / psi points) rather than cell centres.  The
-    reconstruction uses the same stencil methods as ``Advection2D`` — the
-    x-stencil for east faces and the y-stencil for north faces — applied
-    to the q-point field.
+    reconstruction is the one of ``Advection2D`` — along x for east faces and
+    along y for north faces — applied to the q-point field.
 
     Parameters
     ----------
@@ -120,11 +115,11 @@ def uv_node_flux(
     v : Float[Array, "Ny Nx"]
         y-velocity at V-points.
     grid : CartesianCGrid2D
-        Grid object (used only for creating the reconstruction engine).
-    method : str
-        Reconstruction method (same options as :func:`uv_center_flux`).
+        The grid; the metric does not enter.
+    scheme : Scheme, default Upwind(1)
+        Any of `gridax.schemes`.
     mask : Mask2D | None
-        Optional mask for stencil-width fallback.
+        The wet cells, as in :func:`uv_center_flux`.
 
     Returns
     -------
@@ -133,8 +128,7 @@ def uv_node_flux(
     vq_flux : Float[Array, "Ny Nx"]
         North-face flux (q * v reconstructed at north faces).
     """
-    recon = Reconstruction2D(grid=grid)
-    return _compute_face_fluxes(recon, q, u, v, method, mask)
+    return _face_fluxes(q, u, v, scheme, mask)
 
 
 def rusanov_flux(
@@ -214,60 +208,25 @@ def rusanov_flux(
     return 0.5 * a * (q_l + q_r) - 0.5 * speed * (q_r - q_l)
 
 
-def _compute_face_fluxes(
-    recon: Reconstruction2D,
-    h: Float[Array, "Ny Nx"],
-    u: Float[Array, "Ny Nx"],
-    v: Float[Array, "Ny Nx"],
-    method: str,
+def _face_fluxes(
+    q: Float[Array, "*batch Ny Nx"],
+    u: Float[Array, "*batch Ny Nx"],
+    v: Float[Array, "*batch Ny Nx"],
+    scheme: Scheme,
     mask: Mask2D | None,
-) -> tuple[Float[Array, "Ny Nx"], Float[Array, "Ny Nx"]]:
-    """Shared implementation for face-flux computation.
-
-    Mirrors the dispatch logic of ``Advection2D.__call__`` but returns
-    the raw ``(fe, fn)`` face fluxes instead of the divergence tendency.
-    """
-    # ── masked path ───────────────────────────────────────────────────
-    if mask is not None and method in _MASK_DISPATCHABLE_2D:
-        rfx, rfy, sizes = _rec_funcs_for_method_2d(recon, method)
-        mask_x = mask.get_adaptive_masks(direction="x", stencil_sizes=sizes)
-        mask_y = mask.get_adaptive_masks(direction="y", stencil_sizes=sizes)
-        fe = upwind_flux(h, u, dim=1, rec_funcs=rfx, mask_hierarchy=mask_x)
-        fn = upwind_flux(h, v, dim=0, rec_funcs=rfy, mask_hierarchy=mask_y)
-        return fe, fn
-
-    # ── unmasked path ─────────────────────────────────────────────────
-    if method == "naive":
-        fe = recon.naive_x(h, u)
-        fn = recon.naive_y(h, v)
-    elif method == "upwind1":
-        fe = recon.upwind1_x(h, u)
-        fn = recon.upwind1_y(h, v)
-    elif method == "upwind2":
-        fe = recon.upwind2_x(h, u)
-        fn = recon.upwind2_y(h, v)
-    elif method == "upwind3":
-        fe = recon.upwind3_x(h, u)
-        fn = recon.upwind3_y(h, v)
-    elif method == "weno3":
-        fe = recon.weno3_x(h, u)
-        fn = recon.weno3_y(h, v)
-    elif method == "weno5":
-        fe = recon.weno5_x(h, u)
-        fn = recon.weno5_y(h, v)
-    elif method == "wenoz5":
-        fe = recon.wenoz5_x(h, u)
-        fn = recon.wenoz5_y(h, v)
-    elif method == "weno7":
-        fe = recon.weno7_x(h, u)
-        fn = recon.weno7_y(h, v)
-    elif method == "weno9":
-        fe = recon.weno9_x(h, u)
-        fn = recon.weno9_y(h, v)
-    elif method in _TVD_LIMITERS:
-        fe = recon.tvd_x(h, u, limiter=method)
-        fn = recon.tvd_y(h, v, limiter=method)
-    else:
-        raise ValueError(f"Unknown method: {method!r}")
-
+) -> tuple[Float[Array, "*batch Ny Nx"], Float[Array, "*batch Ny Nx"]]:
+    """The flux along x and along y."""
+    check_scheme(scheme)
+    fe, fn = (
+        face_flux(
+            q,
+            velocity,
+            axis=position,
+            scheme=scheme,
+            rank=2,
+            hierarchy=None if mask is None else hierarchy_of(mask, axis, scheme),
+            wet=None if mask is None else mask.wet(),
+        )
+        for axis, position, velocity in (("x", -1, u), ("y", -2, v))
+    )
     return fe, fn

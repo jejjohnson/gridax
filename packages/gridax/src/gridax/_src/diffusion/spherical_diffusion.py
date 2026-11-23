@@ -1,85 +1,18 @@
-"""
-Spherical-coordinate harmonic diffusion operators (flux form).
-
-Computes ``∂h/∂t = ∇·(κ ∇h)`` on an Arakawa C-grid in spherical
-coordinates::
-
-    ∂h/∂t = 1/(R·cosφ) · [∂F_λ/∂λ + ∂(cosφ · F_φ)/∂φ]
-
-with staggered face fluxes
-
-    F_λ = κ · (1/(R·cosφ)) · ∂h/∂λ       at U-points
-    F_φ = κ · (1/R)        · ∂h/∂φ       at V-points
-
-Algorithm (2-D, spacings dlon, dlat in radians, planet radius R)
-----------------------------------------------------------------
-Step 1 — East-face flux at U-points (forward diff T → U)::
-
-    F_λ[j, i+½] = κ[j, i+½] · (h[j, i+1] − h[j, i]) / (R · cos(lat_U) · dlon)
-
-Step 2 — North-face flux at V-points (forward diff T → V)::
-
-    F_φ[j+½, i] = κ[j+½, i] · (h[j+1, i] − h[j, i]) / (R · dlat)
-
-A T-point ``κ`` field is averaged to the faces (arithmetic mean of the two
-cells, ``κ[j, i+½] = (κ[j, i] + κ[j, i+1]) / 2``), as in the Cartesian
-:class:`~gridax.Diffusion2D`; a scalar ``κ`` is used as is.
-
-Step 3 — Tendency at T-points (backward diff of fluxes with cosφ weight on
-the meridional term)::
-
-    dh[j, i] = 1/(R · cos(lat_T)) · [
-        (F_λ[j, i+½] − F_λ[j, i−½]) / dlon
-      + (cos(lat_V_N) · F_φ[j+½, i] − cos(lat_V_S) · F_φ[j−½, i]) / dlat
-    ]
-
-where ``cos(lat_V_N) = cos_lat_V[j, i]`` is the cos(lat) at the north
-face of cell ``[j, i]`` and ``cos(lat_V_S) = cos_lat_V[j−1, i]`` the
-south face.
-
-At the equator (``cos(lat) = 1``) this reduces to the Cartesian
-flux-form Laplacian ``∇·(κ∇h)`` with ``dx = R·dlon`` and
-``dy = R·dlat``.
-
-Boundary conditions
--------------------
-Face fluxes at domain walls are zero by construction (west, east,
-south, north) — see :mod:`gridax._src.diffusion.diffusion` for the
-ghost-ring rationale.  This gives no-flux walls by default.
-
-Pole handling
--------------
-Any step that divides by ``cos(lat)`` uses :func:`_safe_div_cos` and
-returns NaN where ``|cos(lat)| < 1e-12`` instead of ±inf.
-
-Masking
--------
-Like the Cartesian :class:`Diffusion2D`, the spherical operator applies
-the three-step intermediate-flux masking pattern when a ``Mask2D`` /
-``Mask3D`` is provided (`#209 <https://github.com/jejjohnson/gridax/issues/209>`_):
-
-* ``F_λ *= mask.wet(at="U")``
-* ``F_φ *= mask.wet(at="V")``
-* tendency ``*= mask.wet()``
-
-Per issue #209 Q2, spherical 2-D operators take a Cartesian ``Mask2D``
-pending a dedicated ``SphericalMask2D`` follow-up.
+"""The spherical diffusion operators: :func:`gridax.diffuse` and
+:func:`gridax.biharmonic` with a fixed grid and mask.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from jaxtyping import Bool, Float
+from jaxtyping import Float
 import numpy as np
 
-from gridax._src.backend import set_at, vmap
-from gridax._src.diffusion.diffusion import _face_kappa
+from gridax._src.diffusion.diffuse import biharmonic, diffuse, face_fluxes
 from gridax._src.grid import SphericalCGrid2D, SphericalCGrid3D
 from gridax._src.mask import Mask2D, Mask3D
-from gridax._src.operators._ghost import interior, zero_z_ghosts
-from gridax._src.operators._utils import _metric_like, _safe_div_cos
-from gridax._src.pytree import array_namespace, pytree_dataclass
+from gridax._src.pytree import pytree_dataclass
 
 if TYPE_CHECKING:
     from jaxtyping import Array
@@ -87,146 +20,19 @@ else:
     Array = np.ndarray
 
 
-def _spherical_diffusion_2d_impl(
-    h: Float[Array, "Ny Nx"],
-    kappa: float | Float[Array, "Ny Nx"],
-    dlon: Float[Array, ""],
-    dlat: Float[Array, ""],
-    R: Float[Array, ""],
-    cos_lat_T: Float[Array, "Ny Nx"],
-    cos_lat_U: Float[Array, "Ny Nx"],
-    cos_lat_V: Float[Array, "Ny Nx"],
-    mh: Bool[Array, "Ny Nx"] | Float[Array, "Ny Nx"] | None,
-    mu: Bool[Array, "Ny Nx"] | Float[Array, "Ny Nx"] | None,
-    mv: Bool[Array, "Ny Nx"] | Float[Array, "Ny Nx"] | None,
-) -> Float[Array, "Ny Nx"]:
-    """Shared 2-D spherical diffusion kernel with explicit raw-array masks."""
-    xp = array_namespace(h, kappa, cos_lat_T, cos_lat_U, cos_lat_V, mh, mu, mv)
-    cos_lat_T = _metric_like(cos_lat_T, h)
-    cos_lat_U = _metric_like(cos_lat_U, h)
-    cos_lat_V = _metric_like(cos_lat_V, h)
-    R_dlon, R_dlat = _metric_like(R * dlon, h), _metric_like(R * dlat, h)
-    dlon, dlat, R = (_metric_like(m, h) for m in (dlon, dlat, R))
-    # κ at the interior faces (arithmetic mean of the two T cells)
-    kappa_x, kappa_y = _face_kappa(kappa)  # [Ny-2, Nx-3], [Ny-3, Nx-2]
-
-    # Step 1 — east-face flux at U-points.
-    # F_lam[j, i+1/2] = kappa[j, i+1/2] * (h[j, i+1] - h[j, i])
-    #                   / (R * cos(lat_U) * dlon)
-    dh_dlon_raw = kappa_x * (h[1:-1, 2:-1] - h[1:-1, 1:-2])
-    cos_U_face = cos_lat_U[1:-1, 1:-2]
-    # cast as the h-typed `zeros_like(h).at[...].set(...)` buffer did
-    flux_x_interior = _safe_div_cos(dh_dlon_raw, cos_U_face, R_dlon).astype(h.dtype)
-    if mu is not None:
-        flux_x_interior = flux_x_interior * mu[1:-1, 1:-2]
-
-    # Step 2 — north-face flux at V-points.
-    # F_phi[j+1/2, i] = kappa[j+1/2, i] * (h[j+1, i] - h[j, i]) / (R * dlat)
-    flux_y_interior = (kappa_y * (h[2:-1, 1:-1] - h[1:-2, 1:-1]) / R_dlat).astype(
-        h.dtype
-    )
-    if mv is not None:
-        flux_y_interior = flux_y_interior * mv[1:-2, 1:-1]
-
-    # Step 3 — tendency at T-points (spherical flux-divergence).
-    cos_V_N = cos_lat_V[1:-1, 1:-1]  # north face of cell [j, i]
-    cos_V_S = cos_lat_V[:-2, 1:-1]  # south face of cell [j, i]
-    cos_T_c = cos_lat_T[1:-1, 1:-1]
-
-    # Same values as building full-size flux arrays
-    #   flux_x = zeros_like(h).at[1:-1, 1:-2].set(flux_x_interior) (* mu)
-    #   du = (flux_x[1:-1, 1:-1] - flux_x[1:-1, :-2]) / dlon
-    # but the zero closed-wall faces enter as a `pad` of the interior-face
-    # fluxes, so the tendency and its VJP fuse into one pass (see
-    # `diffusion._diffusion_2d_impl`).
-    fx_e = xp.pad(flux_x_interior, ((0, 0), (0, 1)))  # east face   [Ny-2, Nx-2]
-    fx_w = xp.pad(flux_x_interior, ((0, 0), (1, 0)))  # west face
-    fy_n = xp.pad(flux_y_interior, ((0, 1), (0, 0)))  # north face  [Ny-2, Nx-2]
-    fy_s = xp.pad(flux_y_interior, ((1, 0), (0, 0)))  # south face
-    du = (fx_e - fx_w) / dlon
-    dv = (cos_V_N * fy_n - cos_V_S * fy_s) / dlat
-    out = interior(_safe_div_cos(du + dv, cos_T_c, R), h)
-
-    if mh is not None:
-        out = out * mh
-
-    return out
-
-
-def _spherical_diffusion_2d_fluxes_impl(
-    h: Float[Array, "Ny Nx"],
-    kappa: float | Float[Array, "Ny Nx"],
-    dlon: Float[Array, ""],
-    dlat: Float[Array, ""],
-    R: Float[Array, ""],
-    cos_lat_U: Float[Array, "Ny Nx"],
-    mu: Bool[Array, "Ny Nx"] | Float[Array, "Ny Nx"] | None,
-    mv: Bool[Array, "Ny Nx"] | Float[Array, "Ny Nx"] | None,
-) -> tuple[Float[Array, "Ny Nx"], Float[Array, "Ny Nx"]]:
-    """Shared diagnostic-flux kernel for :class:`SphericalDiffusion2D`."""
-    xp = array_namespace(h, kappa, cos_lat_U, mu, mv)
-    cos_lat_U = _metric_like(cos_lat_U, h)
-    R_dlon, R_dlat = _metric_like(R * dlon, h), _metric_like(R * dlat, h)
-    # κ at the interior faces (arithmetic mean of the two T cells)
-    kappa_x, kappa_y = _face_kappa(kappa)  # [Ny-2, Nx-3], [Ny-3, Nx-2]
-
-    dh_dlon_raw = kappa_x * (h[1:-1, 2:-1] - h[1:-1, 1:-2])
-    cos_U_face = cos_lat_U[1:-1, 1:-2]
-    flux_x_interior = _safe_div_cos(dh_dlon_raw, cos_U_face, R_dlon)
-    flux_x = set_at(xp.zeros_like(h), np.s_[1:-1, 1:-2], flux_x_interior)
-    if mu is not None:
-        flux_x = flux_x * mu
-
-    flux_y_interior = kappa_y * (h[2:-1, 1:-1] - h[1:-2, 1:-1]) / R_dlat
-    flux_y = set_at(xp.zeros_like(h), np.s_[1:-2, 1:-1], flux_y_interior)
-    if mv is not None:
-        flux_y = flux_y * mv
-
-    return flux_x, flux_y
-
-
 @pytree_dataclass
 class SphericalDiffusion2D:
-    """Horizontal tracer diffusion (flux form) on a 2-D spherical C-grid.
+    """Harmonic diffusion on a 2-D spherical C-grid, in flux form.
 
-    Computes ``∂h/∂t = ∇·(κ ∇h)`` at T-points from staggered face
-    fluxes, applying the cos(lat) metric terms inside the zonal flux
-    and the meridional flux-divergence (see module docstring for the
-    full stencil).
+    `gridax.diffuse` with a fixed grid and mask.
 
     Parameters
     ----------
     grid : SphericalCGrid2D
-        The underlying 2-D spherical Arakawa C-grid.
-    mask : Mask2D or None, optional
-        Optional land/ocean mask.  When provided, the three-step
-        intermediate-flux masking pattern is applied inside both
-        :meth:`__call__` and :meth:`fluxes`:
-
-        * ``flux_x *= mask.wet(at="U")`` at the U-face stage,
-        * ``flux_y *= mask.wet(at="V")`` at the V-face stage,
-        * tendency ``*= mask.wet()`` on the final output (``__call__`` only).
-
-        Per #209 Q2, this is a Cartesian ``Mask2D`` pending a dedicated
-        ``SphericalMask2D`` follow-up.  ``None`` (default) gives the
-        unmasked behaviour.
-
-    Examples
-    --------
-    >>> import jax.numpy as jnp
-    >>> from gridax import SphericalCGrid2D, SphericalDiffusion2D
-    >>> grid = SphericalCGrid2D.from_interior(
-    ...     nx_interior=16,
-    ...     ny_interior=8,
-    ...     lon_range=(0.0, 360.0),
-    ...     lat_range=(-40.0, 40.0),
-    ...     R=6.371e6,
-    ... )
-    >>> op = SphericalDiffusion2D(grid=grid)
-    >>> h = jnp.ones((grid.Ny, grid.Nx))
-    >>> tend = op(h, kappa=1e3)
-    >>> tend.shape
-    (10, 18)
+        The grid.
+    mask : Mask2D, optional
+        The wet cells: no flux crosses a dry face, and the tendency is zero on
+        dry cells.
     """
 
     grid: SphericalCGrid2D
@@ -234,98 +40,60 @@ class SphericalDiffusion2D:
 
     def __call__(
         self,
-        h: Float[Array, "Ny Nx"],
-        kappa: float | Float[Array, "Ny Nx"],
-    ) -> Float[Array, "Ny Nx"]:
-        """Harmonic diffusion tendency at T-points.
+        h: Float[Array, "*batch Ny Nx"],
+        kappa: float | Float[Array, "..."],
+    ) -> Float[Array, "*batch Ny Nx"]:
+        """The tendency ``∇·(κ∇h)`` at T (:func:`gridax.diffuse`).
 
         Parameters
         ----------
-        h : Float[Array, "Ny Nx"]
-            Tracer field at T-points.
-        kappa : float or Float[Array, "Ny Nx"]
-            Diffusion coefficient (scalar or T-point field).  When an
-            array, each face flux uses the arithmetic mean of the two
-            T-cells the face separates (second order); no ghost value is
-            read.
+        h : Float[Array, "*batch Ny Nx"]
+            The tracer, at T.
+        kappa : float or Float[Array, "..."]
+            The diffusivity: a number, or a field at T.
 
         Returns
         -------
-        Float[Array, "Ny Nx"]
-            Diffusion tendency at T-points.  Ghost ring is zero.
+        Float[Array, "*batch Ny Nx"]
+            The tendency, at T.
         """
-        mh = None if self.mask is None else self.mask.wet()
-        mu = None if self.mask is None else self.mask.wet(at="U")
-        mv = None if self.mask is None else self.mask.wet(at="V")
-        return _spherical_diffusion_2d_impl(
-            h,
-            kappa,
-            self.grid.dlon,
-            self.grid.dlat,
-            self.grid.R,
-            self.grid._cos_lat("T"),
-            self.grid._cos_lat("U"),
-            self.grid._cos_lat("V"),
-            mh=mh,
-            mu=mu,
-            mv=mv,
-        )
+        return diffuse(h, self.grid, kappa=kappa, mask=self.mask, wall="closed")
 
     def fluxes(
         self,
-        h: Float[Array, "Ny Nx"],
-        kappa: float | Float[Array, "Ny Nx"],
-    ) -> tuple[Float[Array, "Ny Nx"], Float[Array, "Ny Nx"]]:
-        """Diagnostic diffusive face fluxes at U- and V-points.
-
-        Returns the metric-scaled east-face and north-face fluxes before
-        the spherical divergence step::
-
-            F_λ[j, i+½] = κ[j, i+½] · (h[j, i+1] − h[j, i]) / (R · cos(lat_U) · dlon)
-            F_φ[j+½, i] = κ[j+½, i] · (h[j+1, i] − h[j, i]) / (R · dlat)
+        h: Float[Array, "*batch Ny Nx"],
+        kappa: float | Float[Array, "..."],
+    ) -> tuple[Float[Array, "*batch Ny Nx"], Float[Array, "*batch Ny Nx"]]:
+        """The face fluxes ``κ δₓh`` at U and ``κ δᵧh`` at V, before the divergence.
 
         Parameters
         ----------
-        h : Float[Array, "Ny Nx"]
-            Tracer field at T-points.
-        kappa : float or Float[Array, "Ny Nx"]
-            Diffusion coefficient.
+        h : Float[Array, "*batch Ny Nx"]
+            The tracer, at T.
+        kappa : float or Float[Array, "..."]
+            The diffusivity: a number, or a field at T.
 
         Returns
         -------
-        tuple[Float[Array, "Ny Nx"], Float[Array, "Ny Nx"]]
-            ``(flux_x, flux_y)``.  Masked by ``mask.wet(at="U")`` / ``mask.wet(at="V")``
-            when ``self.mask`` is set.
+        tuple[Float[Array, "*batch Ny Nx"], Float[Array, "*batch Ny Nx"]]
+            ``(flux_x, flux_y)``, at U and at V, zero on dry faces.
         """
-        mu = None if self.mask is None else self.mask.wet(at="U")
-        mv = None if self.mask is None else self.mask.wet(at="V")
-        return _spherical_diffusion_2d_fluxes_impl(
-            h,
-            kappa,
-            self.grid.dlon,
-            self.grid.dlat,
-            self.grid.R,
-            self.grid._cos_lat("U"),
-            mu=mu,
-            mv=mv,
-        )
+        return face_fluxes(h, self.grid, kappa=kappa, mask=self.mask, wall="closed")
 
 
 @pytree_dataclass
 class SphericalDiffusion3D:
-    """Horizontal tracer diffusion on a 3-D spherical Arakawa C-grid.
+    """Horizontal harmonic diffusion on a 3-D spherical C-grid, level by level.
 
-    Applies :class:`SphericalDiffusion2D` independently at each z-level
-    via ``vmap`` (``jax.vmap`` on JAX inputs).  The 3-D field shape is ``[Nz, Ny, Nx]``.
+    `gridax.diffuse` with a fixed grid and mask.
 
     Parameters
     ----------
     grid : SphericalCGrid3D
-    mask : Mask3D or None, optional
-        Optional 3-D land/ocean mask.  When provided, the intermediate
-        flux masking pattern from :class:`SphericalDiffusion2D` is
-        applied at every z-level with per-z slices of ``mask.wet()``,
-        ``mask.wet(at="U")``, ``mask.wet(at="V")`` — same approach as :class:`Diffusion3D`.
+        The grid.
+    mask : Mask3D, optional
+        The wet cells: no flux crosses a dry face, and the tendency is zero on
+        dry cells.
     """
 
     grid: SphericalCGrid3D
@@ -333,260 +101,118 @@ class SphericalDiffusion3D:
 
     def __call__(
         self,
-        h: Float[Array, "Nz Ny Nx"],
-        kappa: float | Float[Array, "Nz Ny Nx"],
-    ) -> Float[Array, "Nz Ny Nx"]:
-        """Diffusion tendency at T-points over all z-levels."""
-        xp = array_namespace(h, kappa)
-        dlon, dlat, R = self.grid.dlon, self.grid.dlat, self.grid.R
-        cos_T = self.grid._cos_lat("T")
-        cos_U = self.grid._cos_lat("U")
-        cos_V = self.grid._cos_lat("V")
+        h: Float[Array, "*batch Nz Ny Nx"],
+        kappa: float | Float[Array, "..."],
+    ) -> Float[Array, "*batch Nz Ny Nx"]:
+        """The tendency ``∇·(κ∇h)`` at T (:func:`gridax.diffuse`).
 
-        kappa_arr = xp.asarray(kappa)
-        kappa_ax = 0 if kappa_arr.ndim >= 3 else None
+        Parameters
+        ----------
+        h : Float[Array, "*batch Nz Ny Nx"]
+            The tracer, at T.
+        kappa : float or Float[Array, "..."]
+            The diffusivity: a number, or a field at T.
 
-        if self.mask is None:
-
-            def _apply(h_k, kap_k):
-                return _spherical_diffusion_2d_impl(
-                    h_k,
-                    kap_k,
-                    dlon,
-                    dlat,
-                    R,
-                    cos_T,
-                    cos_U,
-                    cos_V,
-                    mh=None,
-                    mu=None,
-                    mv=None,
-                )
-
-            out = vmap(_apply, in_axes=(0, kappa_ax))(h, kappa_arr)
-            return zero_z_ghosts(out)
-
-        mh = self.mask.wet()
-        mu = self.mask.wet(at="U")
-        mv = self.mask.wet(at="V")
-
-        def _apply_masked(h_k, kap_k, mh_k, mu_k, mv_k):
-            return _spherical_diffusion_2d_impl(
-                h_k,
-                kap_k,
-                dlon,
-                dlat,
-                R,
-                cos_T,
-                cos_U,
-                cos_V,
-                mh=mh_k,
-                mu=mu_k,
-                mv=mv_k,
-            )
-
-        out = vmap(_apply_masked, in_axes=(0, kappa_ax, 0, 0, 0))(
-            h, kappa_arr, mh, mu, mv
-        )
-        return zero_z_ghosts(out)
+        Returns
+        -------
+        Float[Array, "*batch Nz Ny Nx"]
+            The tendency, at T.
+        """
+        return diffuse(h, self.grid, kappa=kappa, mask=self.mask, wall="closed")
 
     def fluxes(
         self,
-        h: Float[Array, "Nz Ny Nx"],
-        kappa: float | Float[Array, "Nz Ny Nx"],
-    ) -> tuple[Float[Array, "Nz Ny Nx"], Float[Array, "Nz Ny Nx"]]:
-        """Diagnostic diffusive face fluxes at U- and V-points, all z."""
-        xp = array_namespace(h, kappa)
-        dlon, dlat, R = self.grid.dlon, self.grid.dlat, self.grid.R
-        cos_U = self.grid._cos_lat("U")
+        h: Float[Array, "*batch Nz Ny Nx"],
+        kappa: float | Float[Array, "..."],
+    ) -> tuple[Float[Array, "*batch Nz Ny Nx"], Float[Array, "*batch Nz Ny Nx"]]:
+        """The face fluxes ``κ δₓh`` at U and ``κ δᵧh`` at V, before the divergence.
 
-        kappa_arr = xp.asarray(kappa)
-        kappa_ax = 0 if kappa_arr.ndim >= 3 else None
+        Parameters
+        ----------
+        h : Float[Array, "*batch Nz Ny Nx"]
+            The tracer, at T.
+        kappa : float or Float[Array, "..."]
+            The diffusivity: a number, or a field at T.
 
-        if self.mask is None:
-
-            def _apply(h_k, kap_k):
-                return _spherical_diffusion_2d_fluxes_impl(
-                    h_k, kap_k, dlon, dlat, R, cos_U, mu=None, mv=None
-                )
-
-            fx, fy = vmap(_apply, in_axes=(0, kappa_ax))(h, kappa_arr)
-            return zero_z_ghosts(fx), zero_z_ghosts(fy)
-
-        mu = self.mask.wet(at="U")
-        mv = self.mask.wet(at="V")
-
-        def _apply_masked(h_k, kap_k, mu_k, mv_k):
-            return _spherical_diffusion_2d_fluxes_impl(
-                h_k, kap_k, dlon, dlat, R, cos_U, mu=mu_k, mv=mv_k
-            )
-
-        fx, fy = vmap(_apply_masked, in_axes=(0, kappa_ax, 0, 0))(h, kappa_arr, mu, mv)
-        return zero_z_ghosts(fx), zero_z_ghosts(fy)
+        Returns
+        -------
+        tuple[Float[Array, "*batch Nz Ny Nx"], Float[Array, "*batch Nz Ny Nx"]]
+            ``(flux_x, flux_y)``, at U and at V, zero on dry faces.
+        """
+        return face_fluxes(h, self.grid, kappa=kappa, mask=self.mask, wall="closed")
 
 
 @pytree_dataclass
 class SphericalBiharmonicDiffusion2D:
-    """Biharmonic (spherical ∇⁴) diffusion on a 2-D spherical C-grid.
+    """Biharmonic diffusion on a 2-D spherical C-grid.
 
-    Computes the scale-selective biharmonic tendency
-
-        ∂h/∂t|_diff = −κ · ∇⁴_sphere h
-
-    where ``∇⁴_sphere h = ∇²_sphere(∇²_sphere h)`` is implemented as
-    two successive flux-form spherical Laplacians via
-    :class:`SphericalDiffusion2D`.  Positive κ gives dissipation, with
-    small-scale damping scaling as ``κ·k⁴`` vs ``κ·k²`` for harmonic
-    diffusion — the standard scale-selective mixing used in MITgcm,
-    MOM, and other GCMs on spherical grids.
-
-    Only interior cells ``[1:-1, 1:-1]`` are written; the ghost ring
-    is zero.  The caller is responsible for boundary conditions.
+    `gridax.biharmonic` with a fixed grid and mask.
 
     Parameters
     ----------
     grid : SphericalCGrid2D
-        The underlying 2-D spherical grid.
-    mask : Mask2D or None, optional
-        Optional land/ocean mask.  When provided, the tendency is
-        ``−κ · Dm(Dm(h))`` with ``Dm`` the masked no-flux
-        :class:`SphericalDiffusion2D` (fluxes zeroed on dry faces, output
-        zeroed on dry cells), and dry inputs are zeroed with
-        ``jnp.where`` first: the coast is a no-flux wall for ``h`` and
-        ``∇²h``, land values (``NaN``, ``1e10``) never enter, and the
-        operator is conservative on the wet cells — same semantics as
-        :class:`BiharmonicDiffusion2D`.
-
-    Notes
-    -----
-    Both passes have zero wall-face fluxes: the four domain walls are
-    no-flux for ``h`` and for ``∇²_sphere h``, and no ghost cell (of
-    ``h`` or of the zero-ringed intermediate) is read.  Same as
-    :class:`BiharmonicDiffusion2D`.
-
-    Examples
-    --------
-    >>> import jax.numpy as jnp
-    >>> from gridax import SphericalCGrid2D, SphericalBiharmonicDiffusion2D
-    >>> grid = SphericalCGrid2D.from_interior(
-    ...     nx_interior=16,
-    ...     ny_interior=10,
-    ...     lon_range=(0.0, 360.0),
-    ...     lat_range=(-40.0, 40.0),
-    ... )
-    >>> op = SphericalBiharmonicDiffusion2D(grid=grid)
-    >>> h = jnp.ones((grid.Ny, grid.Nx))
-    >>> tend = op(h, kappa=1e6)
-    >>> tend.shape
-    (12, 18)
+        The grid.
+    mask : Mask2D, optional
+        The wet cells: the coast is no-flux for ``h`` and for ``∇²h``, and dry
+        values are not read.
     """
 
     grid: SphericalCGrid2D
-    mask: Mask2D | None
-    _harm: SphericalDiffusion2D
-
-    def __init__(
-        self,
-        grid: SphericalCGrid2D,
-        mask: Mask2D | None = None,
-    ) -> None:
-        self.grid = grid
-        self.mask = mask
-        # Both passes are the masked no-flux Laplacian Dm (#292).
-        self._harm = SphericalDiffusion2D(grid=grid, mask=mask)
+    mask: Mask2D | None = None
 
     def __call__(
-        self,
-        h: Float[Array, "Ny Nx"],
-        kappa: float,
-    ) -> Float[Array, "Ny Nx"]:
-        """Apply biharmonic diffusion and return ``−κ · ∇⁴_sphere h``.
+        self, h: Float[Array, "*batch Ny Nx"], kappa: float | Float[Array, "..."]
+    ) -> Float[Array, "*batch Ny Nx"]:
+        """The tendency ``-κ ∇⁴h`` at T (:func:`gridax.biharmonic`).
 
         Parameters
         ----------
-        h : Float[Array, "Ny Nx"]
-            Scalar tracer at T-points.
-        kappa : float
-            Biharmonic diffusion coefficient (κ ≥ 0 gives dissipation).
+        h : Float[Array, "*batch Ny Nx"]
+            The tracer, at T.
+        kappa : float or Float[Array, "..."]
+            The biharmonic diffusivity.
 
         Returns
         -------
-        Float[Array, "Ny Nx"]
-            Tendency ``−κ · ∇⁴_sphere h`` at T-points, same shape as
-            ``h``.  Ghost cells are zero.  When ``self.mask`` is set, it
-            is ``−κ · Dm(Dm(h))`` and zero on dry cells.
+        Float[Array, "*batch Ny Nx"]
+            The tendency, at T.
         """
-        xp = array_namespace(h)
-        if self.mask is not None:
-            # zero land (NaN / 1e10) before any stencil reads it
-            h = xp.where(self.mask.wet(), h, 0.0)
-        lap1 = self._harm(h, kappa=1.0)
-        lap2 = self._harm(lap1, kappa=1.0)
-        return -kappa * lap2
+        return biharmonic(h, self.grid, kappa4=kappa, mask=self.mask)
 
 
 @pytree_dataclass
 class SphericalBiharmonicDiffusion3D:
-    """Biharmonic spherical diffusion on a 3-D Arakawa C-grid.
+    """Horizontal biharmonic diffusion on a 3-D spherical C-grid, level by level.
 
-    Applies the horizontal biharmonic spherical Laplacian independently
-    at each z-level
-
-        ∂h/∂t|_diff = −κ · ∇⁴_{h,sphere} h
-
-    where ``∇⁴_{h,sphere}`` denotes the horizontal spherical biharmonic
-    operator, implemented as two successive :class:`SphericalDiffusion3D`
-    passes.
+    `gridax.biharmonic` with a fixed grid and mask.
 
     Parameters
     ----------
     grid : SphericalCGrid3D
-    mask : Mask3D or None, optional
-        Optional 3-D land/ocean mask.  When provided, the tendency is
-        ``−κ · Dm(Dm(h))`` at every z-level with ``Dm`` the masked
-        no-flux :class:`SphericalDiffusion3D`, dry inputs zeroed first —
-        same semantics as :class:`SphericalBiharmonicDiffusion2D`.
+        The grid.
+    mask : Mask3D, optional
+        The wet cells: the coast is no-flux for ``h`` and for ``∇²h``, and dry
+        values are not read.
     """
 
     grid: SphericalCGrid3D
-    mask: Mask3D | None
-    _harm: SphericalDiffusion3D
-
-    def __init__(
-        self,
-        grid: SphericalCGrid3D,
-        mask: Mask3D | None = None,
-    ) -> None:
-        self.grid = grid
-        self.mask = mask
-        # Both passes are the masked no-flux Laplacian Dm (#292).
-        self._harm = SphericalDiffusion3D(grid=grid, mask=mask)
+    mask: Mask3D | None = None
 
     def __call__(
-        self,
-        h: Float[Array, "Nz Ny Nx"],
-        kappa: float,
-    ) -> Float[Array, "Nz Ny Nx"]:
-        """Apply horizontal biharmonic spherical diffusion.
+        self, h: Float[Array, "*batch Nz Ny Nx"], kappa: float | Float[Array, "..."]
+    ) -> Float[Array, "*batch Nz Ny Nx"]:
+        """The tendency ``-κ ∇⁴h`` at T (:func:`gridax.biharmonic`).
 
         Parameters
         ----------
-        h : Float[Array, "Nz Ny Nx"]
-            Scalar tracer at T-points.
-        kappa : float
-            Biharmonic diffusion coefficient (κ ≥ 0 gives dissipation).
+        h : Float[Array, "*batch Nz Ny Nx"]
+            The tracer, at T.
+        kappa : float or Float[Array, "..."]
+            The biharmonic diffusivity.
 
         Returns
         -------
-        Float[Array, "Nz Ny Nx"]
-            Tendency ``−κ · ∇⁴_{h,sphere} h`` at T-points.  Ghost cells
-            are zero.  When ``self.mask`` is set, it is ``−κ · Dm(Dm(h))``
-            and zero on dry cells.
+        Float[Array, "*batch Nz Ny Nx"]
+            The tendency, at T.
         """
-        xp = array_namespace(h)
-        if self.mask is not None:
-            # zero land (NaN / 1e10) before any stencil reads it
-            h = xp.where(self.mask.wet(), h, 0.0)
-        lap1 = self._harm(h, kappa=1.0)
-        lap2 = self._harm(lap1, kappa=1.0)
-        return -kappa * lap2
+        return biharmonic(h, self.grid, kappa4=kappa, mask=self.mask)
