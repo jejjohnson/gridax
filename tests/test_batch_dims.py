@@ -16,6 +16,7 @@ import itertools
 
 import equinox as eqx
 import gridax as fvx
+from gridax.stencils import interior
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -184,16 +185,16 @@ def test_leading_axes_match_a_loop_over_members(fn):
 
 def test_interior_keeps_equal_axes_and_pads_ghost_axes():
     like = jnp.ones((4, 6, 5))
-    out = fvx.interior(jnp.full((4, 4, 3), 2.0), like)
+    out = interior(jnp.full((4, 4, 3), 2.0), like)
     assert out.shape == like.shape
     np.testing.assert_array_equal(out[:, 1:-1, 1:-1], 2.0)
     np.testing.assert_array_equal(out[:, 0], 0.0)
     # 3-D: every axis lost its ghost ring (z ghost slabs included)
-    out3 = fvx.interior(jnp.full((2, 4, 3), 2.0), like)
+    out3 = interior(jnp.full((2, 4, 3), 2.0), like)
     np.testing.assert_array_equal(out3[0], 0.0)
 
 
 @pytest.mark.parametrize("shape", [(4, 5, 3), (4, 4)])
 def test_interior_rejects_values_that_do_not_fit(shape):
     with pytest.raises(ValueError, match="interior"):
-        fvx.interior(jnp.ones(shape), jnp.ones((4, 6, 5)))
+        interior(jnp.ones(shape), jnp.ones((4, 6, 5)))

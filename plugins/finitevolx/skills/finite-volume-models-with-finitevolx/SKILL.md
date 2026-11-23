@@ -36,7 +36,7 @@ Poisson solver or an RK loop, look it up:
 | You need… | Use |
 |---|---|
 | A grid | `fvx.CartesianCGrid1D/2D/3D.from_interior(...)`, `fvx.SphericalCGrid2D/3D.from_interior(...)`; arrays are `[Ny, Nx]` including one ghost ring, interior `[1:-1, 1:-1]` |
-| Raw shifted differences / averages | `fvx.diff_x_fwd_2d`, `fvx.diff_y_bwd_2d`, `fvx.avg_xfwd_yfwd_2d`, … (+ `_1d` / `_3d`); pad back with `fvx.interior(values, like)` |
+| Raw shifted differences / averages | `fvx.diff_x_fwd_2d`, `fvx.diff_y_bwd_2d`, `fvx.avg_xfwd_yfwd_2d`, … (+ `_1d` / `_3d`); pad back with `interior(values, like)` of `gridax.stencils` |
 | Gradients, divergence, curl, Laplacian | `fvx.Difference1D/2D/3D` (`diff_x_T_to_U`, `divergence`, `curl`, `laplacian`, `grad_perp`), `fvx.Divergence2D`, `fvx.Vorticity2D`; on the sphere `fvx.SphericalDifference2D`, `fvx.SphericalDivergence2D`, `fvx.SphericalLaplacian2D`, `fvx.SphericalVorticity2D` |
 | Moving fields between T / U / V / X points | `fvx.Interpolation1D/2D/3D` (`T_to_U`, `U_to_T`, `T_to_X`, …) |
 | Tracer advection | `fvx.Advection1D/2D/3D(grid, mask)(q, u, v, scheme=WENO(5))`, or `fvx.advect(q, u, v, grid, scheme=..., mask=...)`, with a scheme of `gridax.schemes`: `Upwind(k)`, `Centred(k)`, `WENO(k)`, `TVD(limiter)`; `fvx.SphericalAdvection2D` |
@@ -156,7 +156,7 @@ tendency is exactly zero on every land cell.
 
 | Don't write… | Use |
 |---|---|
-| `(h[1:-1, 2:] - h[1:-1, 1:-1]) / dx` into a zeroed array | `fvx.Difference2D(grid=grid).diff_x_T_to_U(h)` or `fvx.interior(fvx.diff_x_fwd_2d(h) / dx, h)` |
+| `(h[1:-1, 2:] - h[1:-1, 1:-1]) / dx` into a zeroed array | `fvx.Difference2D(grid=grid).diff_x_T_to_U(h)` or `interior(fvx.diff_x_fwd_2d(h) / dx, h)` with `from gridax.stencils import interior` |
 | `0.5 * (u[:, 1:] + u[:, :-1])` to move u to cell centres | `fvx.Interpolation2D(grid=grid).U_to_T(u)` |
 | An upwind / WENO face reconstruction and flux divergence | `fvx.Advection2D(grid=grid)(q, u, v, scheme=WENO(5))` |
 | `q[:, 0] = q[:, -2]` (periodic ghosts) and friends | `fvx.enforce_periodic(q)`, `fvx.fill_ghosts(q, grid, fvx.BC(x=fvx.Periodic(), y=fvx.Periodic()))` |

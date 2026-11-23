@@ -20,6 +20,7 @@ CHECKS = textwrap.dedent(
     import numpy as np
 
     import gridax
+    import gridax.stencils
 
     gridax.CartesianCGrid1D.from_interior(4, 1.0)
     gridax.CartesianCGrid3D.from_interior(4, 4, 4, 1.0, 1.0, 1.0).horizontal_grid()
@@ -35,7 +36,7 @@ CHECKS = textwrap.dedent(
     gridax.Mask3D.from_mask(np.broadcast_to(h, (4, 8, 8))).tiers("z")
 
     h2 = np.arange(30.0).reshape(5, 6)
-    gridax.interior(gridax.diff_x_fwd_2d(h2) + gridax.avg_y_bwd_2d(h2), h2)
+    gridax.stencils.interior(gridax.diff_x_fwd_2d(h2) + gridax.avg_y_bwd_2d(h2), h2)
     gridax.smooth_clamp(h2, 3.0)
 
     g2 = gridax.CartesianCGrid2D.from_interior(4, 3, 1.0, 1.0)

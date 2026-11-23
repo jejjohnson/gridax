@@ -89,6 +89,11 @@ ALLOWED_SHARED_NAMES: dict[str, str] = {
         " gaussx through as_preconditioner(); gaussx's is CG preconditioned by"
         " one V-cycle over caller-built levels (#474)"
     ),
+    "interior": (
+        "gridax's is the interior of a field on a grid; gridax.stencils' is the"
+        " Layer 1 padding that puts a raw stencil's values back on a full array"
+        " (#508)"
+    ),
     "difference": (
         "gridax.difference moves a field between the points of a grid;"
         " gridax.analysis.difference differentiates a bare array along an axis,"

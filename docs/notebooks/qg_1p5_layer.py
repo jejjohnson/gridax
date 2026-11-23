@@ -76,6 +76,7 @@ jax.config.update("jax_enable_x64", True)
 import gridax as fvx
 from gridax.schemes import Upwind
 import gridax.solvers as gs
+from gridax.stencils import interior
 from integrix.march import heun_step
 
 IMG_DIR = Path(__file__).resolve().parent.parent / "images" / "qg_1p5_layer"
@@ -229,7 +230,7 @@ tau_x = -tau0 * jnp.cos(2.0 * jnp.pi * y_t / Ly)[:, None] * jnp.ones(Nx)
 tau_x_u = jnp.zeros_like(tau_x).at[:, :-1].set(0.5 * (tau_x[:, :-1] + tau_x[:, 1:]))
 # With tau_y = 0, curl(tau) / (rho0 H) at the X-points is
 #   F[j+1/2, i+1/2] = -(tau_x_u[j+1, i+1/2] - tau_x_u[j, i+1/2]) / (dy rho0 H)
-wind_curl_x = fvx.interior(-fvx.diff_y_fwd_2d(tau_x_u) / (dy * rho0 * H), tau_x)
+wind_curl_x = interior(-fvx.diff_y_fwd_2d(tau_x_u) / (dy * rho0 * H), tau_x)
 # X_to_T on the first interior row / column also reads the south / west wall
 # nodes (X row / column 0), which the stencil leaves at zero like every
 # operator's ghost ring.  Fill them: the curl does not depend on x, so the
@@ -450,7 +451,7 @@ def tendency(q_field):
 
 def apply_bc(q_field):
     """Re-enforce wall BCs: zero ghost ring (psi = 0 on walls)."""
-    return fvx.pad_interior(q_field, mode="constant")
+    return fvx.embed(fvx.interior(q_field, grid), grid)
 
 
 def pv_tendency(q_field):
@@ -655,7 +656,7 @@ plt.show()
 # | **Interpolation** | `Interpolation2D(grid)` | T-to-X, V-to-T, U-to-T, X-to-T |
 # | **Advection** | `Advection2D(grid)(q, u, v, scheme=Upwind(1))` | PV transport |
 # | **Vorticity** | `Vorticity2D(grid).relative_vorticity(u, v)` | $\\zeta$ at X-points |
-# | **Boundary conditions** | `pad_interior(q, mode="constant")` | Zero ghost ring (solid walls) |
+# | **Boundary conditions** | `embed(interior(q, grid), grid)` | Zero ghost ring (solid walls) |
 # | **Time stepping** | `heun_step(q, tendency_fn, dt)` | Heun / RK2 predictor-corrector |
 #
 # ### Key modelling choices

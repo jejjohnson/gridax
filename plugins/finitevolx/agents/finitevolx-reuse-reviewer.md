@@ -48,7 +48,7 @@ list grouped by module, plus spectraldiffx and gaussx.
      (`(h[1:-1, 2:] - h[1:-1, 1:-1]) / dx`, `0.5 * (u[:, 1:] + u[:, :-1])`)
      → `gridax.Difference2D` / `Interpolation2D` methods or the raw
      stencils `gridax.diff_x_fwd_2d`, `gridax.avg_x_fwd_2d`, … with
-     `gridax.interior`;
+     `interior` of `gridax.stencils`;
    - ghost-cell fills (`q.at[:, 0].set(q[:, -2])`, `jnp.pad(..., mode="wrap")`)
      → `gridax.enforce_periodic`, `gridax.zero_gradient_boundaries`,
      `gridax.fill_ghosts` with a `gridax.BC` of `gridax.Dirichlet` /

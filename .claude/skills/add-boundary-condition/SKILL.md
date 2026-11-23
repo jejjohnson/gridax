@@ -11,7 +11,7 @@ contract 4 (boundary conditions) in `AGENTS.md`, then
 
 ## 1. Make sure it does not exist yet
 
-Search `docs/capabilities.md` (the `boundary` groups): `Dirichlet`, `Neumann`, `Robin` (a·u + b·∂u/∂n = c), `Periodic`, `Outflow`, `Extrapolation` (`order=`), `Reflective`, `Sponge`, `Slip`; `BC` and `fill_ghosts`; the fillers `enforce_periodic`, `pad_interior`, `zero_boundaries`, `zero_gradient_boundaries`, `no_slip_boundaries`, `free_slip_boundaries`, `no_flux_boundaries`, `wall_boundaries`, `fix_boundary_corners`. Many "new" conditions are a `Robin` with particular coefficients, or a `BC` of existing atoms.
+Search `docs/capabilities.md` (the `boundary` groups): `Dirichlet`, `Neumann`, `Robin` (a·u + b·∂u/∂n = c), `Periodic`, `Outflow`, `Extrapolation` (`order=`), `Reflective`, `Sponge`, `Slip`; `BC` and `fill_ghosts`; the fillers `enforce_periodic`, `zero_boundaries`, `zero_gradient_boundaries`, `no_slip_boundaries`, `free_slip_boundaries`, `no_flux_boundaries`, `wall_boundaries`, `fix_boundary_corners`. Many "new" conditions are a `Robin` with particular coefficients, or a `BC` of existing atoms.
 
 ## 2. Write it (`packages/gridax/src/gridax/_src/boundary/`)
 
@@ -21,7 +21,7 @@ Search `docs/capabilities.md` (the `boundary` groups): `Dirichlet`, `Neumann`, `
 - Implement `_outside(self, wall, phi, k, step)` only when the layers outside a node on the wall are not the odd mirror `2 wall - phi(k)` (as `Neumann`, `Outflow` and `Reflective` do). A condition that needs more than this (as `Periodic`, which copies from the far side) overrides `fill`.
 - The atom runs on any array backend: use `xp = array_namespace(...)` and `set_at`, never `jnp` or `.at[]` (the AGENTS.md "Backends" rule).
 - Add the class to the `Atom` union at the bottom of `atoms.py` (it types `BC`'s faces).
-- **A functional filler** goes in `boundary.py` and should be a thin wrapper over `fill_ghosts` where possible (as `enforce_periodic` and `pad_interior` are).
+- **A functional filler** goes in `boundary.py` and should be a thin wrapper over `fill_ghosts` where possible (as `enforce_periodic` is).
 - The elliptic inversions in sesmax-core (`sesmax_core.gfd`) take a `gridax.BC` as `bc=`: all faces Dirichlet select the DST, zero Neumann the DCT and Periodic the FFT. A new atom is rejected there with a clear message; don't extend that mapping unless the spectral solver has a matching transform.
 
 ## 3. Export and document

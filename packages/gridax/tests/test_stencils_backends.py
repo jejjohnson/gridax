@@ -13,6 +13,7 @@ from gridax._src import backend
 from gridax._src.operators._ghost import zero_z_ghosts
 from gridax._src.operators._utils import _metric_like, _safe_div_cos
 from gridax._src.operators.stencils import _materialize, _neighbours
+from gridax.stencils import interior
 import numpy as np
 import pytest
 
@@ -71,7 +72,7 @@ def test_stencil_on_numpy_stays_numpy(name, shape):
     h = _field(*shape)
     out = getattr(gridax, name)(h)
     assert isinstance(out, np.ndarray) and out.dtype == np.float64
-    padded = gridax.interior(out, h)
+    padded = interior(out, h)
     assert isinstance(padded, np.ndarray) and padded.shape == h.shape
 
 
@@ -80,15 +81,15 @@ def test_stencil_on_numpy_stays_numpy(name, shape):
 def test_stencil_numpy_equals_jax(name, shape):
     h = _field(*shape)
     fn = getattr(gridax, name)
-    want = gridax.interior(fn(h), h)
-    got = jax.jit(lambda x: gridax.interior(fn(x), x))(jax.numpy.asarray(h))
+    want = interior(fn(h), h)
+    got = jax.jit(lambda x: interior(fn(x), x))(jax.numpy.asarray(h))
     assert isinstance(got, jax.Array)
     np.testing.assert_array_equal(np.asarray(got), want)
 
 
 def test_interior_keeps_float32_and_writes_only_the_interior():
     h = np.ones((5, 6), dtype=np.float32)
-    out = gridax.interior(gridax.diff_x_fwd_2d(h) + 1.0, h)
+    out = interior(gridax.diff_x_fwd_2d(h) + 1.0, h)
     assert out.dtype == np.float32
     assert (
         (out[1:-1, 1:-1] == 1.0).all() and out[0].sum() == 0 and out[:, -1].sum() == 0
