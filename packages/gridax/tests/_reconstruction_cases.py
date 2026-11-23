@@ -10,9 +10,11 @@ script only to re-freeze on purpose:
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
+import itertools
 from pathlib import Path
 
 import gridax
+from gridax.schemes import WENO, Upwind
 import numpy as np
 
 FROZEN = Path(__file__).parent / "data" / "reconstruction_frozen.npz"
@@ -83,15 +85,22 @@ def cases() -> Iterator[tuple[str, Callable[[], np.ndarray]]]:
             else:
                 yield f"{ndim}d.{name}", lambda m=method, h=h, u=u: m(h, u)
     h, u = _fields((14, 18), 9)
-    for dim in (0, 1):
-        for method in ("weno", "wenoz", "linear"):
-            for num_pts in (1, 3, 5):
-                yield (
-                    f"reconstruct.dim{dim}.{method}.{num_pts}",
-                    lambda d=dim, m=method, n=num_pts, h=h, u=u: gridax.reconstruct(
-                        h, u, d, m, n
-                    ),
-                )
+    for dim, (method, variant) in itertools.product(
+        (0, 1), {"weno": "js", "wenoz": "z", "linear": None}.items()
+    ):
+        for num_pts in (1, 3, 5):
+            scheme = (
+                Upwind(num_pts)
+                if variant is None or num_pts == 1
+                else WENO(num_pts, variant)
+            )
+            # named for the old call reconstruct(q, u, dim, method, num_pts)
+            yield (
+                f"reconstruct.dim{dim}.{method}.{num_pts}",
+                lambda axis=dim - 2, scheme=scheme, h=h, u=u: gridax.reconstruct(
+                    h, u, axis=axis, scheme=scheme
+                ),
+            )
 
 
 def freeze() -> None:

@@ -230,8 +230,8 @@ $$\mu_m(s) = \frac{(s + 1/2)^{m+1} - (s - 1/2)^{m+1}}{m + 1}.$$ (cell-moment)
 |---|---|---|---|---|
 | $\pm 1/2$ | point or cell | 1 | $(-1, 1)$ | `diff_*` |
 | $\pm 1/2$ | point or cell | 0 | $(1/2, 1/2)$ | `avg_*`, `linear_2pts` |
-| $\pm 1/2, \pm 3/2$ | point | 1 | $(1, -27, 27, -1)/24$ | `staggered_difference(..., accuracy=3)` |
-| $\pm 1/2, \pm 3/2$ | point | 0 | $(-1, 9, 9, -1)/16$ | `staggered_average(..., accuracy=3)` |
+| $\pm 1/2, \pm 3/2$ | point | 1 | $(1, -27, 27, -1)/24$ | `staggered_difference(..., scheme=Centred(4))` |
+| $\pm 1/2, \pm 3/2$ | point | 0 | $(-1, 9, 9, -1)/16$ | `staggered_average(..., scheme=Centred(4))` |
 | $\pm 1/2, \pm 3/2$ | cell | 0 | $(-1, 7, 7, -1)/12$ | `linear_4pts` |
 | $-5/2, \dots, 3/2$ | cell | 0 | $(2, -13, 47, 27, -3)/60$ | `linear_5pts_left`, the WENO-5 limit |
 
@@ -250,7 +250,7 @@ A stencil wider than two points reads past the one-cell ghost ring on the faces 
 import gridax
 import gridax.advection as gadv
 import gridax.analysis as ga
-from gridax.schemes import WENO
+from gridax.schemes import WENO, Centred
 import gridax.stencils as gs
 
 grid = gridax.CartesianCGrid2D.from_interior(60, 40, 120.0e3, 40.0e3)  # Ny, Nx = 42, 62
@@ -260,7 +260,7 @@ coeffs = gs.difference_coeffs(gs.difference_offsets(method="staggered"), 1)
 # Layer 1: h[j, i+1] - h[j, i], no metric → (40, 60)
 raw = gs.diff_x_fwd_2d(h)
 # Layer 1, fourth order: (h[i-1] - 27 h[i] + 27 h[i+1] - h[i+2]) / 24 → (40, 60)
-raw4 = gs.staggered_difference(h, axis="x", side="fwd", ndim=2, accuracy=3)
+raw4 = gs.staggered_difference(h, axis="x", side="fwd", ndim=2, scheme=Centred(4))
 # Layer 2, collocated: dh/dx on the same points → (42, 62)
 dh_dx_collocated = ga.difference(h, axis=-1, step=grid.spacing("x"))
 # Layer 2, advection: the WENO-5 flux on the east faces → (42, 62)

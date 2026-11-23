@@ -28,6 +28,7 @@ from gridax import (
     upwind_5pt,
     upwind_flux,
 )
+from gridax.schemes import WENO, Upwind
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -36,6 +37,13 @@ import pytest
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _scheme(method: str, num_pts: int):
+    """The scheme of a family and a number of cells."""
+    if num_pts == 1 or method == "linear":
+        return Upwind(num_pts)
+    return WENO(num_pts, "z" if method == "wenoz" else "js")
 
 
 def _scalar(v: float) -> jnp.ndarray:
@@ -355,7 +363,7 @@ class TestReconstructBasic:
         q = jnp.full((Ny, Nx), C)
         u = jnp.ones((Ny, Nx))
         for num_pts in (1, 3, 5):
-            flux = reconstruct(q, u, dim=1, method="weno", num_pts=num_pts)
+            flux = reconstruct(q, u, axis=-1, scheme=_scheme("weno", num_pts))
             assert flux.shape == (Ny, Nx)
             # Interior flux should be C * 1.0 = 3.0
             interior = flux[1:-1, 1:-1]
@@ -370,7 +378,7 @@ class TestReconstructBasic:
         q = jnp.full((Ny, Nx), C)
         v = jnp.ones((Ny, Nx))
         for num_pts in (1, 3, 5):
-            flux = reconstruct(q, v, dim=0, method="weno", num_pts=num_pts)
+            flux = reconstruct(q, v, axis=-2, scheme=_scheme("weno", num_pts))
             assert flux.shape == (Ny, Nx)
             interior = flux[1:-1, 1:-1]
             np.testing.assert_allclose(
@@ -382,7 +390,7 @@ class TestReconstructBasic:
         Ny, Nx = uniform_grid
         q = _smooth_field_2d(Ny, Nx)
         u = jnp.zeros((Ny, Nx))
-        flux = reconstruct(q, u, dim=1, method="weno", num_pts=3)
+        flux = reconstruct(q, u, axis=-1, scheme=_scheme("weno", 3))
         np.testing.assert_allclose(flux, 0.0, atol=1e-15)
 
     def test_ghost_ring_is_zero(self, uniform_grid):
@@ -392,7 +400,7 @@ class TestReconstructBasic:
         u = jnp.ones((Ny, Nx))
         for dim in (0, 1):
             for num_pts in (1, 3, 5):
-                flux = reconstruct(q, u, dim=dim, method="weno", num_pts=num_pts)
+                flux = reconstruct(q, u, axis=dim - 2, scheme=_scheme("weno", num_pts))
                 # Check ghost ring
                 assert jnp.all(flux[0, :] == 0.0)
                 assert jnp.all(flux[-1, :] == 0.0)
@@ -406,7 +414,7 @@ class TestReconstructBasic:
         u = jnp.ones((Ny, Nx))
         for method in ("weno", "wenoz", "linear"):
             for num_pts in (1, 3, 5):
-                flux = reconstruct(q, u, dim=1, method=method, num_pts=num_pts)
+                flux = reconstruct(q, u, axis=-1, scheme=_scheme(method, num_pts))
                 assert flux.shape == (Ny, Nx)
                 assert jnp.all(jnp.isfinite(flux))
 
@@ -422,12 +430,12 @@ class TestReconstructAccuracy:
         q = _smooth_field_2d(Ny, Nx)
         u = jnp.ones((Ny, Nx))
 
-        flux_1pt = reconstruct(q, u, dim=1, method="weno", num_pts=1)
-        flux_3pt = reconstruct(q, u, dim=1, method="weno", num_pts=3)
-        flux_5pt = reconstruct(q, u, dim=1, method="weno", num_pts=5)
+        flux_1pt = reconstruct(q, u, axis=-1, scheme=_scheme("weno", 1))
+        flux_3pt = reconstruct(q, u, axis=-1, scheme=_scheme("weno", 3))
+        flux_5pt = reconstruct(q, u, axis=-1, scheme=_scheme("weno", 5))
 
         # Use linear (optimal) 5-point as reference
-        ref = reconstruct(q, u, dim=1, method="linear", num_pts=5)
+        ref = reconstruct(q, u, axis=-1, scheme=_scheme("linear", 5))
 
         err_1pt = jnp.linalg.norm(flux_1pt - ref)
         err_3pt = jnp.linalg.norm(flux_3pt - ref)
@@ -444,8 +452,8 @@ class TestReconstructAccuracy:
         for N in (16, 32, 64):
             q = _smooth_field_2d(N, N)
             u = jnp.ones((N, N))
-            flux_weno = reconstruct(q, u, dim=1, method="weno", num_pts=5)
-            flux_lin = reconstruct(q, u, dim=1, method="linear", num_pts=5)
+            flux_weno = reconstruct(q, u, axis=-1, scheme=_scheme("weno", 5))
+            flux_lin = reconstruct(q, u, axis=-1, scheme=_scheme("linear", 5))
             err = float(jnp.max(jnp.abs(flux_weno[2:-2, 2:-2] - flux_lin[2:-2, 2:-2])))
             errors.append(err)
         # Error should decrease as grid is refined (WENO converges to linear)
@@ -462,8 +470,8 @@ class TestReconstructAccuracy:
         u_pos = jnp.ones((Ny, Nx))
         u_neg = -jnp.ones((Ny, Nx))
 
-        flux_pos = reconstruct(q, u_pos, dim=1, method="weno", num_pts=3)
-        flux_neg = reconstruct(q, u_neg, dim=1, method="weno", num_pts=3)
+        flux_pos = reconstruct(q, u_pos, axis=-1, scheme=_scheme("weno", 3))
+        flux_neg = reconstruct(q, u_neg, axis=-1, scheme=_scheme("weno", 3))
 
         # Positive flow: face value biased toward left cell (higher)
         # Negative flow: face value biased toward right cell (lower)
@@ -486,8 +494,8 @@ class TestReconstructNearDiscontinuity:
         q = q.at[:, :10].set(1.0)  # step at center
         u = jnp.ones((Ny, Nx))
 
-        flux_weno = reconstruct(q, u, dim=1, method="weno", num_pts=5)
-        flux_lin = reconstruct(q, u, dim=1, method="linear", num_pts=5)
+        flux_weno = reconstruct(q, u, axis=-1, scheme=_scheme("weno", 5))
+        flux_lin = reconstruct(q, u, axis=-1, scheme=_scheme("linear", 5))
 
         # Compare absolute overshoot (values > 1.0)
         weno_overshoot = float(jnp.max(jnp.abs(flux_weno[2:-2, 2:-2])))
@@ -507,10 +515,10 @@ class TestReconstructJaxCompat:
 
         @jax.jit
         def f(q, u):
-            return reconstruct(q, u, dim=1, method="weno", num_pts=5)
+            return reconstruct(q, u, axis=-1, scheme=_scheme("weno", 5))
 
         result = f(q, u)
-        ref = reconstruct(q, u, dim=1, method="weno", num_pts=5)
+        ref = reconstruct(q, u, axis=-1, scheme=_scheme("weno", 5))
         np.testing.assert_allclose(result, ref, atol=1e-14)
 
     @pytest.mark.slow
@@ -522,12 +530,12 @@ class TestReconstructJaxCompat:
 
         # Verify sequential results match vmap results
         results_seq = jnp.stack(
-            [reconstruct(q[i], u[i], dim=1, method="weno", num_pts=3) for i in range(B)]
+            [reconstruct(q[i], u[i], axis=-1, scheme=WENO(3)) for i in range(B)]
         )
 
         @jax.vmap
         def f(q, u):
-            return reconstruct(q, u, dim=1, method="weno", num_pts=3)
+            return reconstruct(q, u, axis=-1, scheme=_scheme("weno", 3))
 
         result = f(q, u)
         assert result.shape == (B, Ny, Nx)
@@ -542,7 +550,7 @@ class TestReconstructJaxCompat:
         u = jnp.ones((Ny, Nx))
 
         def loss(q):
-            flux = reconstruct(q, u, dim=1, method="weno", num_pts=3)
+            flux = reconstruct(q, u, axis=-1, scheme=_scheme("weno", 3))
             return jnp.sum(flux**2)
 
         grad_q = jax.grad(loss)(q)
@@ -553,26 +561,12 @@ class TestReconstructJaxCompat:
 class TestReconstructValidation:
     """Input validation and error handling."""
 
-    def test_invalid_dim(self):
-        q = jnp.ones((5, 5))
-        u = jnp.ones((5, 5))
-        with pytest.raises(ValueError, match="dim must be"):
-            reconstruct(q, u, dim=2)
-
-    def test_invalid_num_pts(self):
-        q = jnp.ones((5, 5))
-        u = jnp.ones((5, 5))
-        with pytest.raises(ValueError, match="num_pts must be"):
-            reconstruct(q, u, dim=1, num_pts=7)
-
-    def test_invalid_method(self):
-        q = jnp.ones((5, 5))
-        u = jnp.ones((5, 5))
-        with pytest.raises(ValueError, match="method must be one of"):
-            reconstruct(q, u, dim=1, method="bogus", num_pts=3)
-        # Also rejected for num_pts=1 (method is validated up-front)
-        with pytest.raises(ValueError, match="method must be one of"):
-            reconstruct(q, u, dim=1, method="bogus", num_pts=1)
+    def test_a_scheme_is_required(self):
+        q = u = jnp.ones((5, 5))
+        with pytest.raises(TypeError, match="scheme"):
+            reconstruct(q, u, axis=-1)
+        with pytest.raises(TypeError, match=r"gridax\.schemes"):
+            reconstruct(q, u, axis=-1, scheme="weno5")
 
 
 # ===========================================================================
@@ -1196,8 +1190,12 @@ class TestReconstructNegativeFlow:
         """
         Ny, Nx = 6, 14
         q = jnp.broadcast_to(jnp.arange(Nx, dtype=float), (Ny, Nx))
-        f_pos = reconstruct(q, jnp.ones((Ny, Nx)), 1, method, num_pts)
-        f_neg = reconstruct(q, -jnp.ones((Ny, Nx)), 1, method, num_pts)
+        f_pos = reconstruct(
+            q, jnp.ones((Ny, Nx)), axis=-1, scheme=_scheme(method, num_pts)
+        )
+        f_neg = reconstruct(
+            q, -jnp.ones((Ny, Nx)), axis=-1, scheme=_scheme(method, num_pts)
+        )
         # flux = h * u, so h_neg = -f_neg; faces i = 1..Nx-3.
         h_pos = f_pos[1:-1, 1 : Nx - 2]
         h_neg = -f_neg[1:-1, 1 : Nx - 2]
@@ -1212,8 +1210,12 @@ class TestReconstructNegativeFlow:
         """Same ramp check along ``dim=0`` (north faces)."""
         Ny, Nx = 14, 6
         q = jnp.broadcast_to(jnp.arange(Ny, dtype=float)[:, None], (Ny, Nx))
-        f_pos = reconstruct(q, jnp.ones((Ny, Nx)), 0, method, num_pts)
-        f_neg = reconstruct(q, -jnp.ones((Ny, Nx)), 0, method, num_pts)
+        f_pos = reconstruct(
+            q, jnp.ones((Ny, Nx)), axis=-2, scheme=_scheme(method, num_pts)
+        )
+        f_neg = reconstruct(
+            q, -jnp.ones((Ny, Nx)), axis=-2, scheme=_scheme(method, num_pts)
+        )
         np.testing.assert_allclose(
             -f_neg[1 : Ny - 2, 1:-1], f_pos[1 : Ny - 2, 1:-1], atol=1e-14
         )
@@ -1235,8 +1237,8 @@ class TestReconstructNegativeFlow:
         Ny, Nx = 6, 16
         q = jax.random.normal(jax.random.PRNGKey(0), (Ny, Nx))
         u = jnp.ones((Ny, Nx))
-        f = reconstruct(q, u, 1, method, num_pts)
-        f_flip = reconstruct(q[:, ::-1], -u, 1, method, num_pts)
+        f = reconstruct(q, u, axis=-1, scheme=_scheme(method, num_pts))
+        f_flip = reconstruct(q[:, ::-1], -u, axis=-1, scheme=_scheme(method, num_pts))
         first = 1 if num_pts == 3 else 2
         i = np.arange(first, Nx - 2)  # 3pt: 1..Nx-3, 5pt: 2..Nx-3
         i_flip = Nx - 2 - i
@@ -1259,7 +1261,7 @@ class TestReconstructNegativeFlow:
         u_mixed = jax.random.normal(key_u, (Ny, Nx))
         for u in (jnp.ones((Ny, Nx)), -jnp.ones((Ny, Nx)), u_mixed):
             ref = fn(q, u)
-            out = reconstruct(q, u, 1, method, num_pts)
+            out = reconstruct(q, u, axis=-1, scheme=_scheme(method, num_pts))
             np.testing.assert_allclose(out, ref, atol=1e-13, rtol=1e-13)
 
 

@@ -6,9 +6,7 @@ fluxes on Arakawa C-grids.  This is the functional counterpart of the
 :class:`~gridax.Reconstruction2D` class — it requires no grid object
 and works on raw arrays with ghost-cell convention.
 
-The axis-generic entry point is :func:`gridax.advection.reconstruct` (#464),
-which also serves the old ``reconstruct(q, u, dim, method, num_pts)`` call
-with a deprecation warning.
+The axis-generic entry point is :func:`gridax.advection.reconstruct` (#464).
 
 All arrays follow the finitevolX ghost-cell convention:
 

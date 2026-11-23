@@ -18,7 +18,7 @@ With `data="cell"` the samples are cell averages, not point values: `difference_
 
 ## Higher-order staggered stencils (Layer 1)
 
-Fourth- and sixth-order differences and averages of point values on the C-grid, centred where they fit and shifted inwards at the walls. `accuracy=1` is the named two-point stencil.
+Fourth- and sixth-order differences and averages of point values on the C-grid, centred where they fit and shifted inwards at the walls. `Centred(2)` is the named two-point stencil.
 
 ::: gridax.stencils.staggered_difference
 

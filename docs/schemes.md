@@ -6,15 +6,15 @@ A scheme says which values an operation reads around its output, and with what w
 
 | Scheme | Arguments (default) | Stencil | Taken by |
 |---|---|---|---|
-| `Centred(order, data)` | any even `order` (2) | symmetric | `reconstruct` |
-| `Biased(order, side, data)` | any `order` (2), `side` required | leans to `side` | `reconstruct` |
+| `Centred(order, data)` | any even `order` (2) | symmetric | `difference`, `interpolate`, `reconstruct` |
+| `Biased(order, side, data)` | any `order` (2), `side` required | leans to `side` | `difference`, `interpolate`, `reconstruct` |
 | `Upwind(order)` | any odd `order` (1) | leans upwind | `reconstruct` |
 | `WENO(order, variant)` | `order` 3, 5, 7, 9 (5) | nonlinear, upwind | `reconstruct` |
 | `TVD(limiter)` | `limiter` (`"minmod"`) | nonlinear, upwind | `reconstruct` |
 
 **The order** is the formal order of accuracy everywhere. A centred stencil has an even order by symmetry. An upwind stencil of order $2k - 1$ is the centred stencil of order $2k - 2$ with one more upwind cell; its leading error is an even derivative, so it is dissipative. WENO of order $2r - 1$ blends $r$ sub-stencils of $r$ cells. `Upwind(2)` is fully one-sided and dispersive, and is kept for compatibility.
 
-**The data.** `data="point"` says the values are point values, as C-grid velocities are, and `data="cell"` that they are cell averages, as a finite-volume tracer carries. The two give different weights from the third value on. `None` leaves it to the operation: `reconstruct` reads cell averages. `Upwind`, `WENO` and `TVD` always read cell averages.
+**The data.** `data="point"` says the values are point values, as C-grid velocities are, and `data="cell"` that they are cell averages, as a finite-volume tracer carries. The two give different weights from the third value on. `None` leaves it to the operation: `reconstruct` reads cell averages, `difference` and `interpolate` point values. `Upwind`, `WENO` and `TVD` always read cell averages.
 
 **The side.** On a staggered grid a `Biased` stencil has one more point on `side` than on the other if their number is odd and two more if it is even, so `Biased(3, "left")` is `Upwind(3)` for flow towards `+x`, whatever the velocity. On a collocated grid it is fully one-sided: `"right"` is the forward difference and `"left"` the backward one.
 
@@ -69,6 +69,29 @@ Upwind(3).linear, Upwind(3).upwinded  # (True, True)
 
 An upwinded scheme reads a stencil or its mirror, and its footprint holds both. Each `Tier` also has a `halo`, the cells it reads on either side of the upwind cell, and a `size`, the key of the adaptive mask that allows it: `size = 2 * halo + 2`.
 
+## Differences and interpolation
+
+`gridax.difference` and `gridax.interpolate` take a scheme that is linear and not upwinded, and raise on any other. The default, `Centred(2)`, is the named two-point stencil.
+
+```python
+import gridax
+from gridax.schemes import Biased, Centred
+
+# Shapes: Ny, Nx include one ghost ring; *batch any leading dims
+
+# δₓh[j, i+½] = (h[j, i−1] − 27h[j, i] + 27h[j, i+1] − h[j, i+2]) / (24Δx)
+# [*batch, Ny, Nx] T → [*batch, Ny, Nx] U
+dhdx4 = gridax.difference(h, cgrid, axis="x", src="T", dst="U", scheme=Centred(4))
+
+# along two axes: the product of the weights
+# [*batch, Ny, Nx] T → [*batch, Ny, Nx] X
+hx = gridax.interpolate(h, cgrid, src="T", dst="X", scheme=Centred(4))
+
+# ∂ₓf[i] = (f[i+1] − f[i]) / Δx, on a collocated grid
+# [*batch, Ny, Nx] → [*batch, Ny, Nx]
+dfdx = gridax.difference(f, agrid, axis="x", scheme=Biased(1, "right"))
+```
+
 ## Next to a wall
 
-Where the widest stencil does not fit, a face value takes the next narrower tier, down to the upwind cell (`Centred`: down to the two cells of the face). With a mask, a dry cell ends the stencil as the edge of the array does, so a face value never reads a dry cell. A difference or an average along a wall shifts its stencil inwards instead; see [the two wall rules](stencils.md).
+Where the widest stencil does not fit, a face value takes the next narrower tier, down to the upwind cell (`Centred`: down to the two cells of the face). With a mask, a dry cell ends the stencil as the edge of the array does, so a face value never reads a dry cell. A difference or an average next to the edge of the array shifts its stencil inwards instead (see [the two wall rules](stencils.md)), and with a mask it takes the next narrower stencil wherever it would read a dry point, down to the two points of `Centred(2)`. A collocated difference is one-sided there.

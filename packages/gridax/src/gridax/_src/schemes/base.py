@@ -233,6 +233,10 @@ class Scheme(abc.ABC):
             return False
         return self.halo(staggered=not collocated) > grid.ghost
 
+    def _ladder(self) -> tuple[Scheme, ...]:
+        """The schemes a move falls back through next to a dry point, widest first."""
+        return (self,)
+
     @property
     def _data(self) -> Data | None:
         """What a value is; ``None`` leaves it to the operation."""
