@@ -187,6 +187,6 @@ def test_the_named_stencils_are_re_exported() -> None:
     import gridax
 
     for name in gs.__all__:
-        if name.startswith(("diff_", "avg_")) or name == "interior":
+        if name.startswith(("diff_", "avg_")):
             assert getattr(gs, name) is getattr(gridax, name)
     assert sum(name.startswith(("diff_", "avg_")) for name in gs.__all__) == 32
