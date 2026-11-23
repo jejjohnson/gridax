@@ -19,7 +19,7 @@ Search `docs/capabilities.md` (the `boundary` groups): `Dirichlet`, `Neumann`, `
 - Implement `_ghost(self, phi, k, step)`: layer `k` outside a wall half a cell from the first node, where `phi(m)` is the m-th interior node from the wall and `step` the normal spacing on the face. Place the condition **at the wall**: Dirichlet is `2 v - phi(k)`, Neumann `phi(k) + (2k - 1) step g`. Write that formula in the docstring and in a comment.
 - Implement `_wall(self, phi, step)`: the value of the node that sits on the wall (`U` / `X` on the x faces, `V` / `X` on the y faces, `W` on the z faces), where the condition is imposed on that node and the gradient is one-sided.
 - Implement `_outside(self, wall, phi, k, step)` only when the layers outside a node on the wall are not the odd mirror `2 wall - phi(k)` (as `Neumann`, `Outflow` and `Reflective` do). A condition that needs more than this (as `Periodic`, which copies from the far side) overrides `fill`.
-- The atom runs on any array backend: use `xp = array_namespace(...)` and `set_at`, never `jnp` or `.at[]` (the AGENTS.md "Backends" rule).
+- The atom runs on any array backend: use `xp = namespace_of(...)` and `set_at`, never `jnp` or `.at[]` (the AGENTS.md "Backends" rule).
 - Add the class to the `Atom` union at the bottom of `atoms.py` (it types `BC`'s faces).
 - **A preset** is a classmethod of `BC` in `fill.py`, named by the physical role of the field.
 - The elliptic inversions in sesmax-core (`sesmax_core.gfd`) take a `gridax.BC` as `bc=`: all faces Dirichlet select the DST, zero Neumann the DCT and Periodic the FFT. A new atom is rejected there with a clear message; don't extend that mapping unless the spectral solver has a matching transform.

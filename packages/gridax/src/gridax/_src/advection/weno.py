@@ -5,9 +5,9 @@ import functools
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
 import numpy as np
+from pipekit_array.functions import namespace_of
 
 from gridax._src.backend import stop_gradient
-from gridax._src.pytree import array_namespace
 from gridax._src.stencils.coefficients import (
     difference_coeffs,
     optimal_weights,
@@ -38,7 +38,7 @@ def _normalised(betas: tuple[Array, ...], *extra: Array) -> list[Array]:
     Exact (see above); ``extra`` carries WENO-Z's ``tau``, a difference of
     indicators that scales like them.
     """
-    xp = array_namespace(*betas)
+    xp = namespace_of(*betas)
     total = stop_gradient(sum(betas))
     tiny = xp.finfo(xp.result_type(total)).tiny
     inv = 1.0 / xp.where(total > tiny, total, 1.0)
@@ -170,7 +170,7 @@ def weno_kernel(
 
     def kernel(*q: Array) -> Array:
         tables = _weno_tables(order, bias)
-        xp = array_namespace(*q)
+        xp = namespace_of(*q)
         departures = [value - q[upwind] for value in q] if centred else q
         face, betas = [], []
         for k in range(r):
@@ -235,7 +235,7 @@ def weno_3pts_improved(qm: Array, q0: Array, qp: Array) -> Array:
     An improved weighted essentially non-oscillatory scheme for hyperbolic
     conservation laws, Borges et al, Journal of Computational Physics 227 (2008).
     """
-    xp = array_namespace(qm, q0, qp)
+    xp = namespace_of(qm, q0, qp)
 
     qi1 = -1.0 / 2.0 * qm + 3.0 / 2.0 * q0
     qi2 = 1.0 / 2.0 * (q0 + qp)
@@ -294,7 +294,7 @@ def weno_5pts_improved(
     An improved weighted essentially non-oscillatory scheme for hyperbolic
     conservation laws, Borges et al, Journal of Computational Physics 227 (2008)
     """
-    xp = array_namespace(qmm, qm, q0, qp, qpp)
+    xp = namespace_of(qmm, qm, q0, qp, qpp)
 
     qi1 = 1.0 / 3.0 * qmm - 7.0 / 6.0 * qm + 11.0 / 6.0 * q0
     qi2 = -1.0 / 6.0 * qm + 5.0 / 6.0 * q0 + 1.0 / 3.0 * qp
@@ -351,7 +351,7 @@ def weno_3pts_improved_right(q0: Array, qp: Array, qpp: Array) -> Array:
 
     Borges et al, J. Comput. Phys. 227 (2008).
     """
-    xp = array_namespace(q0, qp, qpp)
+    xp = namespace_of(q0, qp, qpp)
 
     qi1 = 0.5 * (q0 + qp)
     qi2 = 1.5 * qp - 0.5 * qpp
@@ -410,7 +410,7 @@ def weno_5pts_improved_right(
 
     Borges et al, J. Comput. Phys. 227 (2008).
     """
-    xp = array_namespace(qm, q0, qp, qpp, qppp)
+    xp = namespace_of(qm, q0, qp, qpp, qppp)
 
     qi1 = 1.0 / 3.0 * qppp - 7.0 / 6.0 * qpp + 11.0 / 6.0 * qp
     qi2 = -1.0 / 6.0 * qpp + 5.0 / 6.0 * qp + 1.0 / 3.0 * q0

@@ -24,8 +24,7 @@ from typing import Any, Literal
 
 from jaxtyping import Float, Inexact
 import numpy as np
-
-from gridax._src.pytree import array_namespace
+from pipekit_array.functions import namespace_of
 
 Extrapolate = Literal["nan", "nearest"]
 _EXTRAPOLATE_MODES = ("nan", "nearest")
@@ -145,7 +144,7 @@ def remap_axis(
     """
     if method not in _METHODS:
         raise ValueError(f"unknown method {method!r}; expected 'linear' or 'nearest'")
-    xp = array_namespace(values)
+    xp = namespace_of(values)
     arr = _as_inexact(xp, values)
     src_np = _concrete(source_coords)
     if src_np is None:
@@ -227,7 +226,7 @@ def remap_axis_columns(
             f"unknown extrapolate {extrapolate!r}; expected one of "
             f"{_EXTRAPOLATE_MODES!r}"
         )
-    xp = array_namespace(values, source_coords)
+    xp = namespace_of(values, source_coords)
     arr = _as_inexact(xp, values)
     src = xp.asarray(source_coords)
     tgt = xp.asarray(target_coords)

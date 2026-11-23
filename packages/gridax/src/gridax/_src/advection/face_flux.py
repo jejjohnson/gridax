@@ -6,9 +6,9 @@ from typing import TYPE_CHECKING
 
 from jaxtyping import Float
 import numpy as np
+from pipekit_array.functions import namespace_of
 
 from gridax._src.operators.differentiable import smooth_abs
-from gridax._src.pytree import array_namespace
 
 if TYPE_CHECKING:
     from jaxtyping import Array
@@ -80,7 +80,7 @@ def rusanov_flux(
     >>> fx.shape
     (6, 5)
     """
-    xp = array_namespace(q, a)
+    xp = namespace_of(q, a)
     ndim = q.ndim
     ax = axis % ndim
     left = [slice(None)] * ndim

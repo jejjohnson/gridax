@@ -17,13 +17,14 @@ from collections.abc import Iterable, Mapping
 import dataclasses
 from typing import Any
 
+from pipekit_array.functions import namespace_of
+
 from gridax._src.grid.points import (
     Stagger,
     as_stagger,
     point_stagger,
     stagger_point,
 )
-from gridax._src.pytree import array_namespace
 
 
 class StaggerMismatchError(ValueError):
@@ -197,7 +198,7 @@ class CField:
         if dims == self.dims:
             return self
         order = tuple(self.dims.index(dim) for dim in dims)
-        data = array_namespace(self.data).permute_dims(self.data, order)
+        data = namespace_of(self.data).permute_dims(self.data, order)
         return CField(data, dims, self.labels, self.stagger)
 
     def to_xarray(self, grid: Any, name: str = "field") -> Any:

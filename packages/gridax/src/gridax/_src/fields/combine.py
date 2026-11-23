@@ -5,9 +5,10 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from pipekit_array.functions import namespace_of
+
 from gridax._src.fields.cfield import CField, StaggerMismatchError
 from gridax._src.grid.points import GRID_AXES
-from gridax._src.pytree import array_namespace
 
 
 def combine(fn: Callable[..., Any], *operands: Any) -> CField:
@@ -129,7 +130,7 @@ def _elementwise(name: str) -> Callable[..., CField]:
         field = next((x for x in operands if isinstance(x, CField)), None)
         if field is None:
             raise TypeError(f"gridax.fields.{name} needs at least one CField")
-        xp = array_namespace(*(getattr(x, "data", x) for x in operands))
+        xp = namespace_of(*(x.data if isinstance(x, CField) else x for x in operands))
         fn = getattr(xp, name)
         return combine(lambda *arrays: fn(*arrays, **kwargs), *operands)
 

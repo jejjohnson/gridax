@@ -41,9 +41,9 @@ from typing import TYPE_CHECKING
 
 from jaxtyping import Bool, Float
 import numpy as np
+from pipekit_array.functions import namespace_of
 
 from gridax._src.backend import set_at
-from gridax._src.pytree import array_namespace
 
 if TYPE_CHECKING:
     from jaxtyping import Array
@@ -150,7 +150,7 @@ def upwind_flux(
     >>> fe.shape
     (10, 10)
     """
-    xp = array_namespace(q, u)
+    xp = namespace_of(q, u)
     if not rec_funcs:
         raise ValueError("rec_funcs must not be empty")
     ndim = q.ndim

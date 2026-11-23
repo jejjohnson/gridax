@@ -16,10 +16,11 @@ from typing import TYPE_CHECKING, Any
 
 from jaxtyping import Float
 import numpy as np
+from pipekit_array.functions import namespace_of
 
 from gridax._src.grid.base import ArakawaCGrid1D, ArakawaCGrid2D, ArakawaCGrid3D
 from gridax._src.grid.points import point_axes
-from gridax._src.pytree import array_namespace, pytree_dataclass
+from gridax._src.pytree import pytree_dataclass
 
 if TYPE_CHECKING:
     from jaxtyping import Array
@@ -37,7 +38,7 @@ __all__ = ["StretchedCGrid1D", "StretchedCGrid2D", "StretchedCGrid3D"]
 
 def _midpoints(x: Any) -> Any:
     """Halfway between neighbours; past the last one, half of the last gap."""
-    xp = array_namespace(x)
+    xp = namespace_of(x)
     inner = 0.5 * (x[:-1] + x[1:])
     return xp.concat([inner, x[-1:] + 0.5 * (x[-1:] - x[-2:-1])])
 
@@ -68,7 +69,7 @@ class _Stretched:
         self._size(axis)
         x = getattr(self, f"_{axis}")
         if extra:
-            xp = array_namespace(x)
+            xp = namespace_of(x)
             # mirrors of the interior points about the walls
             n, ghost = x.shape[0], self.ghost
             low = x[ghost - 1] + x[ghost]  # twice the coordinate of the wall
@@ -99,7 +100,7 @@ class _Stretched:
     def _gaps(self, axis: str, at: str) -> Float[Array, "N"]:
         """The spacing around each point, along its axis."""
         x = self._line(axis, "T")
-        xp = array_namespace(x)
+        xp = namespace_of(x)
         if axis in point_axes(at, self.axes):
             # Δ[i+1/2] = x[i+1] - x[i]; the last face repeats the last gap
             gaps = x[1:] - x[:-1]

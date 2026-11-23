@@ -23,9 +23,10 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from geophysix.earth import SPHERE
 from jaxtyping import Float
 import numpy as np
+from pipekit_array.functions import namespace_of
 
 from gridax._src.grid.points import Stagger, point_axes
-from gridax._src.pytree import array_namespace, pytree_dataclass, static_field
+from gridax._src.pytree import pytree_dataclass, static_field
 
 if TYPE_CHECKING:
     from jaxtyping import Array
@@ -86,7 +87,7 @@ class _Collocated:
     def _coordinate_steps(self, axis: str) -> Float[Array, "N"]:
         """Δ of each cell: the distance between its faces, at the midpoints."""
         x = getattr(self, f"_{axis}")
-        xp = array_namespace(x)
+        xp = namespace_of(x)
         gaps = x[1:] - x[:-1]
         # Δ_i = (x_{i+1} - x_{i-1}) / 2, and the one gap next to an end
         return xp.concat([gaps[:1], 0.5 * (gaps[1:] + gaps[:-1]), gaps[-1:]])
@@ -164,7 +165,7 @@ class _Collocated:
         cell = abs(self.spacing(horizontal[-1]))
         for axis in horizontal[:-1]:
             cell = cell * abs(self.spacing(axis))
-        xp = array_namespace(cell) if xp is None else xp
+        xp = namespace_of(cell) if xp is None else xp
         shape = tuple(self._size(axis) for axis in horizontal)
         cell = xp.asarray(cell)
         return xp.broadcast_to(cell.reshape(cell.shape[-len(shape) :]), shape)
@@ -216,7 +217,7 @@ class _Collocated:
             fields: dict[str, Any] = {}
             for axis in self.axes:
                 x = getattr(self, f"_{axis}")
-                xp = array_namespace(x)
+                xp = namespace_of(x)
                 low, high = 2.0 * x[:1] - x[1:2], 2.0 * x[-1:] - x[-2:-1]
                 fields[f"_{axis}"] = xp.concat([low, x, high])
                 fields[f"_d{axis}"] = self._step(axis)
@@ -657,7 +658,7 @@ class SphericalAGrid2D(_Collocated, CollocatedGrid2D):
             raise NotImplementedError(
                 "staggered: a spherical C-grid is uniform in longitude and latitude"
             )
-        xp = array_namespace(self._x, self._y, dlon, dlat)
+        xp = namespace_of(self._x, self._y, dlon, dlat)
         lon = xp.concat([self._x[:1] - dlon, self._x, self._x[-1:] + dlon])
         lat = xp.concat([self._y[:1] - dlat, self._y, self._y[-1:] + dlat])
         shape = (self.Ny + 2, self.Nx + 2)
@@ -776,7 +777,7 @@ class SphericalAGrid2D(_Collocated, CollocatedGrid2D):
         return cls(**axes, R=_leaf(R))
 
     def _cos_lat(self) -> Float[Array, "Ny 1"]:
-        xp = array_namespace(self._y)
+        xp = namespace_of(self._y)
         return xp.cos(self._y)[:, None]
 
     def spacing(self, axis: str, *, at: str | Stagger = "T") -> Float[Array, "..."]:
@@ -797,7 +798,7 @@ class SphericalAGrid2D(_Collocated, CollocatedGrid2D):
         step = super().spacing(axis, at=at)
         if axis == "y":
             return self.R * step
-        xp = array_namespace(self._y)
+        xp = namespace_of(self._y)
         return xp.broadcast_to(self.R * self._cos_lat() * step, self.shape)
 
 

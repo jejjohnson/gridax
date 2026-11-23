@@ -41,13 +41,13 @@ gaussx = { git = "https://github.com/jejjohnson/gaussx", tag = "v0.8.1" }
 # does not import gaussx at run time.
 integrix = { git = "https://github.com/jejjohnson/integrix", tag = "v0.0.9" }
 # pipekit is a uv workspace: consume its packages from git subdirectories.
-# Every source is pinned to the one tag `pipekit-ops-v0.2.1` (ops 0.2.1,
-# cycle 0.1.0, jax 0.1.0); per-package tags make uv report conflicting URLs
+# Every source is pinned to the one tag `pipekit-array-v0.1.3` (ops 0.2.2,
+# array 0.1.3, cycle 0.1.0, jax 0.1.0); per-package tags make uv report conflicting URLs
 # for pipekit-ops. pipekit-cycle comes in through pipekit-jax.
-pipekit-ops = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-ops", tag = "pipekit-ops-v0.2.1" }
-pipekit-array = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-array", tag = "pipekit-ops-v0.2.1" }
-pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-cycle", tag = "pipekit-ops-v0.2.1" }
-pipekit-jax = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-jax", tag = "pipekit-ops-v0.2.1" }
+pipekit-ops = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-ops", tag = "pipekit-array-v0.1.3" }
+pipekit-array = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-array", tag = "pipekit-array-v0.1.3" }
+pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-cycle", tag = "pipekit-array-v0.1.3" }
+pipekit-jax = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-jax", tag = "pipekit-array-v0.1.3" }
 
 [project.optional-dependencies]
 test = [
@@ -63,9 +63,6 @@ test = [
     "matplotlib>=3.9.0",
     "pillow>=11.0.0",
     "xarray>=2025.1.0",
-    # An environment with geophysix >= 0.0.5 or radiomax has it, so the suite
-    # runs with it; the gridax-numpy-only CI job runs without it (#552).
-    "array-api-compat>=1.12",
     # The reference CField.to_xarray and the interpolations are checked against.
     "xgcm>=0.10.1",
     "zarr>=3.1.5",

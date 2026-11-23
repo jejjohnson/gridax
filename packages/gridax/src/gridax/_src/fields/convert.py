@@ -5,12 +5,12 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
+from pipekit_array.functions import namespace_of
 
 from gridax._src.backend import set_at
 from gridax._src.boundary.fill import BC, fill_ghosts
 from gridax._src.fields.cfield import CField
 from gridax._src.grid.points import GRID_AXES, POINT_AXES
-from gridax._src.pytree import array_namespace
 
 #: A point staggered along each axis, whose coordinate is the right faces'.
 _FACE = {along[0]: point for point, along in POINT_AXES.items() if len(along) == 1}
@@ -161,7 +161,7 @@ def to_right(field: CField, grid: Any, bc: BC) -> CField:
     for axis in left:
         if bc.faces.get(axis, (None, None))[1] is None:
             raise ValueError(f"bc has no condition for the high {axis} face")
-    xp = array_namespace(field.data)
+    xp = namespace_of(field.data)
     data = field.data
     for axis in left:
         # right[i] = left[i + 1]; the last index is filled below

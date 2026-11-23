@@ -24,11 +24,12 @@ from typing import TYPE_CHECKING, Any
 
 from jaxtyping import Float
 import numpy as np
+from pipekit_array.functions import namespace_of
 
 from gridax._src.backend import set_at
 from gridax._src.grid.points import Stagger, point_axes
 from gridax._src.operators._utils import _metric_like
-from gridax._src.pytree import array_namespace, pytree_dataclass, static_field
+from gridax._src.pytree import pytree_dataclass, static_field
 from gridax._src.stencils.coefficients import difference_coeffs
 
 if TYPE_CHECKING:
@@ -162,7 +163,7 @@ class _Atom:
             The shape of ``f``; it means something on the dry points of the
             layer only.
         """
-        xp = array_namespace(f)
+        xp = namespace_of(f)
         pos = grid.axes.index(axis) - len(grid.axes)
         inwards = 1 if side == 0 else -1
         # the axis normal to the coast first, so face values and spacings
@@ -201,7 +202,7 @@ def _face_spacing(
         return _metric_like(step, f)
     # [Ny, Nx] on the sphere: the same at every longitude, so one column
     line = step[..., grid.ghost]
-    xp = array_namespace(line)
+    xp = namespace_of(line)
     extra = (f.shape[-2] - line.shape[0]) // 2
     if extra > 0:
         line = xp.concat([line[:1]] * extra + [line] + [line[-1:]] * extra)
@@ -245,7 +246,7 @@ class Dirichlet(_Atom):
         return 2.0 * _value_like(self.value, phi(k)) - phi(k)
 
     def _wall(self, phi: Interior, step: Any) -> Any:
-        xp = array_namespace(phi(1))
+        xp = namespace_of(phi(1))
         return xp.zeros_like(phi(1)) + _value_like(self.value, phi(1))
 
 

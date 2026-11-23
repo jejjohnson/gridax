@@ -25,10 +25,11 @@ from typing import TYPE_CHECKING, Any, ClassVar, Self
 
 from jaxtyping import Bool, Int
 import numpy as np
+from pipekit_array.functions import namespace_of
 
 from gridax._src.grid.points import Stagger, point_axes
 from gridax._src.mask.utils import count_contiguous, dilate_mask, shifted
-from gridax._src.pytree import array_namespace, pytree_dataclass, static_field
+from gridax._src.pytree import pytree_dataclass, static_field
 
 if TYPE_CHECKING:
     from jaxtyping import Array
@@ -202,7 +203,7 @@ def _checked(sizes: Sequence[int]) -> list[int]:
 
 def tiers_of(wet: Any, position: int, sizes: Sequence[int]) -> dict[int, Any]:
     """``MaskBase.tiers`` of an array of wet points, along one of its axes."""
-    xp = array_namespace(wet)
+    xp = namespace_of(wet)
     fits = wet
     reach = xp.asarray(fits, dtype=xp.int8)
     for k in range(1, _checked(sizes)[-1] // 2):
@@ -282,7 +283,7 @@ class MaskBase:
         if not point_axes(at, self._axes) and kind == "default":
             counts = self.stencil_capability
             pos, neg = getattr(counts, f"{axis}_pos"), getattr(counts, f"{axis}_neg")
-            return _tiers(array_namespace(pos, neg).minimum(pos, neg), sizes)
+            return _tiers(namespace_of(pos, neg).minimum(pos, neg), sizes)
         return tiers_of(self.wet(at=at, kind=kind), position, sizes)
 
     # ── coastal ghosts ────────────────────────────────────────────────────────
@@ -355,7 +356,7 @@ class MaskBase:
         A coast cell has land on one of its faces, and a near-coast cell a
         coast cell.
         """
-        xp = array_namespace(self._h)
+        xp = namespace_of(self._h)
         near_land = dilate_mask(~self._h)
         levels = (self._h, self._h & ~near_land, self._h & ~dilate_mask(near_land))
         return sum(xp.asarray(level, dtype=xp.int8) for level in levels)

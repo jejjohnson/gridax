@@ -61,7 +61,7 @@ from gridax._src.boundary.atoms import (
 from gridax._src.boundary.fill import BC, fill_ghosts
 from gridax._src.boundary.regions import apply_mask, embed, interior, select
 from gridax._src.diffusion.diffuse import biharmonic, diffuse, diffusive_fluxes
-from gridax._src.fields._hook import register_when_pipekit_loads as _register
+from gridax._src.fields import adapter as _adapter  # noqa: F401  (registers it)
 from gridax._src.fields.cfield import CField, StaggerMismatchError
 from gridax._src.fields.combine import combine
 from gridax._src.fields.convert import to_dimarray, to_right
@@ -191,8 +191,6 @@ from gridax._src.operators.stencils import (
 
 __version__ = "0.2.0"  # x-release-please-version
 
-# CField is a pipekit carrier from the moment pipekit is imported, by anyone.
-_register()
 from gridax._src.operators.vorticity import vorticity_flux_upwind
 
 __all__ = [

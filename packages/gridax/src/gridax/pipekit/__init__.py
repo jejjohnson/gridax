@@ -1,7 +1,7 @@
 """gridax operators as pipekit Operators (Tier B).
 
 Requires the ``pipekit`` extra (``pip install "gridax[pipekit]"``);
-``import gridax`` never imports pipekit.
+``import gridax`` never imports pipekit-jax, nor JAX-only libraries.
 
 Every operator here is a `pipekit_jax.JaxOperator`: a pipekit ``Operator``
 (JSON config, ``|`` composition, ``Sequential`` / ``Graph`` nodes) that is

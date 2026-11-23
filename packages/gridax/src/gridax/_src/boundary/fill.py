@@ -6,6 +6,7 @@ import itertools
 from typing import Any, Literal
 
 import numpy as np
+from pipekit_array.functions import namespace_of
 
 from gridax._src.boundary.atoms import Atom, Dirichlet, Neumann, Periodic, Wall, _Atom
 from gridax._src.fields.cfield import CField, StaggerMismatchError
@@ -16,7 +17,7 @@ from gridax._src.grid.points import (
     point_axes,
     point_stagger,
 )
-from gridax._src.pytree import array_namespace, pytree_dataclass, static_field
+from gridax._src.pytree import pytree_dataclass, static_field
 
 #: Face names, as the axis and the side (0 low, 1 high).
 FACES: dict[str, tuple[str, int]] = {
@@ -409,7 +410,7 @@ def _fill_coasts(
     Nearest by distance from the water: the nodes on a coast come before any
     mirror, so a wall keeps its value where it ends next to another one.
     """
-    xp = array_namespace(f)
+    xp = namespace_of(f)
     on_wall = point_axes(stagger, grid.axes)
     kind = "strict" if len(on_wall) == 2 else "default"
     coasts = [
@@ -498,7 +499,7 @@ def extend(
     for name, (axis, side) in FACES.items():
         if axis in axes and bc.at_face(axis, side, stagger, grid.axes) is None:
             raise ValueError(f"bc has no condition for the {name} face")
-    xp = array_namespace(f)
+    xp = namespace_of(f)
     for axis in axes:
         position = grid.axes.index(axis) - len(grid.axes)
         f = _widened(xp, f, position, extra, "zero")
@@ -510,7 +511,7 @@ def extend_wet(wet: Any, grid: Any, bc: BC, axes: list[str], extra: int) -> Any:
 
     Wrapped where the faces are periodic, and those of the ghost ring elsewhere.
     """
-    xp = array_namespace(wet)
+    xp = namespace_of(wet)
     for axis in axes:
         position = grid.axes.index(axis) - len(grid.axes)
         periodic = isinstance(bc.faces[axis][0], Periodic)

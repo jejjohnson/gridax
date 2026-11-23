@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from gridax._src.pytree import array_namespace
+from pipekit_array.functions import namespace_of
 
 
 def is_jax(xp: Any) -> bool:
@@ -47,7 +47,7 @@ def set_at(x: Any, index: Any, values: Any) -> Any:
     array
         A new array of ``x``'s namespace, shape and dtype.
     """
-    xp = array_namespace(x, values)
+    xp = namespace_of(x, values)
     if is_jax(xp):
         return xp.asarray(x).at[index].set(values)
     out = xp.asarray(x, copy=True)
@@ -70,7 +70,7 @@ def pad(x: Any, widths: tuple[tuple[int, int], ...]) -> Any:
     array
         The padded array, in ``x``'s namespace and dtype.
     """
-    xp = array_namespace(x)
+    xp = namespace_of(x)
     native = getattr(xp, "pad", None)
     if native is not None:
         return native(x, widths)
@@ -87,7 +87,7 @@ def pad(x: Any, widths: tuple[tuple[int, int], ...]) -> Any:
 
 def optimization_barrier(x: Any) -> Any:
     """``x`` unchanged; on JAX, ``jax.lax.optimization_barrier(x)``."""
-    if is_jax(array_namespace(x)):
+    if is_jax(namespace_of(x)):
         import jax
 
         return jax.lax.optimization_barrier(x)
@@ -96,7 +96,7 @@ def optimization_barrier(x: Any) -> Any:
 
 def stop_gradient(x: Any) -> Any:
     """``x`` unchanged; on JAX, ``jax.lax.stop_gradient(x)``."""
-    if is_jax(array_namespace(x)):
+    if is_jax(namespace_of(x)):
         import jax
 
         return jax.lax.stop_gradient(x)
@@ -126,7 +126,7 @@ def vmap(fn: Any, in_axes: Any = 0) -> Any:
 
     def mapped(*args: Any) -> Any:
         axes = in_axes if isinstance(in_axes, tuple) else (in_axes,) * len(args)
-        xp = array_namespace(*args)
+        xp = namespace_of(*args)
         if is_jax(xp):
             import jax
 

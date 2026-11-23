@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from jaxtyping import Float
 import numpy as np
+from pipekit_array.functions import namespace_of
 
 from gridax._src.analysis.differences import (
     adaptive_difference,
@@ -51,7 +52,6 @@ from gridax._src.operators.triples import (
     moved_along,
     point_name,
 )
-from gridax._src.pytree import array_namespace
 from gridax._src.schemes.adaptive import policies
 from gridax._src.schemes.base import Scheme
 from gridax._src.schemes.linear import Biased, Centred
@@ -226,7 +226,7 @@ def _masked(out: Any, mask: Any, dst: str) -> Any:
     if mask is None:
         return out
     wet = _wet(mask, dst)
-    return array_namespace(out, wet).where(wet, out, 0.0)
+    return namespace_of(out, wet).where(wet, out, 0.0)
 
 
 def _wet(mask: Any, point: str) -> Any:
@@ -271,7 +271,7 @@ def _reads_wet(
     wet: Any, axes: tuple[str, ...], src: str, dst: str, scheme: Scheme, derivative: int
 ) -> Any:
     """Whether every point a move reads, unshifted, is wet; on the interior."""
-    xp = array_namespace(wet)
+    xp = namespace_of(wet)
     fits = xp.asarray(wet, dtype=bool)
     for axis, side in moved_along(src, dst):
         position = axes.index(axis) - len(axes)
@@ -296,7 +296,7 @@ def _narrowing(
     lines: Any = None,
 ) -> Any:
     """A move with more than two points, narrowing next to dry points."""
-    xp = array_namespace(f)
+    xp = namespace_of(f)
     *wider, _ = scheme._ladder()
     out = two_point(f)
     for rung in reversed(wider):
@@ -630,7 +630,7 @@ def _difference_collocated(
             return _collocated_difference(f, method=method, accuracy=accuracy, **kwargs)
         return _at_bounds(f, scheme, method, accuracy, kwargs, edges)
 
-    xp = array_namespace(f)
+    xp = namespace_of(f)
     if mask is None:
         out = plain(f)
     elif dry == "none":
@@ -665,7 +665,7 @@ def _at_bounds(
     f: Any, scheme: Scheme, method: Any, accuracy: int, kwargs: Any, edges: str
 ) -> Any:
     """The collocated difference, NaN or narrower where its stencil does not fit."""
-    xp = array_namespace(f)
+    xp = namespace_of(f)
     out = _collocated_difference(f, method=method, accuracy=accuracy, **kwargs)
     if edges == "none":
         return xp.where(_fits(f, scheme, kwargs), out, xp.nan)

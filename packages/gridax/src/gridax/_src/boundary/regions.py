@@ -6,12 +6,12 @@ import itertools
 from typing import Any
 
 import numpy as np
+from pipekit_array.functions import namespace_of
 
 from gridax._src.backend import pad, set_at
 from gridax._src.boundary.fill import FACES
 from gridax._src.fields.cfield import CField, StaggerMismatchError
 from gridax._src.grid.points import Stagger, as_stagger, point_axes, point_stagger
-from gridax._src.pytree import array_namespace
 
 __all__ = ["apply_mask", "embed", "interior", "select"]
 
@@ -95,7 +95,7 @@ def embed(values: Any, grid: Any, fill: Any = 0) -> Any:
         widths = (*lead, *((ghost, ghost),) * rank)
         if isinstance(fill, int | float) and fill == 0:
             return pad(x, widths)
-        xp = array_namespace(x)
+        xp = namespace_of(x)
         shape = (*x.shape[:-rank], *grid.shape)
         ring = xp.zeros(shape, dtype=x.dtype) + xp.asarray(fill, dtype=x.dtype)
         return set_at(ring, _inner(grid), x)
@@ -174,14 +174,14 @@ def select(
             for layers in (slice(0, ghost), slice(-ghost, None)):
                 piece = at({**dict.fromkeys(axes[:k], inner), axis: layers})
                 pieces.append(piece.reshape(*piece.shape[: -len(axes)], -1))
-        return array_namespace(data).concat(pieces, axis=-1)
+        return namespace_of(data).concat(pieces, axis=-1)
     if region == "corners":
         sides = (slice(ghost - 1, ghost), slice(-ghost, 1 - ghost or None))
         pieces = []
         for corner in itertools.product(sides, repeat=len(axes)):
             piece = at(dict(zip(axes, corner, strict=True)))
             pieces.append(piece.reshape(*piece.shape[: -len(axes)], 1))
-        return array_namespace(data).concat(pieces, axis=-1)
+        return namespace_of(data).concat(pieces, axis=-1)
 
     wall = isinstance(region, str) and region.startswith("wall_")
     face = region.removeprefix("wall_") if isinstance(region, str) else region
@@ -243,7 +243,7 @@ def apply_mask(f: Any, mask: Any, *, at: Any = None, fill: Any = 0) -> Any:
     wet = mask.wet(at=point, kind=kind)
 
     def put(x: Any) -> Any:
-        xp = array_namespace(x)
+        xp = namespace_of(x)
         return xp.where(wet, x, xp.asarray(fill, dtype=x.dtype))
 
     if not isinstance(f, CField):

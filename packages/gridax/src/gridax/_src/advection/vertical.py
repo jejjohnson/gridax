@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from jaxtyping import Float
 import numpy as np
+from pipekit_array.functions import namespace_of
 
 from gridax._src.advection.advect import Wall, _open
 from gridax._src.advection.reconstruct import axis_flux, check_scheme, extends
@@ -25,7 +26,6 @@ from gridax._src.grid import (
     StretchedCGrid3D,
 )
 from gridax._src.operators._utils import _spacing
-from gridax._src.pytree import array_namespace
 from gridax._src.schemes.adaptive import policies
 from gridax._src.schemes.base import Scheme
 
@@ -177,7 +177,7 @@ def _check_wall(wall: str) -> None:
 
 def _column(flux: Any, f: Any, grid: Any, mask: Any) -> Any:
     """``(F[k+1/2] - F[k-1/2]) / Δz`` on the interior, zero elsewhere and on land."""
-    xp = array_namespace(flux, f)
+    xp = namespace_of(flux, f)
     step = _spacing(grid, "z", flux)
     if np.ndim(step):
         step = step[1:-1]
@@ -200,7 +200,7 @@ def _faces(flux: Any, wall: str) -> Any:
 def _advect_vertical(
     grid: Any, q: Any, w: Any, *, scheme: Scheme, mask: Any, wall: str, bc: BC | None
 ) -> Any:
-    xp = array_namespace(q, w)
+    xp = namespace_of(q, w)
     if mask is not None:
         # the dry values enter neither the output nor its gradient
         if policies(scheme, bc, edges="narrow", dry="narrow")[2] != "none":
@@ -218,7 +218,7 @@ def _advect_vertical(
 @diffuse_vertical.register(SphericalCGrid3D)
 @diffuse_vertical.register(StretchedCGrid3D)
 def _diffuse_vertical(grid: Any, f: Any, *, kappa: Any, mask: Any, wall: str) -> Any:
-    xp = array_namespace(f, kappa)
+    xp = namespace_of(f, kappa)
     step = f[..., 1:, :, :] - f[..., :-1, :, :]  # [Nz-1]: f[k+1] - f[k]
     kappa = xp.asarray(kappa)
     if kappa.ndim >= 3:

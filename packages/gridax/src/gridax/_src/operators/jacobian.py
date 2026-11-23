@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any
 
 from jaxtyping import Float
 import numpy as np
+from pipekit_array.functions import namespace_of
 
 from gridax._src.api import grid_dispatch
 from gridax._src.fields.located import located
@@ -27,7 +28,6 @@ from gridax._src.grid import CartesianCGrid2D
 from gridax._src.operators._ghost import interior
 from gridax._src.operators._utils import _sanitize, _spacing
 from gridax._src.operators.stencils import _neighbours
-from gridax._src.pytree import array_namespace
 
 if TYPE_CHECKING:
     from jaxtyping import Array
@@ -108,7 +108,7 @@ def arakawa_jacobian(
 
 @arakawa_jacobian.register(CartesianCGrid2D)
 def _arakawa_jacobian_cartesian(grid: Any, a: Any, b: Any, *, mask: Any) -> Any:
-    xp = array_namespace(a, b)
+    xp = namespace_of(a, b)
     wet = None if mask is None else mask.wet()
     # zero on dry interior cells; the ghost ring belongs to the caller
     a, b = _sanitize(wet, a), _sanitize(wet, b)

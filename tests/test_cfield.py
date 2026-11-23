@@ -217,6 +217,10 @@ class TestElementwise:
         np.testing.assert_array_equal(
             fields.minimum(a, 0.0).data, jnp.minimum(a.data, 0.0)
         )
+        # a NumPy scalar is an array of NumPy, and joins the field's
+        np.testing.assert_array_equal(
+            fields.minimum(a, np.float64(0.0)).data, jnp.minimum(a.data, 0.0)
+        )
         np.testing.assert_array_equal(
             fields.clip(a, min=-0.1, max=0.1).data, jnp.clip(a.data, -0.1, 0.1)
         )

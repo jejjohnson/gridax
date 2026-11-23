@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from jaxtyping import Float
 import numpy as np
+from pipekit_array.functions import namespace_of
 
 from gridax._src.advection.reconstruct import axis_flux, check_scheme, extends
 from gridax._src.api import grid_dispatch
@@ -28,7 +29,6 @@ from gridax._src.grid import (
     SphericalCGrid3D,
 )
 from gridax._src.operators._utils import _metric_like, _safe_div_cos, _spacing
-from gridax._src.pytree import array_namespace
 from gridax._src.schemes.adaptive import policies
 from gridax._src.schemes.base import Scheme
 
@@ -143,7 +143,7 @@ def _fluxes(
     bc: BC | None,
 ) -> dict[str, Array]:
     """The flux through the faces along each horizontal axis, dry faces zeroed."""
-    xp = array_namespace(q, *velocities.values())
+    xp = namespace_of(q, *velocities.values())
     points = {"x": "U", "y": "V"}
     wet: dict[str, Any] = {}
     if mask is not None:
@@ -173,7 +173,7 @@ def _open(flux: Array, velocity: Array, q: Array, position: int) -> Array:
     Dirichlet inflow needs ``ghost = value``, and not the face reflection
     ``2 value - interior`` that `Dirichlet` writes for centred stencils.
     """
-    xp = array_namespace(flux, velocity, q)
+    xp = namespace_of(flux, velocity, q)
 
     def at(k: int) -> tuple[Any, ...]:
         return (..., k, *([slice(None)] * (-position - 1)))
@@ -224,7 +224,7 @@ def _advect_cartesian(
     wall: str,
     bc: BC | None,
 ) -> Any:
-    xp = array_namespace(q, u)
+    xp = namespace_of(q, u)
     fluxes = _fluxes(
         grid,
         q,
@@ -259,7 +259,7 @@ def _advect_spherical(
     wall: str,
     bc: BC | None,
 ) -> Any:
-    xp = array_namespace(q, u)
+    xp = namespace_of(q, u)
     fluxes = _fluxes(
         grid,
         q,

@@ -46,7 +46,7 @@ import functools
 import math
 from typing import Any, Literal
 
-from gridax._src.pytree import array_namespace
+from pipekit_array.functions import namespace_of
 
 __all__ = [
     "METHODS",
@@ -497,7 +497,7 @@ def nonuniform_coeffs(dz: Any, derivative: int = 1) -> Any:
     2.0
     """
 
-    xp = array_namespace(dz)
+    xp = namespace_of(dz)
     n_points = dz.shape[-1]
     if derivative >= n_points:
         raise ValueError(

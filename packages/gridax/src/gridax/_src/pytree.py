@@ -21,9 +21,6 @@ import numpy as np
 
 _STATIC = "static"
 
-# Values that join whatever array library the others are from.
-_HOST_TYPES = (int, float, complex, np.ndarray, np.generic)
-
 
 def static_field(**kwargs: Any) -> Any:
     """A dataclass field that is pytree metadata, not a leaf.
@@ -42,47 +39,6 @@ def static_field(**kwargs: Any) -> Any:
     metadata = dict(kwargs.pop("metadata", None) or {})
     metadata[_STATIC] = True
     return dataclasses.field(metadata=metadata, **kwargs)
-
-
-def array_namespace(*values: Any) -> Any:
-    """The array namespace shared by ``values``, NumPy for plain values.
-
-    Lets a function written once run on the NumPy arrays a grid is built
-    with and on the JAX arrays, tracers, CuPy arrays (or anything else that
-    follows the array API) a caller passes instead. With
-    ``array-api-compat`` installed it decides, so backends without a native
-    ``__array_namespace__`` (PyTorch) work too; otherwise the first value
-    that reports a namespace other than NumPy's wins. Python scalars,
-    ``None`` and NumPy arrays join the other arrays, and resolve to NumPy on
-    their own, as does anything that is not an array (a list).
-
-    Parameters
-    ----------
-    *values
-        Arrays, scalars or ``None``.
-
-    Returns
-    -------
-    module
-        ``numpy``, or the namespace of the arrays (``jax.numpy`` for JAX
-        arrays and tracers).
-    """
-    arrays = [v for v in values if v is not None and not isinstance(v, _HOST_TYPES)]
-    try:
-        import array_api_compat
-    except ImportError:
-        return _native_namespace(arrays)
-    known = [v for v in arrays if array_api_compat.is_array_api_obj(v)]
-    return array_api_compat.array_namespace(*known) if known else np
-
-
-def _native_namespace(arrays: list[Any]) -> Any:
-    """The namespace the first array reports itself, NumPy if none does."""
-    for value in arrays:
-        get_namespace = getattr(value, "__array_namespace__", None)
-        if get_namespace is not None:
-            return get_namespace()
-    return np
 
 
 def _register_with_jax(cls: type) -> None:

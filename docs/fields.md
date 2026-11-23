@@ -73,7 +73,7 @@ The grid axes are found by name, in any order, and the other dims are kept. A re
 
 ## With pipekit
 
-With the `pipekit` extra, the named-dim functions of pipekit-array work on fields. A field stays a field while any grid axis remains, with its stagger trimmed to the axes left, and becomes a `pipekit_array.DimArray` when none is.
+The named-dim functions of pipekit-array, which the base install has, work on fields. A field stays a field while any grid axis remains, with its stagger trimmed to the axes left, and becomes a `pipekit_array.DimArray` when none is.
 
 ```python
 import pipekit_array as pa
@@ -85,7 +85,7 @@ pa.reduce(v, "mean", ("y", "x"))  # a DimArray over member
 pa.map_over(v, lambda item: combine(jnp.square, item), "member")  # one vmap
 ```
 
-`import gridax` never imports pipekit: the adapter registers itself the moment `pipekit_ops` is imported, whichever comes first.
+`import gridax` registers the adapter.
 
 ## With xarray and other models
 
