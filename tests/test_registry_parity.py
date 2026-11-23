@@ -7,6 +7,8 @@ must raise ``NotImplementedError`` naming the operation and the grid.
 
 from __future__ import annotations
 
+import dataclasses
+import inspect
 import re
 
 import gridax
@@ -124,3 +126,39 @@ def test_dispatch_is_resolved_at_trace_time(grid):
 )
 def test_the_per_geometry_names_are_gone(name):
     assert not hasattr(gridax, name)
+
+
+#: What takes a grid beside the canonical functions: the weights and the
+#: coordinates of a grid, the ghost ring and the regions of a field, and the
+#: conversions between two grids or two conventions.
+GRID_HELPERS = {
+    "agrid_from",
+    "area_weights",
+    "collocate",
+    "embed",
+    "fill_ghosts",
+    "interior",
+    "select",
+    "stagger",
+    "t_point_coordinates",
+    "to_right",
+    "volume_weights",
+}
+
+
+def test_one_public_name_per_operation():
+    """No class but `GridOps` holds a grid, and no function takes spacings (#493)."""
+    holders, takers = set(), set()
+    for name in gridax.__all__:
+        obj = getattr(gridax, name)
+        if inspect.isclass(obj):
+            if dataclasses.is_dataclass(obj):
+                if any(field.name == "grid" for field in dataclasses.fields(obj)):
+                    holders.add(name)
+        elif callable(obj):
+            parameters = set(inspect.signature(obj).parameters)
+            assert not parameters & {"dx", "dy", "dz"}, name
+            if "grid" in parameters:
+                takers.add(name)
+    assert holders == {"GridOps"}
+    assert takers == set(OPERATIONS) | GRID_HELPERS
