@@ -15,7 +15,7 @@ from gridax._src.advection.spherical_advection import (
     SphericalAdvection2D,
     SphericalAdvection3D,
 )
-from gridax._src.operators.reductions import spherical_area_weights
+from gridax._src.operators.reductions import area_weights
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -397,7 +397,7 @@ class TestSphericalAdvection3D:
 
 
 # ======================================================================
-# Telescoping against spherical_area_weights (#247, #297)
+# Telescoping against area_weights (#247, #297)
 # ======================================================================
 
 #: Rounding of a sum of ~1000 O(1)-relative terms (measured 1e-18 - 3e-17);
@@ -462,7 +462,7 @@ class TestSphericalTelescoping:
 
         grid, (_, u, v), _ = _periodic_setup(halo=1)
         div = SphericalDivergence2D(grid=grid)(u, v)
-        area = spherical_area_weights(grid)
+        area = area_weights(grid)
         assert abs(_relative_net(area, div)) < TELESCOPE_RTOL
 
     def test_divergence_zero_boundary_velocity(self):
@@ -471,7 +471,7 @@ class TestSphericalTelescoping:
         grid, (_, u, v), _ = _periodic_setup(halo=1)
         u = u.at[:, 0].set(0.0).at[:, -2].set(0.0)  # west / east wall faces
         div = SphericalDivergence2D(grid=grid)(u, v)
-        area = spherical_area_weights(grid)
+        area = area_weights(grid)
         assert abs(_relative_net(area, div)) < TELESCOPE_RTOL
 
     @pytest.mark.parametrize("method", ["upwind1", "weno5", "van_leer"])
@@ -487,7 +487,7 @@ class TestSphericalTelescoping:
         h = wrap(jnp.asarray(1000.0 + 10 * rng.randn(grid.Ny, grid.Nx)))
         u = wrap(jnp.asarray(rng.randn(grid.Ny, grid.Nx)))
         op = SphericalAdvection2D(grid=grid)
-        area = spherical_area_weights(grid)
+        area = area_weights(grid)
         closed = _advect(op, h, u, jnp.zeros_like(u), method)
         opened = _advect(op, h, u, jnp.zeros_like(u), method, wall="open")
         assert abs(_relative_net(area, closed)) > 1e-3  # the #247 defect
@@ -500,7 +500,7 @@ class TestSphericalTelescoping:
         scheme's (equal to a much wider halo) and telescopes."""
         grid, (h, u, v), physical = _periodic_setup(halo=HALO[method])
         out = _advect(SphericalAdvection2D(grid=grid), h, u, v, method, "open")
-        area = spherical_area_weights(grid)
+        area = area_weights(grid)
         assert abs(_relative_net(area, out, physical)) < TELESCOPE_RTOL
 
         wide, (hw, uw, vw), physical_w = _periodic_setup(halo=6)
@@ -519,7 +519,7 @@ class TestSphericalTelescoping:
         grid, (h, u, v), _ = _periodic_setup(halo=1, seed=3)
         u = u.at[:, 0].set(0.0).at[:, -2].set(0.0)
         out = _advect(SphericalAdvection2D(grid=grid), h, u, v, method, "open")
-        area = spherical_area_weights(grid)
+        area = area_weights(grid)
         assert abs(_relative_net(area, out)) < TELESCOPE_RTOL
 
 

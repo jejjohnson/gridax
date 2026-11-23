@@ -152,8 +152,8 @@ GRIDS = {
 
 def _reductions(field, grid, mask):
     return (
-        gridax.area_sum(field, grid, mask),
-        gridax.area_mean(field, grid, mask),
+        gridax.area_sum(field, grid, mask=mask),
+        gridax.area_mean(field, grid, mask=mask),
     )
 
 

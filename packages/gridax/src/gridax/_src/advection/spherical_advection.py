@@ -38,7 +38,7 @@ the Cartesian advection with ``dx = R·dlon`` and ``dy = R·dlat``.
 
 Both classes take the Cartesian ``wall="closed" | "open"`` argument with the
 same semantics.  The flux divergence telescopes against
-:func:`~gridax.spherical_area_weights` (``R² cos(lat_T) dlon dlat``, the
+:func:`~gridax.area_weights` (``R² cos(lat_T) dlon dlat``, the
 cell area the divergence divides by), so ``Σ A · tendency`` is the net flux
 through the faces bounding the written cells, and is zero to rounding when
 those cancel:
