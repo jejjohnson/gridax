@@ -34,6 +34,15 @@ def _mask_2d(ny: int, nx: int) -> gridax.Mask2D:
     return gridax.Mask2D.from_mask(wet)
 
 
+def flux(q, u, *, axis: int, scheme, mask=None):
+    """`gridax.reconstruct` on a grid of the arrays' shape, the axis by its index."""
+    sizes = [n - 2 for n in reversed(q.shape)]
+    cls = getattr(gridax, f"CartesianCGrid{q.ndim}D")
+    grid = cls.from_interior(*sizes, *([1.0] * q.ndim))
+    name = grid.axes[axis % q.ndim]
+    return gridax.reconstruct(q, u, grid, axis=name, scheme=scheme, mask=mask)
+
+
 def cases() -> Iterator[tuple[str, Callable[[], np.ndarray]]]:
     """``(name, call)`` for every method of Reconstruction1D/2D/3D and the old reconstruct."""
     setups = {
@@ -97,7 +106,7 @@ def cases() -> Iterator[tuple[str, Callable[[], np.ndarray]]]:
             # named for the old call reconstruct(q, u, dim, method, num_pts)
             yield (
                 f"reconstruct.dim{dim}.{method}.{num_pts}",
-                lambda axis=dim - 2, scheme=scheme, h=h, u=u: gridax.reconstruct(
+                lambda axis=dim - 2, scheme=scheme, h=h, u=u: flux(
                     h, u, axis=axis, scheme=scheme
                 ),
             )

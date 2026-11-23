@@ -172,13 +172,14 @@ class TestBiharmonicDiffusionMasks:
         np.testing.assert_array_equal(op_plain(h, kappa=1e-3), op_all(h, kappa=1e-3))
 
     def test_2d_inner_harm_is_masked(self):
-        """#292: both Laplacian passes are the masked no-flux ``Dm``, so the
-        inner ``_harm`` carries the outer mask (the second pass zeroes the
-        wet→dry fluxes, so the dry zeros of ``Dm(h)`` are never read).
+        """#292: both Laplacian passes are the masked no-flux ``Dm`` (the second
+        pass zeroes the wet→dry fluxes, so the dry zeros of ``Dm(h)`` are never
+        read).
         """
-        mask = make_mask_2d()
-        op = BiharmonicDiffusion2D(grid=make_grid_2d(), mask=mask)
-        assert op._harm.mask is mask
+        grid, mask, h = make_grid_2d(), make_mask_2d(), make_h_field_2d()
+        harm = Diffusion2D(grid=grid, mask=mask)
+        out = BiharmonicDiffusion2D(grid=grid, mask=mask)(h, kappa=1e-3)
+        np.testing.assert_array_equal(out, -1e-3 * harm(harm(h, 1.0), 1.0))
 
     def test_3d_unmasked_golden(self):
         op = BiharmonicDiffusion3D(grid=make_grid_3d())
@@ -199,9 +200,10 @@ class TestBiharmonicDiffusionMasks:
         np.testing.assert_array_equal(op_plain(h, kappa=1e-3), op_all(h, kappa=1e-3))
 
     def test_3d_inner_harm_is_masked(self):
-        mask = make_mask_3d()
-        op = BiharmonicDiffusion3D(grid=make_grid_3d(), mask=mask)
-        assert op._harm.mask is mask
+        grid, mask, h = make_grid_3d(), make_mask_3d(), make_h_field_3d()
+        harm = Diffusion3D(grid=grid, mask=mask)
+        out = BiharmonicDiffusion3D(grid=grid, mask=mask)(h, kappa=1e-3)
+        np.testing.assert_array_equal(out, -1e-3 * harm(harm(h, 1.0), 1.0))
 
 
 # ---------------------------------------------------------------------------

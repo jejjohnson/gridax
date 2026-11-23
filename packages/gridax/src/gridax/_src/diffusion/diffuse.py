@@ -170,12 +170,17 @@ def _fluxes(
     In the dtype of ``h``: a float64 ``kappa`` does not promote a float32 field.
     """
     kx, ky = _face_kappa(kappa, wall)
-    # x faces i+1/2 for i = 0 .. Nx-2 (open) or 1 .. Nx-3 (closed); y likewise
-    s = slice(None) if wall == "open" else slice(1, -1)
-    hx, hy = h[..., 1:-1, s], h[..., s, 1:-1]
+    # the cells after and before each face i+1/2, i = 0 .. Nx-2 (open) or
+    # 1 .. Nx-3 (closed); one slice per offset, so the VJP has one pad each
+    after, before = (
+        (slice(1, None), slice(None, -1))
+        if wall == "open"
+        else (slice(2, -1), slice(1, -2))
+    )
+    c = slice(1, -1)
     # κ[j, i+1/2] (h[j, i+1] - h[j, i]), κ[j+1/2, i] (h[j+1, i] - h[j, i])
-    fx = kx * (hx[..., 1:] - hx[..., :-1])
-    fy = ky * (hy[..., 1:, :] - hy[..., :-1, :])
+    fx = kx * (h[..., c, after] - h[..., c, before])
+    fy = ky * (h[..., after, c] - h[..., before, c])
     if isinstance(grid, SphericalCGrid2D | SphericalCGrid3D):
         cos_u = _metric_like(grid._cos_lat("U"), h)[1:-1, 1:-2]
         fx = _safe_div_cos(fx, cos_u, _metric_like(grid.R * grid.dlon, h))
@@ -184,9 +189,9 @@ def _fluxes(
         fx, fy = fx / _spacing(grid, "x", h), fy / _spacing(grid, "y", h)
     fx, fy = fx.astype(h.dtype), fy.astype(h.dtype)
     if mu is not None:
-        fx = fx * mu[..., 1:-1, s][..., :-1]
+        fx = fx * mu[..., c, before]
     if mv is not None:
-        fy = fy * mv[..., s, 1:-1][..., :-1, :]
+        fy = fy * mv[..., before, c]
     return fx, fy
 
 

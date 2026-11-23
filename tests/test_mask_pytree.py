@@ -26,6 +26,7 @@ from gridax import (
     Mask3D,
     SphericalCGrid2D,
 )
+from gridax.schemes import WENO
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -217,7 +218,7 @@ def test_masked_advection_jits_with_mask_as_argument(dim):
     mask = MASKS[dim]()
 
     def tendency(mask, *fields):
-        return cls(grid=grid, mask=mask)(*fields, method="weno5")
+        return cls(grid=grid, mask=mask)(*fields, scheme=WENO(5))
 
     np.testing.assert_allclose(
         eqx.filter_jit(tendency)(mask, *fields), tendency(mask, *fields), rtol=1e-12

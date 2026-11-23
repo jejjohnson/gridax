@@ -91,9 +91,12 @@ from gridax._src.solvers.spectral import (
     solve_poisson_dst,
     solve_poisson_fft,
 )
+from gridax.schemes import Upwind
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
+from tests._schemes import SCHEMES
 
 NX = NY = 16
 NZ = 4
@@ -329,9 +332,7 @@ def _cases():
         ),
         Case(
             "arakawa_jacobian",
-            lambda g, m, f: arakawa_jacobian(
-                f[0], f[1], g.spacing("x"), g.spacing("y")
-            ),
+            lambda g, m, f: arakawa_jacobian(f[0], f[1], g),
             ("A", "B"),
             2,
             masked=False,
@@ -434,7 +435,7 @@ def _cases():
         ),
         Case(
             "advection_1d_upwind1",
-            lambda g, m, f: Advection1D(grid=g, mask=m)(f[0], f[1], method="upwind1"),
+            lambda g, m, f: Advection1D(grid=g, mask=m)(f[0], f[1], scheme=Upwind(1)),
             ("A", "B"),
             1,
             dim=1,
@@ -493,7 +494,7 @@ def _cases():
         Case(
             "advection_3d_upwind1",
             lambda g, m, f: Advection3D(grid=g, mask=m)(
-                f[0], f[1], f[2], method="upwind1"
+                f[0], f[1], f[2], scheme=Upwind(1)
             ),
             ("A", "B", "B"),
             1,
@@ -585,45 +586,19 @@ def _advection_case(method, dim, geometry="cartesian"):
     operator, labels = ADVECTION_OPERATORS[(geometry, dim)]
     prefix = "advection" if geometry == "cartesian" else "spherical_advection"
 
-    def run(g, m, f, method=method, operator=operator):
-        return operator(grid=g, mask=m)(*f, method=method)
+    def run(g, m, f, scheme=SCHEMES[method], operator=operator):
+        return operator(grid=g, mask=m)(*f, scheme=scheme)
 
     return Case(f"{prefix}_{dim}d_{method}", run, labels, 1, grid=geometry, dim=dim)
 
 
-#: Not every dimension implements every scheme — ``Advection3D`` has no
-#: ``upwind2``/``upwind3``, and only the 2-D operator has ``wenoz5``.
-#: Probed rather than hard-coded so the matrix cannot drift out of date,
-#: and asserted non-empty below so a probe that silently matches nothing
-#: cannot quietly empty the suite.
-def _supported(operator, grid, fields, method):
-    # Only the deliberate "this operator has no such scheme" error
-    # means unsupported. Any other ``ValueError`` — a construction or
-    # execution failure in a scheme that *is* advertised — would
-    # otherwise drop that case from the matrix and leave the suite
-    # green while the operator is broken, so it is re-raised.
-    try:
-        operator(grid=grid)(*fields, method=method)
-    except ValueError as error:
-        if "unknown method" in str(error).lower():
-            return False
-        raise
-    return True
-
-
 def _advection_cases(methods):
-    cases = []
-    for geometry, dim in ADVECTION_OPERATORS:
-        if dim not in ADVECTION_DIMS:
-            continue
-        grid = GRID_FACTORIES[(dim, geometry)](1.0)
-        make_field = FIELD_MAKERS[dim]
-        operator, labels = ADVECTION_OPERATORS[(geometry, dim)]
-        probe = [make_field(seed) for seed in range(len(labels))]
-        for method in methods:
-            if _supported(operator, grid, probe, method):
-                cases.append(_advection_case(method, dim, geometry))
-    return cases
+    return [
+        _advection_case(method, dim, geometry)
+        for geometry, dim in ADVECTION_OPERATORS
+        if dim in ADVECTION_DIMS
+        for method in methods
+    ]
 
 
 CASES = _cases()

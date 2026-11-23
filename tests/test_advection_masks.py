@@ -45,11 +45,13 @@ from gridax._src.advection.advection import (
 )
 from gridax._src.advection.spherical_advection import SphericalAdvection2D
 from gridax._src.operators.reductions import area_weights
+from gridax.schemes import WENO
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from tests._schemes import SCHEMES
 from tests.fixtures._helpers import assert_matches_golden
 from tests.fixtures.inputs import (
     make_grid_1d,
@@ -91,12 +93,12 @@ class TestAdvection1DMasks:
 
     @pytest.mark.parametrize("method", ["upwind1", "weno5"])
     def test_unmasked_golden(self, op_unmasked, method):
-        out = op_unmasked(make_h_field_1d(), make_u_field_1d(), method=method)
+        out = op_unmasked(make_h_field_1d(), make_u_field_1d(), scheme=SCHEMES[method])
         assert_matches_golden(out, "Advection1D", f"__call___{method}", "unmasked")
 
     @pytest.mark.parametrize("method", ["upwind1", "weno5"])
     def test_masked_golden(self, op_masked, method):
-        out = op_masked(make_h_field_1d(), make_u_field_1d(), method=method)
+        out = op_masked(make_h_field_1d(), make_u_field_1d(), scheme=SCHEMES[method])
         assert_matches_golden(out, "Advection1D", f"__call___{method}", "masked")
 
     @pytest.mark.parametrize("method", ["upwind1", "weno5"])
@@ -104,8 +106,8 @@ class TestAdvection1DMasks:
         h = make_h_field_1d()
         u = make_u_field_1d()
         np.testing.assert_array_equal(
-            op_all_ocean(h, u, method=method),
-            op_unmasked(h, u, method=method),
+            op_all_ocean(h, u, scheme=SCHEMES[method]),
+            op_unmasked(h, u, scheme=SCHEMES[method]),
         )
 
 
@@ -130,14 +132,20 @@ class TestAdvection2DMasks:
     @pytest.mark.parametrize("method", ["upwind1", "weno5"])
     def test_unmasked_golden(self, op_unmasked, method):
         out = op_unmasked(
-            make_h_field_2d(), make_u_field_2d(), make_v_field_2d(), method=method
+            make_h_field_2d(),
+            make_u_field_2d(),
+            make_v_field_2d(),
+            scheme=SCHEMES[method],
         )
         assert_matches_golden(out, "Advection2D", f"__call___{method}", "unmasked")
 
     @pytest.mark.parametrize("method", ["upwind1", "weno5"])
     def test_masked_golden(self, op_masked, method):
         out = op_masked(
-            make_h_field_2d(), make_u_field_2d(), make_v_field_2d(), method=method
+            make_h_field_2d(),
+            make_u_field_2d(),
+            make_v_field_2d(),
+            scheme=SCHEMES[method],
         )
         assert_matches_golden(out, "Advection2D", f"__call___{method}", "masked")
 
@@ -147,8 +155,8 @@ class TestAdvection2DMasks:
         u = make_u_field_2d()
         v = make_v_field_2d()
         np.testing.assert_array_equal(
-            op_all_ocean(h, u, v, method=method),
-            op_unmasked(h, u, v, method=method),
+            op_all_ocean(h, u, v, scheme=SCHEMES[method]),
+            op_unmasked(h, u, v, scheme=SCHEMES[method]),
         )
 
 
@@ -173,14 +181,20 @@ class TestAdvection3DMasks:
     @pytest.mark.parametrize("method", ["upwind1", "weno5"])
     def test_unmasked_golden(self, op_unmasked, method):
         out = op_unmasked(
-            make_h_field_3d(), make_u_field_3d(), make_v_field_3d(), method=method
+            make_h_field_3d(),
+            make_u_field_3d(),
+            make_v_field_3d(),
+            scheme=SCHEMES[method],
         )
         assert_matches_golden(out, "Advection3D", f"__call___{method}", "unmasked")
 
     @pytest.mark.parametrize("method", ["upwind1", "weno5"])
     def test_masked_golden(self, op_masked, method):
         out = op_masked(
-            make_h_field_3d(), make_u_field_3d(), make_v_field_3d(), method=method
+            make_h_field_3d(),
+            make_u_field_3d(),
+            make_v_field_3d(),
+            scheme=SCHEMES[method],
         )
         assert_matches_golden(out, "Advection3D", f"__call___{method}", "masked")
 
@@ -190,8 +204,8 @@ class TestAdvection3DMasks:
         u = make_u_field_3d()
         v = make_v_field_3d()
         np.testing.assert_array_equal(
-            op_all_ocean(h, u, v, method=method),
-            op_unmasked(h, u, v, method=method),
+            op_all_ocean(h, u, v, scheme=SCHEMES[method]),
+            op_unmasked(h, u, v, scheme=SCHEMES[method]),
         )
 
 
@@ -209,7 +223,9 @@ class TestDryCellsAreZero:
     def test_advection1d(self, method):
         mask = make_mask_1d()
         op = Advection1D(grid=make_grid_1d(), mask=mask)
-        out = np.asarray(op(make_h_field_1d(), make_u_field_1d(), method=method))
+        out = np.asarray(
+            op(make_h_field_1d(), make_u_field_1d(), scheme=SCHEMES[method])
+        )
         dry = np.asarray(~mask.wet())
         assert np.all(out[dry] == 0.0)
 
@@ -218,7 +234,12 @@ class TestDryCellsAreZero:
         mask = make_mask_2d()
         op = Advection2D(grid=make_grid_2d(), mask=mask)
         out = np.asarray(
-            op(make_h_field_2d(), make_u_field_2d(), make_v_field_2d(), method=method)
+            op(
+                make_h_field_2d(),
+                make_u_field_2d(),
+                make_v_field_2d(),
+                scheme=SCHEMES[method],
+            )
         )
         dry = np.asarray(~mask.wet())
         assert np.all(out[dry] == 0.0)
@@ -228,7 +249,12 @@ class TestDryCellsAreZero:
         mask = make_mask_3d()
         op = Advection3D(grid=make_grid_3d(), mask=mask)
         out = np.asarray(
-            op(make_h_field_3d(), make_u_field_3d(), make_v_field_3d(), method=method)
+            op(
+                make_h_field_3d(),
+                make_u_field_3d(),
+                make_v_field_3d(),
+                scheme=SCHEMES[method],
+            )
         )
         dry = np.asarray(~mask.wet())
         assert np.all(out[dry] == 0.0)
@@ -319,8 +345,8 @@ CASES = [(name, m) for name, (_, _, methods) in OPS.items() for m in methods]
 
 def _call(op, h, u, v, method):
     if h.ndim == 1:
-        return op(h, u, method=method)
-    return op(h, u, v, method=method)
+        return op(h, u, scheme=SCHEMES[method])
+    return op(h, u, v, scheme=SCHEMES[method])
 
 
 class TestMaskSafety:
@@ -385,7 +411,7 @@ class TestMaskSafety:
         op, wet, _ = OPS["2d"]
         h, u, v = _fields(wet.shape, seed=2)
         hn = jnp.where(jnp.asarray(wet), h, jnp.nan)
-        g = jax.grad(lambda x: jnp.sum(op(x, u, v, method=method) ** 2))(hn)
+        g = jax.grad(lambda x: jnp.sum(op(x, u, v, scheme=SCHEMES[method]) ** 2))(hn)
         assert bool(jnp.all(jnp.isfinite(g)))
 
 
@@ -395,10 +421,10 @@ class TestWenoZ5AllDimensions:
     def test_advection1d(self):
         grid = make_grid_1d()
         out = Advection1D(grid=grid)(
-            make_h_field_1d(), make_u_field_1d(), method="wenoz5"
+            make_h_field_1d(), make_u_field_1d(), scheme=WENO(5, "z")
         )
         ref = Advection1D(grid=grid)(
-            make_h_field_1d(), make_u_field_1d(), method="weno5"
+            make_h_field_1d(), make_u_field_1d(), scheme=WENO(5)
         )
         assert bool(jnp.all(jnp.isfinite(out)))
         # same 5-point stencils, different nonlinear weights: close, not equal
@@ -410,12 +436,14 @@ class TestWenoZ5AllDimensions:
     def test_advection3d(self):
         grid = make_grid_3d()
         args = (make_h_field_3d(), make_u_field_3d(), make_v_field_3d())
-        out = Advection3D(grid=grid)(*args, method="wenoz5")
-        ref = Advection3D(grid=grid)(*args, method="weno5")
+        out = Advection3D(grid=grid)(*args, scheme=WENO(5, "z"))
+        ref = Advection3D(grid=grid)(*args, scheme=WENO(5))
         assert bool(jnp.all(jnp.isfinite(out)))
         np.testing.assert_allclose(out, ref, atol=0.1 * float(jnp.max(jnp.abs(ref))))
         assert not np.allclose(out, ref, rtol=1e-10, atol=0.0)  # not routed to weno5
         # matches the 2-D operator level by level
         g2 = make_grid_2d()
-        out2 = Advection2D(grid=g2)(args[0][1], args[1][1], args[2][1], method="wenoz5")
+        out2 = Advection2D(grid=g2)(
+            args[0][1], args[1][1], args[2][1], scheme=WENO(5, "z")
+        )
         np.testing.assert_allclose(out[1], out2, rtol=1e-14, atol=1e-14)

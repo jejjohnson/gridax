@@ -153,7 +153,9 @@ class TestMatchesFunctional:
         op = Energetics2D(grid=grid)
         h, u, v = _args("bernoulli_potential")
         H = _args("available_potential_energy")[1]
-        np.testing.assert_array_equal(op.kinetic_energy(u, v), kinetic_energy(u, v))
+        np.testing.assert_array_equal(
+            op.kinetic_energy(u, v), kinetic_energy(u, v, grid)
+        )
         np.testing.assert_array_equal(
             op.bernoulli_potential(h, u, v, 9.0), bernoulli_potential(h, u, v, 9.0)
         )
@@ -172,12 +174,8 @@ class TestMatchesFunctional:
         grid = make_grid_2d()
         op = Strain2D(grid=grid)
         u, v = _args("shear")
-        np.testing.assert_array_equal(
-            op.shear(u, v), shear_strain(u, v, grid.spacing("x"), grid.spacing("y"))
-        )
-        np.testing.assert_array_equal(
-            op.tensor(u, v), tensor_strain(u, v, grid.spacing("x"), grid.spacing("y"))
-        )
+        np.testing.assert_array_equal(op.shear(u, v), shear_strain(u, v, grid))
+        np.testing.assert_array_equal(op.tensor(u, v), tensor_strain(u, v, grid))
 
     def test_vorticity(self):
         grid = make_grid_2d()

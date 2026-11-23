@@ -19,6 +19,8 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from tests._schemes import SCHEMES
+
 N = 8  # interior cells
 WENO = ("weno3", "weno5", "wenoz5", "weno7", "weno9")
 TVD = ("minmod", "van_leer", "superbee", "mc")
@@ -29,7 +31,7 @@ def _tendency_grad(h, method, mask=None):
     adv = fvx.Advection2D(grid, mask=mask)
     u = jnp.ones_like(h)
     v = 0.5 * jnp.ones_like(h)
-    return jax.grad(lambda q: jnp.sum(adv(q, u, v, method=method) ** 2))(h)
+    return jax.grad(lambda q: jnp.sum(adv(q, u, v, scheme=SCHEMES[method]) ** 2))(h)
 
 
 def _smooth(dtype, amplitude=1.0):

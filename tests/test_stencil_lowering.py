@@ -20,11 +20,9 @@ These tests pin both halves of that contract:
 
 from __future__ import annotations
 
-import warnings
-
 import gridax as fvx
-from gridax._src.diffusion.diffusion import _diffusion_2d_fluxes_impl
 from gridax._src.operators._ghost import interior, zero_z_ghosts
+from gridax._src.operators.jacobian import _jacobian
 from gridax._src.operators.stencils import (
     _materialize,
     _neighbours,
@@ -39,6 +37,7 @@ from gridax._src.operators.stencils import (
     diff_y_fwd_2d,
     diff_y_fwd_3d,
 )
+from gridax.schemes import WENO
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -192,7 +191,7 @@ class TestSameValues:
             + g[..., 1:-1, :-2] * (f[..., 2:, :-2] - f[..., :-2, :-2])
         )
         ref = (jpp + jpx + jxp) / (12.0 * 0.5 * 0.25)
-        np.testing.assert_array_equal(fvx.arakawa_jacobian(f, g, 0.5, 0.25), ref)
+        np.testing.assert_array_equal(_jacobian(f, g, 0.5, 0.25), ref)
 
     @pytest.mark.parametrize("wall", ["closed", "open"])
     @pytest.mark.parametrize("kappa_field", [False, True])
@@ -201,7 +200,7 @@ class TestSameValues:
         h = _field(NY, NX, seed=5)
         kappa = jnp.abs(_field(NY, NX, seed=6)) if kappa_field else 0.7
         dx, dy = self.g2.spacing("x"), self.g2.spacing("y")
-        fx, fy = _diffusion_2d_fluxes_impl(h, kappa, dx, dy, None, None, wall=wall)
+        fx, fy = fvx.Diffusion2D(self.g2).fluxes(h, kappa, wall=wall)
         du = (fx[1:-1, 1:-1] - fx[1:-1, :-2]) / dx
         dv = (fy[1:-1, 1:-1] - fy[:-2, 1:-1]) / dy
         ref = interior(du + dv, h)
@@ -220,11 +219,7 @@ class TestSameValues:
             kappa = np.float64(0.7)
         # the operators cast the metric to the field's dtype
         dx, dy = (jnp.float32(self.g2.spacing(axis)) for axis in "xy")
-        # the old path wrote float64 fluxes into float32 buffers; JAX warns
-        # about that implicit scatter cast, which is the behaviour we pin
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", FutureWarning)
-            fx, fy = _diffusion_2d_fluxes_impl(h, kappa, dx, dy, None, None, wall=wall)
+        fx, fy = fvx.Diffusion2D(self.g2).fluxes(h, kappa, wall=wall)
         du = (fx[1:-1, 1:-1] - fx[1:-1, :-2]) / dx
         dv = (fy[1:-1, 1:-1] - fy[:-2, 1:-1]) / dy
         ref = interior(du + dv, h)
@@ -247,9 +242,7 @@ class TestSameValues:
         wet[3:5, 4:7] = False
         mask = fvx.Mask2D.from_mask(wet)
         dx, dy = self.g2.spacing("x"), self.g2.spacing("y")
-        fx, fy = _diffusion_2d_fluxes_impl(
-            h, 0.7, dx, dy, mask.wet(at="U"), mask.wet(at="V")
-        )
+        fx, fy = fvx.Diffusion2D(self.g2, mask=mask).fluxes(h, 0.7)
         du = (fx[1:-1, 1:-1] - fx[1:-1, :-2]) / dx
         dv = (fy[1:-1, 1:-1] - fy[:-2, 1:-1]) / dy
         ref = interior(du + dv, h) * mask.wet()
@@ -309,7 +302,7 @@ class TestOnePadPerOffset:
     def test_arakawa_jacobian(self):
         # eight off-centre neighbours of f and of g
         f, g = _field(NY, NX, seed=1), _field(NY, NX, seed=2)
-        pads = _vjp_pads(lambda a, b: fvx.arakawa_jacobian(a, b, 1.0, 1.0), f, g)
+        pads = _vjp_pads(lambda a, b: _jacobian(a, b, 1.0, 1.0), f, g)
         assert pads == 16
 
     def test_diffusion_2d(self):
@@ -362,5 +355,5 @@ class TestUnrolledSmoothnessIndicator:
         g2 = fvx.CartesianCGrid2D.from_interior(NX - 2, NY - 2, 3.0, 2.0)
         adv = fvx.Advection2D(g2)
         h, u, v = (_field(NY, NX, seed=k) for k in range(3))
-        jaxpr = jax.make_jaxpr(lambda a, b, c: adv(a, b, c, method="weno7"))(h, u, v)
+        jaxpr = jax.make_jaxpr(lambda a, b, c: adv(a, b, c, scheme=WENO(7)))(h, u, v)
         assert "dot_general" not in _primitives(jaxpr.jaxpr)
