@@ -190,7 +190,7 @@ depending on direction:
 **Operators write only to `[1:-1, 1:-1]`.**  Ghost cells remain at their
 initialised value (typically zero).  Callers are responsible for filling
 ghosts via boundary-condition helpers (`pad_interior`, `enforce_periodic`,
-`BoundaryConditionSet`, etc.) before the next operator call.
+`fill_ghosts`, etc.) before the next operator call.
 
 ---
 

@@ -1,28 +1,32 @@
 # Boundary Conditions
 
-Boundary condition primitives and helpers for staggered C-grid fields.
+Boundary conditions and the ghost-ring fill for staggered C-grid fields.
 
-## BC Atoms (1-D)
+## Filling the Ghost Ring
 
-::: gridax.Dirichlet1D
+::: gridax.BC
 
-::: gridax.Neumann1D
+::: gridax.fill_ghosts
 
-::: gridax.Periodic1D
+## BC Atoms
 
-::: gridax.Reflective1D
+::: gridax.Dirichlet
 
-::: gridax.Slip1D
+::: gridax.Neumann
 
-::: gridax.Outflow1D
+::: gridax.Robin
 
-::: gridax.Sponge1D
+::: gridax.Periodic
 
-## BC Composition
+::: gridax.Reflective
 
-::: gridax.BoundaryConditionSet
+::: gridax.Slip
 
-::: gridax.FieldBCSet
+::: gridax.Outflow
+
+::: gridax.Extrapolation
+
+::: gridax.Sponge
 
 ## Helpers
 

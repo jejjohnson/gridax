@@ -55,10 +55,11 @@ The ghost cell simply copies the opposite interior edge.
 
 ## Boundary Condition Types
 
-### `Dirichlet1D`
+A condition is an object with no face and no point: [BC](xref:api#gridax.BC) says which face it sits on, and [fill_ghosts](xref:api#gridax.fill_ghosts) says which point the field lives at and what the grid spacing is.  So one condition describes the physics, and the same one serves a T, a U and a V field.
 
-Fixes the **value** of the field at the domain wall.  The ghost cell is set to
-the reflection that makes the average equal to the target value:
+### `Dirichlet`
+
+[Dirichlet](xref:api#gridax.Dirichlet)`(value)` fixes the **value** of the field at the domain wall.  The ghost cell is set to the reflection that makes the average equal to the target value:
 
 $$
 \phi_{\text{ghost}} = 2\,v_{\text{target}} - \phi_{\text{interior}}
@@ -66,12 +67,11 @@ $$
 
 **Physical use cases:**
 - No-slip walls for the tangential velocity: $v = 0$ on a west / east wall.
-- No normal flow through a wall: $u = 0$ on a west / east wall, with
-  `point="U"` (see below).
+- No normal flow through a wall: $u = 0$ on a west / east wall, for a U-field (see below).
 - Fixed surface elevation: $\eta = 0$ on rigid lid.
 - Streamfunction: $\psi = 0$ on closed coastline (used by DST Poisson solver).
 
-### Staggered fields: `point=`
+### Staggered fields: the point of the field
 
 The formula above places the wall half a cell outside the first interior
 node, which is right for every **cell-centred** direction: `T` on all four
@@ -81,35 +81,32 @@ same-index staggering the other pairs have a node **on** the wall:
 `V[Ny-2, :]` the south and north ones, and an `X` field has a node on all
 four walls (`U[:, Nx-1]`, `V[Ny-1, :]` are outside the domain).
 
-Every atom except `Periodic1D` takes a static `point="T" | "U" | "V" | "X"`
-(default `"T"`).  For a node on the wall the condition is imposed on that
-node: `Dirichlet1D` writes `value` to it, `Neumann1D` / `Robin1D` use the
-one-sided gradient between it and the first interior node, `Slip1D` writes
-`a * interior`, and the outside slot on the east / north side gets the odd
-mirror $2\phi_{\text{wall}} - \phi_{\text{adjacent}}$.  `Periodic1D` needs no
-`point`: wrapping by one period is right for every stagger (`U[:, 0]` is the
-same face as `U[:, Nx-2]`).
+The point comes from the field: a [CField](xref:api#gridax.CField) carries its own, and for a plain array you pass `stagger="U"` (T by default) to `fill_ghosts`.  For a node on the wall the condition is imposed on that node: `Dirichlet` writes `value` to it, `Neumann` / `Robin` use the one-sided gradient between it and the first interior node, `Slip` writes `a * interior`, and the outside slot on the east / north side gets the odd mirror $2\phi_{\text{wall}} - \phi_{\text{adjacent}}$.  `Periodic` needs no special case: wrapping by one period is right for every stagger (`U[:, 0]` is the same face as `U[:, Nx-2]`).
 
-:::{warning} Normal velocity needs `point=`
-`Dirichlet1D("east", 0.0)` on a U-field sets the ghost column
-`U[:, Nx-1] = -U[:, Nx-2]` and leaves the east wall face `U[:, Nx-2]`
-untouched, so mass flows through a "closed" wall.  Use
-`Dirichlet1D("east", 0.0, point="U")`, or
-`BoundaryConditionSet.closed(point="U")` for the whole basin.
+:::{warning} Normal velocity needs its own point
+Filling a U-field as if it were at T points (the default of a plain array) sets the ghost column `U[:, Nx-1] = -U[:, Nx-2]` and leaves the east wall face `U[:, Nx-2]` untouched, so mass flows through a "closed" wall.  Pass `stagger="U"` (or give `fill_ghosts` a U `CField`) so the wall node itself is written.
 :::
 
-```python
-import gridax as fvx
+A closed basin is one `BC` with a Dirichlet zero on every wall, filled once per velocity component at its own point:
 
-bc_u = fvx.BoundaryConditionSet.closed(point="U")  # u = 0 on W/E faces, no-slip on S/N
-bc_v = fvx.BoundaryConditionSet.closed(point="V")  # v = 0 on S/N faces, no-slip on W/E
-u, v = bc_u(u, dx, dy), bc_v(v, dx, dy)
+```python
+import numpy as np
+import gridax
+
+grid = gridax.CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
+u = np.ones(grid.shape)
+v = np.ones(grid.shape)
+
+walls = gridax.BC(x=gridax.Dirichlet(0.0), y=gridax.Dirichlet(0.0))
+u = gridax.fill_ghosts(u, grid, walls, stagger="U")  # u = 0 on the W/E faces, no-slip on S/N
+v = gridax.fill_ghosts(v, grid, walls, stagger="V")  # v = 0 on the S/N faces, no-slip on W/E
+print(u[3, 0], u[3, -2], v[0, 3], v[-2, 3])
 # Difference2D(grid).divergence(u, v) now integrates to zero over the basin.
 ```
 
-### `Neumann1D`
+### `Neumann`
 
-Fixes the **outward-normal gradient** $\partial\phi/\partial n = g$:
+[Neumann](xref:api#gridax.Neumann)`(gradient=0.0)` fixes the **outward-normal gradient** $\partial\phi/\partial n = g$:
 
 $$
 \phi_{\text{ghost}} = \phi_{\text{interior}} + g\,\Delta n
@@ -120,10 +117,10 @@ $$
 - No-flux tracer BC: $\partial T/\partial n = 0$ on insulating walls.
 - Pressure BC: $\partial p/\partial n = 0$ on solid walls.
 
-### `Periodic1D`
+### `Periodic`
 
-Wraps the field: the ghost cell on one face copies the last interior cell on
-the opposite face.
+[Periodic](xref:api#gridax.Periodic)`()` wraps the field: the ghost cell on one face copies the last interior cell on
+the opposite face.  Both faces of an axis must be periodic.
 
 **Physical use cases:**
 - Doubly-periodic channels and basins.
@@ -131,13 +128,12 @@ the opposite face.
 
 :::{note} enforce_periodic helper
 For fully periodic domains the helper `enforce_periodic(field, ...)` is
-available as a thin wrapper that applies `Periodic1D` on all four faces
-simultaneously.  Prefer `BoundaryConditionSet` for per-face control.
+available as a thin wrapper that wraps both axes at once.  Prefer `BC` for per-face control.
 :::
 
-### `Reflective1D`
+### `Reflective`
 
-Reflects the field about the boundary:
+[Reflective](xref:api#gridax.Reflective)`()` reflects the field about the boundary:
 
 $$
 \phi_{\text{ghost}} = \phi_{\text{interior}} \quad (\text{even reflection})
@@ -146,9 +142,9 @@ $$
 This is Neumann with $g = 0$.  Used for **free-slip** walls where the
 normal velocity is zero and the tangential velocity has zero normal gradient.
 
-### `Slip1D`
+### `Slip`
 
-General slip boundary condition controlled by a scalar `coefficient = a`:
+[Slip](xref:api#gridax.Slip)`(coefficient=1.0)` is the general slip boundary condition controlled by a scalar `coefficient = a`:
 
 $$
 \phi_{\text{ghost}} = (2a - 1)\,\phi_{\text{interior}}
@@ -164,9 +160,9 @@ This BC is typically used for velocity components at solid walls, with the
 choice of `coefficient` controlling how strongly the tangential velocity is
 damped at the boundary.
 
-### `Outflow1D`
+### `Outflow`
 
-Zero-gradient outflow condition (equivalent to Neumann with $g=0$):
+[Outflow](xref:api#gridax.Outflow)`()` is the zero-gradient outflow condition (equivalent to Neumann with $g=0$):
 
 $$
 \phi_{\text{ghost}} = \phi_{\text{interior}}
@@ -175,24 +171,24 @@ $$
 Used at **open boundaries** where the flow leaves the domain and the outward
 gradient is assumed zero.
 
-### `Extrapolation1D`
+### `Extrapolation`
 
-Linear extrapolation from the two innermost interior cells:
+[Extrapolation](xref:api#gridax.Extrapolation)`(order=1)` extrapolates the polynomial of degree `order` through the innermost interior cells.  With the default order 1 this is the linear extrapolation from the two innermost cells:
 
 $$
 \phi_{\text{ghost}} = 2\,\phi_1 - \phi_2
 $$
 
 More accurate than zero-gradient for smoothly varying fields at open
-boundaries.  Avoids spurious reflections from the domain edge.
+boundaries.  Avoids spurious reflections from the domain edge.  The order runs from 1 to 5 (order 0 is `Outflow`), and the axis needs `order + 1` interior cells.
 
-### `Robin1D`
+### `Robin`
 
-Mixed (Robin / third-kind) condition: a linear combination of value and
+[Robin](xref:api#gridax.Robin)`(a, b, c)` is the mixed (Robin / third-kind) condition: a linear combination of value and
 gradient:
 
 $$
-a\,\phi_{\text{wall}} + b\,\frac{\partial\phi}{\partial n}\bigg|_{\text{wall}} = g
+a\,\phi_{\text{wall}} + b\,\frac{\partial\phi}{\partial n}\bigg|_{\text{wall}} = c
 $$
 
 With $\phi_{\text{wall}} = (\phi_{\text{ghost}} + \phi_{\text{interior}})/2$ and
@@ -200,80 +196,120 @@ $\partial\phi/\partial n = (\phi_{\text{ghost}} - \phi_{\text{interior}})/\Delta
 (outward normal, same on every face), the ghost value is
 
 $$
-\phi_{\text{ghost}} = \frac{g - (a/2 - s)\,\phi_{\text{interior}}}{a/2 + s},
+\phi_{\text{ghost}} = \frac{c - (a/2 - s)\,\phi_{\text{interior}}}{a/2 + s},
 \qquad s = \frac{b}{\Delta n}
 $$
 
-Used for **sponge-layer** or **radiation** boundary conditions in more
+With $b = 0$ it is a Dirichlet condition with value $c/a$, and with $a = 0$ a Neumann condition with gradient $c/b$.  Used for **radiation** boundary conditions in more
 advanced setups.
 
-### `Sponge1D`
+### `Sponge`
 
-Relaxation towards a target profile $\phi^*$ within a sponge layer of
-specified half-width:
+[Sponge](xref:api#gridax.Sponge)`(background, weight)` relaxes the ghost cell towards a background value $\phi^*$ with a weight $w \in [0, 1]$:
 
 $$
-\phi_{\text{ghost}} = \phi_{\text{interior}} + \lambda(\phi^* - \phi_{\text{interior}})
+\phi_{\text{ghost}} = (1 - w)\,\phi_{\text{interior}} + w\,\phi^*
 $$
 
-Used at **open boundaries** to absorb outgoing waves and prevent reflections.
+Used at **open boundaries** to absorb outgoing waves and prevent reflections.  It acts on the ghost ring only: a sponge layer inside the domain is a tendency of the model.
 
 ---
 
 ## Composing Boundary Conditions
 
-### `BoundaryConditionSet`
+### `BC`
 
-Applies one BC atom on each of the four faces of a 2-D field.  Faces are
-processed in **south → north → west → east** order, so west/east BCs
-overwrite corner ghost cells filled by south/north BCs:
+[BC](xref:api#gridax.BC) names the condition on each face of the grid.  A face is given by its axis (`x=`, `y=`, `z=`) with one condition for both sides or a `(low, high)` pair, or by its side (`west=`, `east=`, `south=`, `north=`, `bottom=`, `top=`) with one condition.  A face left out is not written.  Every face is processed per axis, so `fill_ghosts` works the same on a 1-D, 2-D or 3-D grid, Cartesian or spherical; on a sphere the spacing $\Delta n$ is the one of each row.
 
 ```python
-from gridax import BoundaryConditionSet, Dirichlet1D, Periodic1D
+import numpy as np
+import gridax
 
-# Closed basin: Dirichlet ψ=0 on all walls
-bc_set = BoundaryConditionSet(
-    south=Dirichlet1D(face="south", value=0.0),
-    north=Dirichlet1D(face="north", value=0.0),
-    west=Dirichlet1D(face="west",  value=0.0),
-    east=Dirichlet1D(face="east",  value=0.0),
-)
+grid = gridax.CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
+psi = np.ones(grid.shape)
 
-psi = bc_set(psi, dx=grid.spacing("x"), dy=grid.spacing("y"))
+# Closed basin: Dirichlet psi=0 on all walls
+walls = gridax.BC(x=gridax.Dirichlet(0.0), y=gridax.Dirichlet(0.0))
+psi = gridax.fill_ghosts(psi, grid, walls)
+
+# A re-entrant channel: periodic in x, a closed south wall, a zero-gradient north wall
+channel = gridax.BC(x=gridax.Periodic(), south=gridax.Dirichlet(0.0), north=gridax.Neumann())
+h = gridax.fill_ghosts(np.ones(grid.shape), grid, channel)
+print(psi[0, 3], h[0, 3], h[-1, 3])
 ```
 
-The same set can describe the boundary of an **elliptic solve**: the one-call inversions `streamfunction_from_vorticity`, `pressure_from_divergence` and `pv_inversion` take it as `bc=`.  Those wrappers moved to sesmax-core (`sesmax_core.gfd`); see the [elliptic inversions guide](https://jejjohnson.github.io/sesmax/elliptic-inversions/) for how a set selects the transform and imposes non-zero `Dirichlet1D` values on the wall nodes.
+The same `BC` can describe the boundary of an **elliptic solve**: the one-call inversions `streamfunction_from_vorticity`, `pressure_from_divergence` and `pv_inversion` take it as `bc=`: all faces Dirichlet select the DST, zero Neumann the DCT and Periodic the FFT.  Those wrappers moved to sesmax-core (`sesmax_core.gfd`); see the [elliptic inversions guide](https://jejjohnson.github.io/sesmax/elliptic-inversions/) for how a `BC` selects the transform and imposes non-zero `Dirichlet` values on the wall nodes.
 
-When time-stepping, a `Dirichlet1D` value sits on the wall face, half a
+When time-stepping, a `Dirichlet` value sits on the wall face, half a
 cell outside the first wet T cell.  ψ lives at X points, and the X nodes
 `0` and `N-2` lie **on** the walls, so a solve pins those wall nodes (the
 coast ring of the ψ mask) to the face value: the same wall.  For a
 T-point pressure solve the face is half a cell from any cell
-centre, so non-zero `Dirichlet1D` faces are not supported there.  See
+centre, so non-zero `Dirichlet` faces are not supported there.  See
 [Known Boundary Values](elliptic_solvers_usage.md#known-boundary-values-inhomogeneous-dirichlet)
 for arbitrary per-cell values and interior observations.
 
-### `FieldBCSet`
+### Several fields
 
-Maps a BC set to a named field in a state dictionary or pytree.  Useful
-for model state vectors with multiple fields, each needing different BCs:
+A model state with several fields needs one call of `fill_ghosts` per field, each with the `BC` and the point of that field.  A `BC` holds no point, so the same one can be reused:
 
 ```python
-from gridax import BoundaryConditionSet, Dirichlet1D, FieldBCSet, Neumann1D
+import numpy as np
+import gridax
 
-# Free-slip velocity BCs: zero normal flow on the wall faces (point="U"),
-# zero tangential gradient on the south / north walls
-bc_u = BoundaryConditionSet(
-    south=Neumann1D(face="south", value=0.0),
-    north=Neumann1D(face="north", value=0.0),
-    west=Dirichlet1D(face="west", value=0.0, point="U"),
-    east=Dirichlet1D(face="east", value=0.0, point="U"),
-)
-bcs = FieldBCSet(bc_map={"u": bc_u, "h": BoundaryConditionSet.open()})
+grid = gridax.CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
+state = {"u": np.ones(grid.shape), "h": np.ones(grid.shape)}
+
+# Free-slip velocity: zero normal flow on the W/E walls, zero tangential gradient on S/N
+bc_u = gridax.BC(x=gridax.Dirichlet(0.0), y=gridax.Neumann())
+bc_h = gridax.BC(x=gridax.Outflow(), y=gridax.Outflow())
+state["u"] = gridax.fill_ghosts(state["u"], grid, bc_u, stagger="U")
+state["h"] = gridax.fill_ghosts(state["h"], grid, bc_h)
 ```
 
-Each atom carries its own `point`, so `FieldBCSet` needs no stagger
-information of its own.
+### Corners
+
+Where two faces meet, the ghost corner depends on the order the faces are applied in.  `BC(corners="average")` (the default) fills the corner with the mean over the orders; `corners="priority"` applies the axes in the grid's order, so the later axis (x over y) wins.  Off the corners every order agrees.  With $\phi = 3$ in the interior, a Dirichlet value 1 in x and 0 in y, the two orders give 5 and 1 at the corner, so the default is 3:
+
+```python
+import numpy as np
+import gridax
+
+grid = gridax.CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
+t = np.full(grid.shape, 3.0)
+faces = dict(x=gridax.Dirichlet(1.0), y=gridax.Dirichlet(0.0))
+mean = gridax.fill_ghosts(t, grid, gridax.BC(**faces))
+first = gridax.fill_ghosts(t, grid, gridax.BC(corners="priority", **faces))
+print(mean[0, 0], first[0, 0], mean[0, 4] == first[0, 4])  # 3.0 5.0 True
+```
+
+### Face values from a parent model
+
+The numbers of a condition (`value`, `gradient`, `background`, `weight`, `a`, `b`, `c`, `coefficient`) can be arrays of shape `[*batch, N_face]` instead of scalars, so a nested model can take its boundary values from a parent model: one value per face point, and one per batch member.  They are pytree leaves of the `BC`, so a loss that depends on the filled field can be differentiated with respect to them.  Note that `Dirichlet` writes the ghost cell $2v - \phi_1$, so the value sits on the wall:
+
+```python
+import numpy as np
+import gridax
+
+grid = gridax.CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
+parent = np.linspace(0.0, 1.0, grid.shape[0])  # the parent's value at each west-face row
+bc = gridax.BC(west=gridax.Dirichlet(parent), east=gridax.Neumann())
+w = gridax.fill_ghosts(np.zeros(grid.shape), grid, bc)
+print(w[:, 0])  # 2 * parent, as the interior is zero
+```
+
+### Ghost layers: `width`
+
+A grid has a ghost ring of `grid.ghost` cells on each side (1 by default), and `fill_ghosts` fills all of them.  A scheme that reads more cells, such as a wide stencil, needs a wider ring: build the grid with `ghost=`, or pass `width=` for an array that has that many layers on each side.  For a cell-centred direction, layer $k$ outward lies the same distance outside the wall as the interior node $\phi_k$ lies inside it, so the condition holds on the wall for every layer.  For `Neumann` this gives $\phi_{-k} = \phi_k + (2k - 1)\,g\,\Delta n$:
+
+```python
+import numpy as np
+import gridax
+
+grid = gridax.CartesianCGrid1D(Nx=8 + 4, Lx=1.0, ghost=2)
+x = np.arange(12.0)
+print(gridax.fill_ghosts(x, grid, gridax.BC(x=gridax.Neumann())))
+```
 
 ---
 
@@ -312,29 +348,29 @@ q = enforce_periodic(q, x=True, y=True)   # both directions
 What physical condition applies?
 │
 ├── Fixed value at wall (ψ=0, T=T_wall, tangential velocity)
-│   └── Dirichlet1D(face=..., value=...)
+│   └── Dirichlet(value)
 │
 ├── No normal flow through a wall (u on W/E, v on S/N)
-│   └── Dirichlet1D(face=..., value=0, point="U" / "V")
+│   └── Dirichlet(0.0), with stagger="U" / "V"
 │
 ├── Zero normal gradient (free-slip, insulating)
-│   └── Reflective1D  or  Neumann1D(face=..., value=0)
+│   └── Reflective()  or  Neumann()
 │
 ├── Specified normal gradient (heat flux, wind stress)
-│   └── Neumann1D(face=..., value=g)
+│   └── Neumann(g)
 │
 ├── No-slip (u=0, v=0 at wall)
-│   └── Slip1D  or  Dirichlet1D(value=0)
+│   └── Slip(0.0)  or  Dirichlet(0.0)
 │
 ├── Periodic domain
-│   └── Periodic1D  or  enforce_periodic(field)
+│   └── Periodic()  or  enforce_periodic(field)
 │
 ├── Open boundary, outflow
-│   ├── Zero gradient   → Outflow1D  or  Reflective1D
-│   └── Linear extrap   → Extrapolation1D
+│   ├── Zero gradient   → Outflow()  or  Reflective()
+│   └── Extrapolation   → Extrapolation(order)
 │
 └── Open boundary with wave absorption
-    └── Sponge1D  or  Robin1D
+    └── Sponge(background, weight)  or  Robin(a, b, c)
 ```
 
 ---

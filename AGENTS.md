@@ -28,7 +28,7 @@ The repository is a uv workspace with one package, `packages/gridax/` (`src/grid
 | Layer 1: raw stencils | `gridax/_src/operators/stencils.py`, `gridax/_src/stencils/staggered.py`, `gridax/_src/operators/_ghost.py` (public: `gridax.stencils`) | `<op>_<axis>_<side>_<d>d` index arithmetic with no metric and no padding, on any backend; `staggered_difference` / `staggered_average` for fourth and sixth order; `interior` pads a result back to the full shape |
 | Layer 2: functional helpers | `gridax/_src/operators/{diagnostics,jacobian,reductions}.py`, `gridax/_src/advection/{weno,linear,limiters,reconstruct_fn,face_flux,flux}.py`; … | Pure functions on arrays (`kinetic_energy`, `arakawa_jacobian`, `area_mean`, `weno_5pts`, `upwind_flux`, …); they never take a `Mask2D`, except the reductions (`area_sum`, `masked_mean`, … accept `mask=`) |
 | Layer 3: class operators | `gridax/_src/operators/` (`difference.py`, `interpolation.py`, `divergence.py`, `vorticity.py`, `coriolis.py`, `diagnostic_operators.py`, `spherical_*.py`), `gridax/_src/advection/` (`advection.py`, `reconstruction.py`, `spherical_advection.py`), `gridax/_src/diffusion/` | `Difference*`, `Interpolation*`, `Advection*`, `Reconstruction*`, `Diffusion*`, `MomentumAdvection*`, `Vorticity*`, `Coriolis*`, `Energetics2D`, … and their `Spherical*` siblings; mask-aware through a `mask` field |
-| Boundary conditions | `gridax/_src/boundary/` | Per-face atoms `Dirichlet1D` … `Slip1D` (`bc_1d.py`), `BoundaryConditionSet` (`bc_set.py`), `FieldBCSet` (`bc_field.py`), functional ghost-ring fillers (`boundary.py`) |
+| Boundary conditions | `gridax/_src/boundary/` | One-face atoms `Dirichlet` … `Slip` (`atoms.py`), `BC` and `fill_ghosts` (`fill.py`), functional ghost-ring fillers (`boundary.py`) |
 | Solvers | `solvers/` (public: `gridax.solvers`, the `jax` extra) | Spectral solvers re-exported from spectraldiffx (`spectral.py`, `spectral_transforms.py`); capacitance wrapper (`elliptic.py`; the `streamfunction_from_vorticity` / `pressure_from_divergence` / `pv_inversion` wrappers moved to `sesmax_core.gfd`, #475); the T-point `masked_laplacian`, `masked_neumann_laplacian`, `masked_face_dirichlet_laplacian`, `wet_components`, `project_zero_mean` (`iterative.py`); `make_spectral_preconditioner` (`preconditioners.py`); CG itself is gaussx's (`gaussx.linear_solve_with_info` with `gaussx.CGSolver`); `MultigridSolver` (`multigrid.py`); known-value lifting (`inhomogeneous.py`); tridiagonal solve re-exported from gaussx (`tridiagonal.py`); the dtype rule `check_dtype` (`dtype.py`) |
 | Time integration | not here | `solve_ocean_pde` moved to `sesmax_core.solve_pde` (#475); the time steppers live in `integrix.march`, the semi-Lagrangian scheme included (#476, with `gridax.t_point_coordinates` for its nodes), and gridax has no alias for them; `gridax/_src/pipekit/timestep.py` imports `integrix.march` directly |
 | Vertical, forcing | not here | forcing, vertical modes, `multilayer` and the barotropic filter are `sesmax_core.forcing` and `sesmax_core.vertical` (#422); new forcing goes to sesmax-core |
@@ -73,7 +73,7 @@ model.
 | Library | finitevolX uses it for | The rule it brings |
 |---|---|---|
 | **jax** | Arrays, `jit`, `vmap`, `grad`, `lax.fori_loop` (multigrid V-cycles) | Pure functions; `.at[...].set` instead of mutation; no Python control flow on traced values; build outputs with the input's dtype (`interior` uses `jnp.result_type`). |
-| **equinox** | The solvers and pipekit operators (`gridax.solvers`, `gridax.pipekit`) are `eqx.Module`s; `eqx.filter_vmap` (the layer `vmap`) | Never a plain dataclass or class for anything holding arrays. In gridax (grids, masks, operators, BCs) that is a `pytree_dataclass` (`gridax/_src/pytree.py`): settings that pick a code path or a shape are `static_field()` (e.g. `Dirichlet1D.face`, the grid sizes), a hand-written `__init__` may precompute, and `__check_init__` validates. In `gridax.solvers` and `gridax.pipekit` it is an `eqx.Module`, with `eqx.field(static=True)` for settings. An operator holds its grid, its mask and any precomputed hierarchy as fields, built once in `__init__`. |
+| **equinox** | The solvers and pipekit operators (`gridax.solvers`, `gridax.pipekit`) are `eqx.Module`s; `eqx.filter_vmap` (the layer `vmap`) | Never a plain dataclass or class for anything holding arrays. In gridax (grids, masks, operators, BCs) that is a `pytree_dataclass` (`gridax/_src/pytree.py`): settings that pick a code path or a shape are `static_field()` (e.g. `Extrapolation.order`, the grid sizes), a hand-written `__init__` may precompute, and `__check_init__` validates. In `gridax.solvers` and `gridax.pipekit` it is an `eqx.Module`, with `eqx.field(static=True)` for settings. An operator holds its grid, its mask and any precomputed hierarchy as fields, built once in `__init__`. |
 | **jaxtyping** | Shape annotations (`Float[Array, "Ny Nx"]`) | Annotate public array arguments and returns; shape strings stay quoted (`UP037` and `F722` are off for that reason). They are documentation: nothing checks them at run time (beartype is a declared dependency but is not imported). |
 | **lineax** | The operators the solvers build on (`helmholtz_operator`, the multigrid levels) | Elliptic operators here are negative (semi)definite: tag them `negative_semidefinite_tag`; a preconditioner approximates `A⁻¹`, and gaussx's CG solves `(−A) x = −b`, so it takes `−M⁻¹`. |
 | **diffrax** | Nothing directly; the steppers of `integrix.march` are diffrax solvers | gridax holds no solver of its own: the integrators are `integrix.march`'s, and a new one goes there; a forcing lives inside the vector field, not as an extra diffrax term. |
@@ -111,7 +111,7 @@ whether it exists:
 | Harmonic / biharmonic diffusion, momentum advection, Coriolis | `Diffusion2D/3D`, `BiharmonicDiffusion2D/3D`, `MomentumAdvection2D/3D`, `Coriolis2D/3D` (and `Spherical*`) |
 | Kinetic energy, PV, enstrophy, strain, Okubo–Weiss, an Arakawa Jacobian | `Energetics2D`, `Vorticity2D`, `Strain2D`, `QGPotentialVorticity2D`, `ArakawaJacobian2D`; functional `kinetic_energy`, `arakawa_jacobian`, `okubo_weiss`, … |
 | Element-wise maths on fields that know their point | `gridax.combine`, `gridax.fields` (`sqrt`, `where`, `clip`, …) on `gridax.CField`; `f.like(array)` for a full array |
-| Filling ghost cells | `BoundaryConditionSet` of `Dirichlet1D` / `Neumann1D` / `Periodic1D` / …; `enforce_periodic`, `zero_gradient_boundaries`, `no_slip_boundaries`, `wall_boundaries` |
+| Filling ghost cells | `gridax.fill_ghosts(f, grid, gridax.BC(x=gridax.Dirichlet(0.0), …))` with `Dirichlet` / `Neumann` / `Periodic` / …; `enforce_periodic`, `zero_gradient_boundaries`, `no_slip_boundaries`, `wall_boundaries` |
 | Land / ocean masks, coastal stencil fallback | `Mask2D.from_mask` (or `from_center`, `from_u_face`, …), `mask.get_adaptive_masks`, `StencilCapability2D` |
 | Area / volume integrals and masked means | `area_sum`, `area_mean`, `volume_mean`, `masked_mean`, `masked_moments` (grid-polymorphic; `cartesian_*` / `spherical_*` explicit) |
 | A Poisson / Helmholtz solve | `solve_helmholtz_dst` / `_dct` / `_fft` (spectraldiffx) on a rectangle; `build_capacitance_solver`, gaussx's CG (`gaussx.linear_solve_with_info` with `gaussx.CGSolver`) with `make_spectral_preconditioner` or `build_multigrid_solver(...).as_preconditioner()`, or `build_multigrid_solver` on its own on a masked domain; the one-call wrappers `streamfunction_from_vorticity`, `pressure_from_divergence`, `pv_inversion` live in sesmax-core (`sesmax_core.gfd`) |
@@ -277,27 +277,10 @@ apply BCs to intermediate fields before chaining operators.
 
 ### 4. Boundary conditions
 
-- A BC atom is a `pytree_dataclass` (in gridax) with a static `face` (`"south" | "north" |
-  "west" | "east"`) whose `__call__(field, dx, dy)` returns the field with
-  that one ghost row / column set; it is listed in the `BoundaryCondition1D`
-  union in `boundary/bc_1d.py`.
-- `BoundaryConditionSet(south=, north=, west=, east=)` applies them in
-  south, north, west, east order (west / east overwrite the corners);
-  `FieldBCSet` maps state-dict keys to sets. Ghost values are placed so the
-  condition holds **at the face**, half a cell from the interior point (e.g.
-  Dirichlet: `ghost = 2 * value - interior`).
-- Atoms also carry a static `point` (`"T"` default, `"U"`, `"V"`, `"X"`).
-  Where the field has a node **on** the wall (`U` / `X` on west / east, `V`
-  / `X` on south / north) the atom writes that node (index `0` or `-2`) and
-  mirrors it into the outside slot `-1`; the normal velocity of a closed
-  wall is `Dirichlet1D(face, 0.0, point="U")` (or
-  `BoundaryConditionSet.closed(point="U")`), never the T-point default,
-  which leaves `U[:, Nx-2]` open.
-- The elliptic wrappers (in sesmax-core, `sesmax_core.gfd`) accept a
-  `BoundaryConditionSet` as `bc=` only when all four faces are `Dirichlet1D`
-  (→ DST), zero-valued `Neumann1D` (→ DCT) or `Periodic1D` (→ FFT); non-zero
-  Dirichlet values become known values via lifting
-  (`solvers/inhomogeneous.py`, which stays here).
+- A BC atom (`Dirichlet`, `Neumann`, `Robin`, `Periodic`, `Outflow`, `Extrapolation`, `Reflective`, `Sponge`, `Slip`) is a `pytree_dataclass` in `boundary/atoms.py` that knows neither its face nor its point; it is listed in the `Atom` union there. Its numbers (`value`, `gradient`, `weight`, …) may be arrays `[*batch, N_face]` and are pytree leaves, so they are differentiable.
+- `gridax.BC(x=, y=, z=)` (one condition or a `(low, high)` pair) or `west=` / `east=` / `south=` / `north=` / `bottom=` / `top=` says which condition each face has, and `corners="average"` (the default, the mean over the orders of the axes) or `"priority"` (the later axis wins: x over y) what a ghost corner holds. `gridax.fill_ghosts(f, grid, bc, *, width=None, stagger=None)` writes the ghost layers of one field: `f` is a `CField`, which has its own point, or a plain array with `stagger="U"` (T by default). The grid gives the spacing (per row on a sphere), in 1-D, 2-D and 3-D; `width` ghost layers are filled, the grid's ring by default. For several fields call `fill_ghosts` once per field. Ghost values are placed so the condition holds **at the wall**, half a cell from the interior point (e.g. Dirichlet: `ghost = 2 * value - interior`).
+- Where the field has a node **on** the wall (`U` / `X` on west / east, `V` / `X` on south / north, `W` on bottom / top) the atom writes that node and mirrors it into the layers outside it. A closed basin is `walls = gridax.BC(x=gridax.Dirichlet(0.0), y=gridax.Dirichlet(0.0))`, filled once per velocity component at its own point: `fill_ghosts(u, grid, walls, stagger="U")` and `fill_ghosts(v, grid, walls, stagger="V")`. A `U` field filled at the T-point default leaves `U[:, Nx-2]` open.
+- The elliptic wrappers (in sesmax-core, `sesmax_core.gfd`) accept a `gridax.BC` as `bc=` only when all faces are `Dirichlet` (→ DST), zero-valued `Neumann` (→ DCT) or `Periodic` (→ FFT); non-zero Dirichlet values become known values via lifting (`solvers/inhomogeneous.py`, which stays here).
 
 ### 5. Solvers
 

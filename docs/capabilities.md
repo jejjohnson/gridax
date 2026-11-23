@@ -98,31 +98,19 @@ Every public name in gridax (426 entries), listed per public module (`gridax`, i
 | `weno_9pts` | function | 9-points non-linear left-biased stencil reconstruction |
 | `weno_9pts_right` | function | 9-points non-linear right-biased stencil reconstruction at face q0+1/2: |
 
-#### Single-face boundary condition atoms for 2-D ghost-ring arrays (`gridax._src.boundary.bc_1d`)
+#### One-face boundary conditions: what the ghost layers of a face hold (`gridax._src.boundary.atoms`)
 
 | Name | Kind | What it does |
 |---|---|---|
-| `Dirichlet1D` | class | Apply a Dirichlet value on one domain face. |
-| `Extrapolation1D` | class | High-order polynomial extrapolation for ghost cells. |
-| `Neumann1D` | class | Apply an outward-normal gradient on one domain face. |
-| `Outflow1D` | class | Apply a one-face outflow boundary condition. |
-| `Periodic1D` | class | Apply periodic wrapping on one domain face. |
-| `Reflective1D` | class | Apply an even-symmetry reflective boundary on one face. |
-| `Robin1D` | class | Robin (mixed) boundary condition: α·u + β·∂u/∂n = γ. |
-| `Slip1D` | class | Slip boundary condition for tangential velocity at a solid wall. |
-| `Sponge1D` | class | Relax one ghost face toward a background value. |
-
-#### Boundary-condition dispatchers for state dictionaries (`gridax._src.boundary.bc_field`)
-
-| Name | Kind | What it does |
-|---|---|---|
-| `FieldBCSet` | class | Dispatch per-face boundary conditions across multiple fields. |
-
-#### Per-face boundary condition containers for 2-D ghost-ring arrays (`gridax._src.boundary.bc_set`)
-
-| Name | Kind | What it does |
-|---|---|---|
-| `BoundaryConditionSet` | class | Apply a different boundary condition on each domain face. |
+| `Dirichlet` | class | A value at the wall. |
+| `Extrapolation` | class | Extrapolate the polynomial through the first interior nodes. |
+| `Neumann` | class | A gradient ``∂φ/∂n`` along the outward normal. |
+| `Outflow` | class | Zero gradient by copy: every layer holds the nearest interior node. |
+| `Periodic` | class | Wrap around: ``φ_{-k} = φ_{N+1-k}``, the node one period away. |
+| `Reflective` | class | Even symmetry about the wall: ``φ_{-k} = φ_k``. |
+| `Robin` | class | A mixed condition at the wall, ``a φ + b ∂φ/∂n = c``. |
+| `Slip` | class | The tangential velocity at a solid wall, from no-slip to free-slip. |
+| `Sponge` | class | Relax the ghost layers towards a background value. |
 
 #### Boundary condition helpers for finitevolX (`gridax._src.boundary.boundary`)
 
@@ -137,6 +125,13 @@ Every public name in gridax (426 entries), listed per public module (`gridax`, i
 | `wall_boundaries` | function | Apply wall boundary conditions appropriate for a C-grid staggering. |
 | `zero_boundaries` | function | Fill ghost ring with zeros (homogeneous Dirichlet). |
 | `zero_gradient_boundaries` | function | Fill ghost ring by copying nearest interior value (zero gradient / Neumann). |
+
+#### `BC` says which condition each face has; `fill_ghosts` writes the ghost ring (`gridax._src.boundary.fill`)
+
+| Name | Kind | What it does |
+|---|---|---|
+| `BC` | class | The boundary condition of each face of a grid. |
+| `fill_ghosts` | function | Fill the ghost ring of a field from its boundary conditions. |
 
 #### Harmonic and biharmonic diffusion operators (flux form) on Arakawa C-grids (`gridax._src.diffusion.diffusion`)
 

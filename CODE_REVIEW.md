@@ -88,8 +88,8 @@ order); review what they cannot see.
 
 ### 4. Boundary conditions and solvers
 
-- A BC atom has a static `face`, sets one ghost row / column so the
-  condition holds at the face, and joins the `BoundaryCondition1D` union.
+- A BC atom knows neither its face nor its point, fills every ghost layer so the
+  condition holds at the wall (and writes the wall node where the field has one), and joins the `Atom` union.
 - Elliptic solves: the Helmholtz sign convention (negative semidefinite);
   convergence reported (`info.converged` from `gaussx.linear_solve_with_info`) and checked in tests;
   geometry-only precomputation built once; randomised construction takes a

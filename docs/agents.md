@@ -67,7 +67,7 @@ search the capability index
   (`Difference2D.diff_x_T_to_U`, `Interpolation2D.U_to_T`) instead of
   writing the slice.
 - Operators write only the interior. Fill every field's ghost ring
-  (`enforce_periodic`, a `BoundaryConditionSet`) before the next operator
+  (`enforce_periodic`, `fill_ghosts` with a `BC`) before the next operator
   reads it, including inside the time stepper's right-hand side.
 - Build a `Mask2D.from_mask(wet)` once and pass it as `mask=` to the
   operators; don't multiply by a mask afterwards or keep `NaN` on land.

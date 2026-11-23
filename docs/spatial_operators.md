@@ -277,7 +277,7 @@ $$
 Both tendencies come from the same corner products, so the kinetic-energy
 tendency $\sum u\,\dot u + \sum v\,\dot v$ vanishes to round-off for **any**
 $f$, including a $\beta$-plane, on a periodic domain or a closed basin (with
-the wall BCs of `BoundaryConditionSet.closed(point="U")` / `"V"`).  For
+a `BC` of Dirichlet zero on every wall, filled at `stagger="U"` and `"V"`).  For
 uniform $f$ it reduces to the familiar $+f\,\overline{v}^{xy}$,
 $-f\,\overline{u}^{xy}$ (`Interpolation2D.V_to_U` / `U_to_V`).  The form
 used before #289, $f_{\text{on-U}}\,\overline{v}_{\text{on-U}}$, conserves
