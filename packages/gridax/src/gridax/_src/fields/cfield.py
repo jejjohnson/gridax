@@ -198,6 +198,71 @@ class CField:
         data = array_namespace(self.data).permute_dims(self.data, order)
         return CField(data, dims, self.labels, self.stagger)
 
+    def to_xarray(self, grid: Any, name: str = "field") -> Any:
+        """The field as an ``xr.Dataset`` that ``xgcm.Grid`` understands.
+
+        Each grid axis gets two coordinates from ``grid``, the cell centres
+        (``x_c``) and the right faces (``x_g``), with xgcm's ``axis`` and
+        ``c_grid_axis_shift`` attributes, and the variable uses the one it
+        sits on. Labels become coordinates.
+
+        Parameters
+        ----------
+        grid : grid
+            The grid of the field; its ``coords`` include the ghost ring.
+        name : str
+            The variable's name.
+
+        Returns
+        -------
+        xr.Dataset
+
+        Raises
+        ------
+        ImportError
+            If xarray is not installed.
+        ValueError
+            If an axis is at another position than centred or right.
+
+        Examples
+        --------
+        >>> import gridax, numpy as np
+        >>> grid = gridax.CartesianCGrid2D.from_interior(4, 2, 1.0, 1.0)
+        >>> u = gridax.CField(np.zeros(grid.shape), ("y", "x"), loc="U")
+        >>> u.to_xarray(grid, "u")["u"].dims
+        ('y_c', 'x_g')
+        """
+        from gridax._src.fields.convert import to_xarray
+
+        return to_xarray(self, grid, name)
+
+    @classmethod
+    def from_xarray(cls, array: Any) -> CField:
+        """The field of an ``xr.DataArray`` whose coordinates carry xgcm's attributes.
+
+        A dim whose coordinate has an ``axis`` attribute (``"X"``, ``"Y"`` or
+        ``"Z"``) becomes that grid axis, on the right faces where
+        ``c_grid_axis_shift`` is 0.5 and on the left ones where it is -0.5.
+        The other dims keep their names and their coordinates become labels.
+
+        Parameters
+        ----------
+        array : xr.DataArray
+            With its ghost ring.
+
+        Returns
+        -------
+        CField
+
+        Raises
+        ------
+        ValueError
+            If a shift is not 0, 0.5 or -0.5.
+        """
+        from gridax._src.fields.convert import from_xarray
+
+        return from_xarray(array)
+
     def __repr__(self) -> str:
         where = self.loc or dict(self.stagger)
         labelled = f", labels={sorted(self.labels)}" if self.labels else ""
