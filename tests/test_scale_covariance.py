@@ -889,7 +889,7 @@ class TestConstantsAudit:
         assert len(modules) > 20
         names = {p.name for p in modules}
         assert "calculus.py" in names
-        assert "spherical_diffusion.py" in names
+        assert "diffuse.py" in names
 
     def test_audit_detects_an_aliased_constant(self, tmp_path):
         """``STANDARD as g`` is the same constant under another name."""
