@@ -4,12 +4,10 @@ import importlib.util
 from pathlib import Path
 import sys
 
-from gridax import CartesianCGrid2D
+from gridax import CartesianCGrid2D, GridOps
 import jax.numpy as jnp
 import numpy as np
 import pytest
-
-from tests.fixtures.bindings import Difference2D, Interpolation2D
 
 xr = pytest.importorskip("xarray")
 pytest.importorskip("zarr")
@@ -191,8 +189,7 @@ def test_qg_geostrophic_velocity_helper_is_nearly_nondivergent() -> None:
     module = load_script_module("qg_module", "qg_1p5_layer.py")
     config = module.QuasiGeostrophicConfig(nx=16, ny=16)
     grid = CartesianCGrid2D.from_interior(config.nx, config.ny, config.Lx, config.Ly)
-    diff = Difference2D(grid=grid)
-    interp = Interpolation2D(grid=grid)
+    ops = GridOps(grid)
 
     x = (np.arange(config.nx) + 0.5) * grid.spacing("x")
     y = (np.arange(config.ny) + 0.5) * grid.spacing("y")
@@ -203,10 +200,8 @@ def test_qg_geostrophic_velocity_helper_is_nearly_nondivergent() -> None:
     # Use zero (Dirichlet wall) ghost cells, matching the closed-basin setup.
     psi_field = jnp.pad(jnp.asarray(psi_interior), pad_width=1, mode="constant")
 
-    u_field, v_field = module.geostrophic_velocity_from_streamfunction(
-        psi_field, diff, interp
-    )
-    divergence = diff.divergence(u_field, v_field)
+    u_field, v_field = module.geostrophic_velocity_from_streamfunction(psi_field, ops)
+    divergence = ops.divergence(u_field, v_field)
 
     np.testing.assert_allclose(divergence[1:-1, 1:-1], 0.0, atol=1e-12)
 
