@@ -153,7 +153,7 @@ from gridax import CartesianCGrid2D, Mask2D, Reconstruction2D, upwind_flux
 grid = CartesianCGrid2D.from_interior(8, 8, 1.0, 1.0)
 recon = Reconstruction2D(grid=grid)
 mask = Mask2D.from_dimensions(grid.Ny, grid.Nx)
-hier = mask.get_adaptive_masks(direction="x", stencil_sizes=(2, 4, 6))
+hier = mask.tiers("x", sizes=(2, 4, 6))
 rec_funcs = {2: recon.upwind1_x, 4: recon.weno3_x, 6: recon.weno5_x}
 q = jnp.ones((grid.Ny, grid.Nx))
 u = jnp.ones((grid.Ny, grid.Nx))

@@ -15,12 +15,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from jaxtyping import Float
 import numpy as np
 
-from gridax._src.advection.reconstruct import (
-    Hierarchy,
-    check_scheme,
-    face_flux,
-    hierarchy_of,
-)
+from gridax._src.advection.reconstruct import check_scheme, face_flux, hierarchy_of
 from gridax._src.api import grid_dispatch
 from gridax._src.backend import set_at
 from gridax._src.fields.located import located
@@ -43,12 +38,6 @@ else:
 __all__ = ["advect"]
 
 Wall = Literal["closed", "open"]
-
-#: ``{axis: {size: mask}}``, what the bindings cache.
-type Hierarchies = dict[str, Hierarchy]
-
-#: The sizes a binding caches: those of every scheme up to order 9.
-HIERARCHY_SIZES: tuple[int, ...] = (2, 4, 6, 8, 10)
 
 
 @grid_dispatch
@@ -128,18 +117,6 @@ def check_wall(wall: str, mask: object) -> None:
         )
 
 
-def cache(mask: Any, axes: tuple[str, ...]) -> Hierarchies | None:
-    """The adaptive masks a binding keeps, along each horizontal axis."""
-    if mask is None:
-        return None
-    if axes == ("x",):
-        return {"x": mask.get_adaptive_masks(stencil_sizes=HIERARCHY_SIZES)}
-    return {
-        axis: mask.get_adaptive_masks(direction=axis, stencil_sizes=HIERARCHY_SIZES)
-        for axis in ("x", "y")
-    }
-
-
 def _fluxes(
     grid: Any,
     q: Array,
@@ -148,7 +125,6 @@ def _fluxes(
     scheme: Scheme,
     mask: Any,
     wall: str,
-    cached: Hierarchies | None,
 ) -> dict[str, Array]:
     """The flux through the faces along each horizontal axis, dry faces zeroed."""
     xp = array_namespace(q, *velocities.values())
@@ -165,8 +141,7 @@ def _fluxes(
     for axis, velocity in velocities.items():
         hierarchy = None
         if mask is not None:
-            kept = None if cached is None else cached[axis]
-            hierarchy = hierarchy_of(mask, axis, scheme, kept)
+            hierarchy = hierarchy_of(mask, axis, scheme)
         flux = face_flux(
             q,
             velocity,
@@ -242,7 +217,6 @@ def _advect_cartesian(
     scheme: Scheme,
     mask: Any,
     wall: str,
-    cached: Hierarchies | None = None,
 ) -> Any:
     xp = array_namespace(q, u)
     fluxes = _fluxes(
@@ -252,7 +226,6 @@ def _advect_cartesian(
         scheme=scheme,
         mask=mask,
         wall=wall,
-        cached=cached,
     )
     here = _written(grid, wall)
     terms = []
@@ -277,7 +250,6 @@ def _advect_spherical(
     scheme: Scheme,
     mask: Any,
     wall: str,
-    cached: Hierarchies | None = None,
 ) -> Any:
     xp = array_namespace(q, u)
     fluxes = _fluxes(
@@ -287,7 +259,6 @@ def _advect_spherical(
         scheme=scheme,
         mask=mask,
         wall=wall,
-        cached=cached,
     )
     fe, fn = fluxes["x"], fluxes["y"]
     here = _written(grid, wall)

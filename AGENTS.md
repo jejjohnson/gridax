@@ -22,7 +22,7 @@ The repository is a uv workspace with one package, `packages/gridax/` (`src/grid
 |---|---|---|
 | Grids | `gridax/_src/grid/` | `ArakawaCGrid*` (topology) → `CurvilinearGrid*` (uniform metric) → `CartesianCGrid1D/2D/3D`, `SphericalCGrid2D/3D` (`base.py`, `cartesian.py`, `spherical.py`), and beside them the collocated `CollocatedGrid*` → `CartesianAGrid1D/2D/3D`, `SphericalAGrid2D` (`collocated.py`: T points only, no ghost ring, irregular axes, `agrid_from` a raster): frozen dataclasses built with NumPy, registered as JAX pytrees by `gridax/_src/pytree.py` when JAX is importable |
 | Located fields | `gridax/_src/fields/` (public: `gridax.CField`, `gridax.combine`, `gridax.fields`), `gridax/_src/grid/points.py` | `CField`: an array with named dims and a stagger per axis, its array the only pytree leaf; `combine` and the element-wise functions, which raise `StaggerMismatchError` on fields at different points; the pipekit adapter (`adapter.py`, loaded by `_hook.py` once something imports `pipekit_ops`); the point names and their staggers |
-| Masks | `gridax/_src/mask/` | `Mask1D/2D/3D` (`cartesian.py`), frozen NumPy dataclasses like the grids: staggered wet masks, coast classification, `StencilCapability*` (`base.py`), adaptive stencil hierarchies; numpy / scipy construction helpers (`utils.py`) |
+| Masks | `gridax/_src/mask/` | `Mask1D/2D/3D` (`cartesian.py`), frozen NumPy dataclasses like the grids: staggered wet masks, `StencilCapability*`, and what is derived from them on request, so it works on a traced mask and is not stored (`MaskBase` in `base.py`): stencil tiers, coastal ghosts, coast classification; numpy / scipy construction helpers (`utils.py`) |
 | Analysis kernels | `gridax/_src/analysis/` (public: `gridax.analysis`) | Finite differences on collocated grids (`difference`, `adaptive_difference`, 1-D / 2-D / 3-D gradient, divergence, curl, Laplacian) and axis remapping (`remap_axis`, `remap_axis_columns`), array-API code that runs on NumPy, JAX or any backend; the kernels behind geoops' and xrops' calculus and remap operators |
 | Layer 0: coefficients | `gridax/_src/stencils/coefficients.py` (public: `gridax.stencils`) | `difference_offsets` / `difference_coeffs`: offsets and exact coefficients from the Taylor conditions, for point values or cell averages (`data=`), collocated or staggered (`method="staggered"`, `bias=`); `weno_stencils`, `optimal_weights`, `smoothness_matrix` (the linear parts of WENO); `nonuniform_coeffs` |
 | Layer 1: raw stencils | `gridax/_src/operators/stencils.py`, `gridax/_src/stencils/staggered.py`, `gridax/_src/operators/_ghost.py` (public: `gridax.stencils`) | `<op>_<axis>_<side>_<d>d` index arithmetic with no metric and no padding, on any backend; `staggered_difference` / `staggered_average` for fourth and sixth order; `interior` pads a result back to the full shape |
@@ -113,7 +113,7 @@ whether it exists:
 | Kinetic energy, PV, enstrophy, strain, Okubo–Weiss, an Arakawa Jacobian | `Energetics2D`, `Vorticity2D`, `Strain2D`, `QGPotentialVorticity2D`, `ArakawaJacobian2D`; functional `kinetic_energy`, `arakawa_jacobian`, `okubo_weiss`, … |
 | Element-wise maths on fields that know their point | `gridax.combine`, `gridax.fields` (`sqrt`, `where`, `clip`, …) on `gridax.CField`; `f.like(array)` for a full array |
 | Filling ghost cells | `gridax.fill_ghosts(f, grid, gridax.BC(x=gridax.Dirichlet(0.0), …))` with `Dirichlet` / `Neumann` / `Periodic` / …; `enforce_periodic`, `zero_gradient_boundaries`, `no_slip_boundaries`, `wall_boundaries` |
-| Land / ocean masks, coastal stencil fallback | `Mask2D.from_mask` (or `from_center`, `from_u_face`, …), `mask.get_adaptive_masks`, `StencilCapability2D` |
+| Land / ocean masks, coastal stencil fallback | `Mask2D.from_mask` (or `from_center`, `from_u_face`, …), `mask.tiers(axis)` (the widest stencil per point), `mask.coast_ghosts(axis, side)` (the dry points behind a coast), `StencilCapability2D` |
 | Area / volume integrals and masked means | `area_sum`, `area_mean`, `volume_mean`, `masked_mean`, `masked_moments`: the sums and means dispatch on the grid type (`mask=` is a keyword) |
 | A Poisson / Helmholtz solve | `solve_helmholtz_dst` / `_dct` / `_fft` (spectraldiffx) on a rectangle; `build_capacitance_solver`, gaussx's CG (`gaussx.linear_solve_with_info` with `gaussx.CGSolver`) with `make_spectral_preconditioner` or `build_multigrid_solver(...).as_preconditioner()`, or `build_multigrid_solver` on its own on a masked domain; the one-call wrappers `streamfunction_from_vorticity`, `pressure_from_divergence`, `pv_inversion` live in sesmax-core (`sesmax_core.gfd`) |
 | A DCT / DST | `dct`, `dst`, `dctn`, … (spectraldiffx, scipy's unnormalised convention) |
@@ -258,7 +258,7 @@ apply BCs to intermediate fields before chaining operators.
 - Masked advection (`Advection1D/2D/3D`, `SphericalAdvection2D/3D`) is
   land-safe for every scheme: dry inputs are zeroed with `jnp.where`, every
   upwind-biased scheme falls back to narrower stencils near the coast
-  through `upwind_flux` and the `(2, 4, 6, 8, 10)` adaptive hierarchy
+  through `upwind_flux` and the tiers of the mask (`mask.tiers`)
   (`naive` reads only the two cells beside a face), and the fluxes on dry
   faces (`mask.wet(at="U")` / `mask.wet(at="V")` false) are zeroed before the divergence, as in
   `Diffusion2D`.

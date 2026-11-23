@@ -67,9 +67,7 @@ class TestUpwindFluxBasic:
         recon = Reconstruction2D(grid=grid2d)
         q = jnp.ones((grid2d.Ny, grid2d.Nx))
         u = jnp.ones((grid2d.Ny, grid2d.Nx))
-        mask_hier = all_ocean_mask.get_adaptive_masks(
-            direction="x", stencil_sizes=(2, 4, 6)
-        )
+        mask_hier = all_ocean_mask.tiers("x", sizes=(2, 4, 6))
         result = upwind_flux(
             q, u, dim=1, rec_funcs=_make_rec_funcs_x(recon), mask_hierarchy=mask_hier
         )
@@ -79,9 +77,7 @@ class TestUpwindFluxBasic:
         recon = Reconstruction2D(grid=grid2d)
         q = jnp.ones((grid2d.Ny, grid2d.Nx))
         v = jnp.ones((grid2d.Ny, grid2d.Nx))
-        mask_hier = all_ocean_mask.get_adaptive_masks(
-            direction="y", stencil_sizes=(2, 4, 6)
-        )
+        mask_hier = all_ocean_mask.tiers("y", sizes=(2, 4, 6))
         result = upwind_flux(
             q, v, dim=0, rec_funcs=_make_rec_funcs_y(recon), mask_hierarchy=mask_hier
         )
@@ -91,9 +87,7 @@ class TestUpwindFluxBasic:
         recon = Reconstruction2D(grid=grid2d)
         q = jnp.ones((grid2d.Ny, grid2d.Nx))
         u = jnp.ones((grid2d.Ny, grid2d.Nx))
-        mask_hier = all_ocean_mask.get_adaptive_masks(
-            direction="x", stencil_sizes=(2, 4, 6)
-        )
+        mask_hier = all_ocean_mask.tiers("x", sizes=(2, 4, 6))
         result = upwind_flux(
             q, u, dim=1, rec_funcs=_make_rec_funcs_x(recon), mask_hierarchy=mask_hier
         )
@@ -106,9 +100,7 @@ class TestUpwindFluxBasic:
         recon = Reconstruction2D(grid=grid2d)
         q = jnp.ones((grid2d.Ny, grid2d.Nx))
         v = jnp.ones((grid2d.Ny, grid2d.Nx))
-        mask_hier = all_ocean_mask.get_adaptive_masks(
-            direction="y", stencil_sizes=(2, 4, 6)
-        )
+        mask_hier = all_ocean_mask.tiers("y", sizes=(2, 4, 6))
         result = upwind_flux(
             q, v, dim=0, rec_funcs=_make_rec_funcs_y(recon), mask_hierarchy=mask_hier
         )
@@ -120,9 +112,7 @@ class TestUpwindFluxBasic:
     def test_raises_on_empty_rec_funcs(self, grid2d, all_ocean_mask):
         q = jnp.ones((grid2d.Ny, grid2d.Nx))
         u = jnp.ones((grid2d.Ny, grid2d.Nx))
-        mask_hier = all_ocean_mask.get_adaptive_masks(
-            direction="x", stencil_sizes=(2, 4, 6)
-        )
+        mask_hier = all_ocean_mask.tiers("x", sizes=(2, 4, 6))
         with pytest.raises(ValueError, match="rec_funcs"):
             upwind_flux(q, u, dim=1, rec_funcs={}, mask_hierarchy=mask_hier)
 
@@ -130,9 +120,7 @@ class TestUpwindFluxBasic:
         recon = Reconstruction2D(grid=grid2d)
         q = jnp.ones((grid2d.Ny, grid2d.Nx))
         u = jnp.ones((grid2d.Ny, grid2d.Nx))
-        mask_hier = all_ocean_mask.get_adaptive_masks(
-            direction="x", stencil_sizes=(2, 4, 6)
-        )
+        mask_hier = all_ocean_mask.tiers("x", sizes=(2, 4, 6))
         with pytest.raises(ValueError, match="dim"):
             upwind_flux(
                 q,
@@ -160,9 +148,7 @@ class TestUpwindFluxRectangular:
         recon = Reconstruction2D(grid=grid2d)
         q = 3.0 * jnp.ones((grid2d.Ny, grid2d.Nx))
         u = jnp.ones((grid2d.Ny, grid2d.Nx))
-        mask_hier = all_ocean_mask.get_adaptive_masks(
-            direction="x", stencil_sizes=(2, 4, 6)
-        )
+        mask_hier = all_ocean_mask.tiers("x", sizes=(2, 4, 6))
         result = upwind_flux(
             q, u, dim=1, rec_funcs=_make_rec_funcs_x(recon), mask_hierarchy=mask_hier
         )
@@ -173,9 +159,7 @@ class TestUpwindFluxRectangular:
         recon = Reconstruction2D(grid=grid2d)
         q = 3.0 * jnp.ones((grid2d.Ny, grid2d.Nx))
         u = -jnp.ones((grid2d.Ny, grid2d.Nx))
-        mask_hier = all_ocean_mask.get_adaptive_masks(
-            direction="x", stencil_sizes=(2, 4, 6)
-        )
+        mask_hier = all_ocean_mask.tiers("x", sizes=(2, 4, 6))
         result = upwind_flux(
             q, u, dim=1, rec_funcs=_make_rec_funcs_x(recon), mask_hierarchy=mask_hier
         )
@@ -185,9 +169,7 @@ class TestUpwindFluxRectangular:
         recon = Reconstruction2D(grid=grid2d)
         q = 4.0 * jnp.ones((grid2d.Ny, grid2d.Nx))
         v = jnp.ones((grid2d.Ny, grid2d.Nx))
-        mask_hier = all_ocean_mask.get_adaptive_masks(
-            direction="y", stencil_sizes=(2, 4, 6)
-        )
+        mask_hier = all_ocean_mask.tiers("y", sizes=(2, 4, 6))
         result = upwind_flux(
             q, v, dim=0, rec_funcs=_make_rec_funcs_y(recon), mask_hierarchy=mask_hier
         )
@@ -197,9 +179,7 @@ class TestUpwindFluxRectangular:
         recon = Reconstruction2D(grid=grid2d)
         q = 4.0 * jnp.ones((grid2d.Ny, grid2d.Nx))
         v = -jnp.ones((grid2d.Ny, grid2d.Nx))
-        mask_hier = all_ocean_mask.get_adaptive_masks(
-            direction="y", stencil_sizes=(2, 4, 6)
-        )
+        mask_hier = all_ocean_mask.tiers("y", sizes=(2, 4, 6))
         result = upwind_flux(
             q, v, dim=0, rec_funcs=_make_rec_funcs_y(recon), mask_hierarchy=mask_hier
         )
@@ -214,7 +194,7 @@ class TestUpwindFluxRectangular:
         mask = Mask2D.from_dimensions(14, 14)
         q = jnp.broadcast_to(jnp.arange(14, dtype=float), (14, 14))
         u = jnp.ones((14, 14))
-        mask_hier = mask.get_adaptive_masks(direction="x", stencil_sizes=(2, 4, 6))
+        mask_hier = mask.tiers("x", sizes=(2, 4, 6))
         result = upwind_flux(
             q, u, dim=1, rec_funcs=_make_rec_funcs_x(recon), mask_hierarchy=mask_hier
         )
@@ -230,7 +210,7 @@ class TestUpwindFluxRectangular:
         mask = Mask2D.from_dimensions(14, 14)
         q = jnp.broadcast_to(jnp.arange(14, dtype=float)[:, None], (14, 14))
         v = jnp.ones((14, 14))
-        mask_hier = mask.get_adaptive_masks(direction="y", stencil_sizes=(2, 4, 6))
+        mask_hier = mask.tiers("y", sizes=(2, 4, 6))
         result = upwind_flux(
             q, v, dim=0, rec_funcs=_make_rec_funcs_y(recon), mask_hierarchy=mask_hier
         )
@@ -249,9 +229,7 @@ class TestUpwindFluxMaskedDomain:
         recon = Reconstruction2D(grid=grid)
         q = jnp.broadcast_to(jnp.arange(10, dtype=float), (10, 10))
         u = jnp.ones((10, 10))
-        mask_hier = coastal_mask.get_adaptive_masks(
-            direction="x", stencil_sizes=(2, 4, 6)
-        )
+        mask_hier = coastal_mask.tiers("x", sizes=(2, 4, 6))
         result = upwind_flux(
             q, u, dim=1, rec_funcs=_make_rec_funcs_x(recon), mask_hierarchy=mask_hier
         )
@@ -262,9 +240,7 @@ class TestUpwindFluxMaskedDomain:
         recon = Reconstruction2D(grid=grid)
         q = jnp.broadcast_to(jnp.arange(10, dtype=float)[:, None], (10, 10))
         v = jnp.ones((10, 10))
-        mask_hier = coastal_mask.get_adaptive_masks(
-            direction="y", stencil_sizes=(2, 4, 6)
-        )
+        mask_hier = coastal_mask.tiers("y", sizes=(2, 4, 6))
         result = upwind_flux(
             q, v, dim=0, rec_funcs=_make_rec_funcs_y(recon), mask_hierarchy=mask_hier
         )
@@ -283,9 +259,7 @@ class TestUpwindFluxMaskedDomain:
         q = jnp.broadcast_to(x_idx, (10, 10))
         for sign in (1.0, -1.0):
             u = sign * jnp.ones((10, 10))
-            mask_hier = coastal_mask.get_adaptive_masks(
-                direction="x", stencil_sizes=(2, 4, 6)
-            )
+            mask_hier = coastal_mask.tiers("x", sizes=(2, 4, 6))
             result = upwind_flux(
                 q,
                 u,
@@ -307,9 +281,7 @@ class TestUpwindFluxMaskedDomain:
         recon = Reconstruction2D(grid=grid)
         q = jnp.ones((20, 20))
         u = jnp.ones((20, 20))
-        mask_hier = island_mask.get_adaptive_masks(
-            direction="x", stencil_sizes=(2, 4, 6)
-        )
+        mask_hier = island_mask.tiers("x", sizes=(2, 4, 6))
         result = upwind_flux(
             q, u, dim=1, rec_funcs=_make_rec_funcs_x(recon), mask_hierarchy=mask_hier
         )
@@ -345,7 +317,7 @@ class TestUpwindFluxConservation:
         q = 2.0 * jnp.ones((14, 14))
         # Uniform flow, but zero at the east-wall U-face so no flux exits
         u = jnp.ones((14, 14)).at[:, -2].set(0.0)
-        mask_hier = mask.get_adaptive_masks(direction="x", stencil_sizes=(2, 4, 6))
+        mask_hier = mask.tiers("x", sizes=(2, 4, 6))
         fe = upwind_flux(
             q, u, dim=1, rec_funcs=_make_rec_funcs_x(recon), mask_hierarchy=mask_hier
         )
@@ -364,7 +336,7 @@ class TestUpwindFluxConservation:
         q = 5.0 * jnp.ones((14, 14))
         # Uniform flow, but zero at the north-wall V-face so no flux exits
         v = jnp.ones((14, 14)).at[-2, :].set(0.0)
-        mask_hier = mask.get_adaptive_masks(direction="y", stencil_sizes=(2, 4, 6))
+        mask_hier = mask.tiers("y", sizes=(2, 4, 6))
         fn = upwind_flux(
             q, v, dim=0, rec_funcs=_make_rec_funcs_y(recon), mask_hierarchy=mask_hier
         )
@@ -573,7 +545,7 @@ class TestUpwindFluxValidation:
         u = jnp.ones((grid2d.Ny, grid2d.Nx))
         mask = Mask2D.from_dimensions(grid2d.Ny, grid2d.Nx)
         # Only provide mask for size 2, but rec_funcs expects 2 and 6
-        mask_hier = mask.get_adaptive_masks(direction="x", stencil_sizes=(2,))
+        mask_hier = mask.tiers("x", sizes=(2,))
         with pytest.raises(ValueError, match="missing masks"):
             upwind_flux(
                 q,

@@ -1,7 +1,7 @@
 """Cartesian Arakawa C-grid masks (1-D / 2-D / 3-D).
 
 Concrete mask classes for uniform-spacing Cartesian grids.  All
-construction logic uses numpy/scipy (masks are built once at setup
+construction logic uses numpy (masks are built once at setup
 time and stored as NumPy arrays; JAX converts them when a kernel reads
 them, and each class is a JAX pytree when JAX is importable).
 
@@ -28,24 +28,21 @@ grid module's ``U[j, i]`` / ``V[j, i]`` positions::
 from __future__ import annotations
 
 import dataclasses
-import typing as tp
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
-from jaxtyping import Bool, Float, Int
+from jaxtyping import Bool, Float
 import numpy as np
 
 from gridax._src.grid.points import Stagger, point_axes
 from gridax._src.mask.base import (
+    WALL_KINDS,
+    MaskBase,
     StencilCapability1D,
     StencilCapability2D,
     StencilCapability3D,
 )
-from gridax._src.mask.utils import (
-    dilate_mask,
-    h_from_pooled,
-    pool_bool,
-)
-from gridax._src.pytree import array_namespace, pytree_dataclass
+from gridax._src.mask.utils import h_from_pooled, pool_bool, shifted
+from gridax._src.pytree import pytree_dataclass
 
 # The mask arrays are NumPy when a mask is built and JAX arrays (or tracers)
 # once a transform has flattened it. ``jaxtyping.Array`` imports JAX, so it
@@ -57,13 +54,14 @@ else:
 
 
 def _wet(mask: Any, axes: tuple[str, ...], at: str | Stagger, kind: str) -> Any:
-    """``mask.wet``: the stored array of a point, and of a kind of corner."""
+    """``mask.wet``: the array of a point, and of a kind of corner."""
     staggered = point_axes(at, axes)
     if staggered == ("x", "y") and mask._u is not None:
-        name = "_xy_corner" if kind == "default" else f"_xy_corner_{kind}"
-        if hasattr(mask, name):
-            return getattr(mask, name)
-        kinds = ("default", "strict", "y_wall", "x_wall", "convex", "valid")
+        if kind in ("default", "strict"):
+            return mask._xy_corner if kind == "default" else mask._xy_corner_strict
+        if kind in WALL_KINDS:
+            return _corner_kind(mask, kind)
+        kinds = ("default", "strict", *WALL_KINDS)
         raise ValueError(f"kind must be one of {kinds} at X, got {kind!r}")
     if kind != "default":
         raise ValueError(f"kind={kind!r} exists at X only, not at {at!r}")
@@ -72,6 +70,19 @@ def _wet(mask: Any, axes: tuple[str, ...], at: str | Stagger, kind: str) -> Any:
     if mask._u is None:
         raise ValueError(f"at={at!r}: the mask of a collocated grid has T points only")
     return getattr(mask, {"x": "_u", "y": "_v", "z": "_w"}[staggered[0]])
+
+
+def _corner_kind(mask: Any, kind: str) -> Any:
+    """The corners of a wall kind, from the four faces that meet at each."""
+    corner, u, v = mask._xy_corner, mask._u, mask._v
+    # the faces around the corner [j, i]: u[j, i] south of it, u[j+1, i] north,
+    # v[j, i] west, v[j, i+1] east; those outside the array are dry
+    u_north, v_east = shifted(u, -2, 1), shifted(v, -1, 1)
+    if kind == "valid":
+        return corner & u & u_north & v & v_east
+    on_y = ~u | ~u_north  # a vertical wall
+    on_x = ~v | ~v_east  # a horizontal wall
+    return corner & {"y_wall": on_y, "x_wall": on_x, "convex": on_y & on_x}[kind]
 
 
 def _from_grid(from_mask: Any, grid: Any, wet_t: Any, **kwargs: Any) -> Any:
@@ -97,12 +108,12 @@ def _from_grid(from_mask: Any, grid: Any, wet_t: Any, **kwargs: Any) -> Any:
 
 
 @pytree_dataclass
-class Mask1D:
+class Mask1D(MaskBase):
     """Unified Arakawa C-grid mask for a 1-D Cartesian domain.
 
     Stores binary masks on the two staggerings (cell centre ``h``,
-    x-face ``u``), a 4-level land/coast classification, directional
-    stencil capability.  The 1-D grid has no v/xy-corner concepts.
+    x-face ``u``) and the directional stencil capability.  The 1-D grid
+    has no v/xy-corner concepts.
 
     Construct via one of the factory class-methods:
 
@@ -124,16 +135,14 @@ class Mask1D:
         centres).  An x-face is wet iff *both* of its adjacent cell
         centres are wet — i.e. flow through the face is physically
         meaningful.
-    classification : Int[Array, "Nx"]
-        4-level integer classification: 0 = land, 1 = coast, 2 = near-coast,
-        3 = open ocean.
     stencil_capability : StencilCapability1D
         Directional contiguous-wet-cell counts on the h-grid.
     """
 
+    _axes: ClassVar[tuple[str, ...]] = ("x",)
+
     _h: Bool[Array, "Nx"]
     _u: Bool[Array, "Nx"]
-    classification: Int[Array, "Nx"]
     stencil_capability: StencilCapability1D
 
     # ── wet points ───────────────────────────────────────────────────────────
@@ -167,80 +176,7 @@ class Mask1D:
         >>> int(mask.wet().sum()), int(mask.wet(at="U").sum())
         (4, 3)
         """
-        return _wet(self, ("x",), at, kind)
-
-    # ── Boolean accessors for land/coast classification ───────────────────────
-
-    @property
-    def ind_land(self) -> Bool[Array, "Nx"]:
-        """Boolean mask: land cells (classification == 0)."""
-        return self.classification == 0
-
-    @property
-    def ind_coast(self) -> Bool[Array, "Nx"]:
-        """Boolean mask: coast cells (classification == 1)."""
-        return self.classification == 1
-
-    @property
-    def ind_near_coast(self) -> Bool[Array, "Nx"]:
-        """Boolean mask: near-coast cells (classification == 2)."""
-        return self.classification == 2
-
-    @property
-    def ind_ocean(self) -> Bool[Array, "Nx"]:
-        """Boolean mask: open-ocean cells (classification == 3)."""
-        return self.classification == 3
-
-    @property
-    def ind_boundary(self) -> Bool[Array, "Nx"]:
-        """Boolean mask: outermost domain-boundary endpoints."""
-        (Nx,) = self._h.shape
-        bnd = np.zeros((Nx,), dtype=bool)
-        bnd[0] = True
-        bnd[-1] = True
-        return bnd
-
-    # ── adaptive stencil masks ────────────────────────────────────────────────
-
-    def get_adaptive_masks(
-        self,
-        stencil_sizes: tp.Sequence[int] = (2, 4, 6, 8, 10),
-    ) -> dict[int, Bool[Array, "Nx"]]:
-        """Per-point adaptive stencil-size masks for 1-D operators.
-
-        For each stencil size *s*, returns a boolean mask that is ``True``
-        at cells where a symmetric stencil of half-width ``s//2`` is fully
-        supported by contiguous wet neighbours.  The masks are mutually
-        exclusive hierarchical tiers (the mask for size *s* is True only
-        where *s* is the *largest* usable stencil).
-
-        These masks are useful for any operator that wants to fall back
-        to a narrower stencil near coastlines or irregular boundaries —
-        not just WENO reconstruction, but also higher-order upwind
-        advection, higher-order finite-difference operators, and
-        higher-order interpolation kernels.
-
-        Parameters
-        ----------
-        stencil_sizes : sequence of int
-            Ordered candidate stencil sizes (even integers).
-
-        Returns
-        -------
-        dict[int, Bool[Array, "Nx"]]
-            Mapping from stencil size to its mutually-exclusive boolean mask.
-        """
-        sc = self.stencil_capability
-        cnt_pos, cnt_neg = sc.x_pos, sc.x_neg
-
-        xp = array_namespace(cnt_pos, cnt_neg)
-        max_s = xp.zeros(cnt_pos.shape, dtype=xp.int32)
-        for s in sorted(stencil_sizes):
-            hw = s // 2
-            can_use = (cnt_pos >= hw) & (cnt_neg >= hw)
-            max_s = xp.where(can_use, s, max_s)
-
-        return {s: (max_s == s) for s in stencil_sizes}
+        return _wet(self, self._axes, at, kind)
 
     # ── factory class-methods ─────────────────────────────────────────────────
 
@@ -272,31 +208,15 @@ class Mask1D:
         ``u``  ``(2,)``  ``3/4``    both adjacent h-cells wet (strict)
         ====== ========= =========  ====================================
 
-        The land/coast classification uses two successive
-        :func:`dilate_mask` passes on ``~mask_hgrid``; the stencil
-        capability is built via :meth:`StencilCapability1D.from_mask`.
+        The stencil capability is built via
+        :meth:`StencilCapability1D.from_mask`.
         """
         h_np = np.asarray(mask_hgrid, dtype=bool)
-        (Nx,) = h_np.shape
         hf = h_np.astype(np.float32)
 
         # Staggered u-face (east face of T[i]): kernel (2,) trailing
         # → u[i] = (h[i] + h[i+1]) / 2 > 3/4 (both adjacent h-cells wet)
         u_np = pool_bool(hf, kernel=(2,), threshold=3.0 / 4.0, direction="trailing")
-
-        # ── land / coast classification ───────────────────────────────────
-        # 0 = land, 1 = coast (ocean adj. to land), 2 = near-coast, 3 = ocean
-        land = ~h_np
-        land_d1 = dilate_mask(land)
-        coast = h_np & land_d1
-        land_d2 = dilate_mask(land_d1)
-        near_coast = h_np & land_d2 & ~coast
-        open_ocean = h_np & ~land_d2
-
-        classification = np.zeros(Nx, dtype=np.int8)
-        classification[coast] = 1
-        classification[near_coast] = 2
-        classification[open_ocean] = 3
 
         # ── stencil capability ────────────────────────────────────────────
         sc = StencilCapability1D.from_mask(h_np)
@@ -306,7 +226,6 @@ class Mask1D:
         fields: dict[str, Any] = {
             "_h": h_np,
             "_u": u_np,
-            "classification": classification,
             "stencil_capability": sc,
         }
         return cls(**fields)
@@ -422,14 +341,15 @@ class Mask1D:
 
 
 @pytree_dataclass
-class Mask2D:
+class Mask2D(MaskBase):
     """Unified Arakawa C-grid mask for a 2-D Cartesian domain.
 
     Stores binary masks on all five Arakawa C-grid staggerings (cell
     centre ``h``, x-face ``u``, y-face ``v``, xy-corner lenient
-    ``xy_corner``, xy-corner strict ``xy_corner_strict``), boundary-type
-    flags for the corner cells, a 4-level land/coast classification,
-    directional stencil capability, and an optional sea-floor index array.
+    ``xy_corner``, xy-corner strict ``xy_corner_strict``), the directional
+    stencil capability, and an optional sea-floor index array.  The stencil
+    tiers, the coastal ghosts, the kinds of corner and the land / coast
+    classification are derived from them when asked for.
 
     Construct via one of the factory class-methods:
 
@@ -471,27 +391,13 @@ class Mask2D:
         *all four* surrounding cell centres are wet — useful for
         quantities (e.g. relative vorticity) that require the full
         4-point horizontal stencil to be inside the fluid.
-    xy_corner_y_wall : Bool[Array, "Ny Nx"]
-        xy-corner cells on a y-direction wall: wet xy_corner cell where
-        at least one of the two u-faces ``u[j, i]``, ``u[j+1, i]`` meeting
-        at the corner is dry.
-    xy_corner_x_wall : Bool[Array, "Ny Nx"]
-        xy-corner cells on an x-direction wall: wet xy_corner cell where
-        at least one of the two v-faces ``v[j, i]``, ``v[j, i+1]`` meeting
-        at the corner is dry.
-    xy_corner_convex : Bool[Array, "Ny Nx"]
-        xy-corner cells at convex corners (on both x- and y-walls).
-    xy_corner_valid : Bool[Array, "Ny Nx"]
-        Interior xy-corner cells: wet ``xy_corner`` with all 4 adjacent
-        faces wet.
-    classification : Int[Array, "Ny Nx"]
-        4-level integer classification: 0 = land, 1 = coast, 2 = near-coast,
-        3 = open ocean.
     stencil_capability : StencilCapability2D
         Directional contiguous-wet-cell counts on the h-grid.
     k_bottom : Array or None
         Optional 2-D array of vertical sea-floor indices (3-D domains).
     """
+
+    _axes: ClassVar[tuple[str, ...]] = ("y", "x")
 
     # ── staggered masks ───────────────────────────────────────────────────────
     _h: Bool[Array, "Ny Nx"]
@@ -499,15 +405,6 @@ class Mask2D:
     _v: Bool[Array, "Ny Nx"]
     _xy_corner: Bool[Array, "Ny Nx"]
     _xy_corner_strict: Bool[Array, "Ny Nx"]
-
-    # ── corner boundary classification ────────────────────────────────────────
-    _xy_corner_y_wall: Bool[Array, "Ny Nx"]
-    _xy_corner_x_wall: Bool[Array, "Ny Nx"]
-    _xy_corner_convex: Bool[Array, "Ny Nx"]
-    _xy_corner_valid: Bool[Array, "Ny Nx"]
-
-    # ── land/coast classification ─────────────────────────────────────────────
-    classification: Int[Array, "Ny Nx"]
 
     # ── stencil capability ────────────────────────────────────────────────────
     stencil_capability: StencilCapability2D
@@ -548,129 +445,7 @@ class Mask2D:
         >>> int(mask.wet().sum()), int(mask.wet(at="U").sum())
         (16, 12)
         """
-        return _wet(self, ("y", "x"), at, kind)
-
-    # ── Boolean accessors for land/coast classification ───────────────────────
-
-    @property
-    def ind_land(self) -> Bool[Array, "Ny Nx"]:
-        """Boolean mask: land cells (classification == 0)."""
-        return self.classification == 0
-
-    @property
-    def ind_coast(self) -> Bool[Array, "Ny Nx"]:
-        """Boolean mask: coast cells (classification == 1)."""
-        return self.classification == 1
-
-    @property
-    def ind_near_coast(self) -> Bool[Array, "Ny Nx"]:
-        """Boolean mask: near-coast cells (classification == 2)."""
-        return self.classification == 2
-
-    @property
-    def ind_ocean(self) -> Bool[Array, "Ny Nx"]:
-        """Boolean mask: open-ocean cells (classification == 3)."""
-        return self.classification == 3
-
-    @property
-    def ind_boundary(self) -> Bool[Array, "Ny Nx"]:
-        """Boolean mask: outermost domain-boundary ring."""
-        Ny, Nx = self._h.shape
-        bnd = np.zeros((Ny, Nx), dtype=bool)
-        bnd[0, :] = True
-        bnd[-1, :] = True
-        bnd[:, 0] = True
-        bnd[:, -1] = True
-        return bnd
-
-    # ── adaptive stencil masks ────────────────────────────────────────────────
-
-    def get_adaptive_masks(
-        self,
-        direction: str = "x",
-        source: str = "h",
-        stencil_sizes: tp.Sequence[int] = (2, 4, 6, 8, 10),
-    ) -> dict[int, Bool[Array, "Ny Nx"]]:
-        """Per-point adaptive stencil-size masks for 2-D operators.
-
-        For each stencil size *s* in ``stencil_sizes``, returns a boolean mask
-        that is ``True`` at cells where a symmetric stencil of half-width
-        *s//2* is fully supported by contiguous wet neighbours.
-
-        These masks are useful for any operator that wants to fall back
-        to a narrower stencil near coastlines or irregular boundaries.
-        Common consumers include:
-
-        * **WENO reconstruction**: size 2 → upwind1, 4 → WENO3, 6 → WENO5,
-          8 → WENO7, 10 → WENO9 (half-widths 1 / 2 / 3 / 4 / 5).
-        * **Higher-order upwind advection** (e.g. 3rd / 5th-order upwind).
-        * **Higher-order centred finite-difference** operators (4th / 6th /
-          8th-order Laplacians, gradients, etc.).
-        * **Higher-order interpolation** kernels (cubic / quintic
-          T↔face / T↔corner interpolations).
-
-        The returned masks are **mutually exclusive** hierarchical tiers: the
-        mask for size *s* is ``True`` only where *s* is the *largest* usable
-        stencil.
-
-        Parameters
-        ----------
-        direction : {'x', 'y'}
-            Stencil direction.
-        source : {'h', 'u', 'v', 'xy_corner', 'xy_corner_strict'}
-            Source grid whose stencil capability to use.
-        stencil_sizes : sequence of int
-            Ordered candidate stencil sizes (even integers).
-
-        Returns
-        -------
-        dict[int, Bool[Array, "Ny Nx"]]
-            Mapping from stencil size to its mutually-exclusive boolean mask.
-        """
-        sc = self._stencil_capability_for(source)
-        if direction == "x":
-            cnt_pos, cnt_neg = sc.x_pos, sc.x_neg
-        elif direction == "y":
-            cnt_pos, cnt_neg = sc.y_pos, sc.y_neg
-        else:
-            raise ValueError(f"direction must be 'x' or 'y', got {direction!r}")
-
-        # Maximum usable stencil size at each point
-        xp = array_namespace(cnt_pos, cnt_neg)
-        max_s = xp.zeros(cnt_pos.shape, dtype=xp.int32)
-        for s in sorted(stencil_sizes):
-            hw = s // 2
-            can_use = (cnt_pos >= hw) & (cnt_neg >= hw)
-            max_s = xp.where(can_use, s, max_s)
-
-        # Mutually-exclusive masks
-        return {s: (max_s == s) for s in stencil_sizes}
-
-    def _stencil_capability_for(self, source: str) -> StencilCapability2D:
-        """Return a :class:`StencilCapability2D` for the given source grid.
-
-        For non-``'h'`` sources the capability is re-computed from the stored
-        staggered mask.  This should **not** be called inside a JIT-compiled
-        function for non-h sources (numpy conversion required).
-
-        Parameters
-        ----------
-        source : {'h', 'u', 'v', 'xy_corner', 'xy_corner_strict'}
-        """
-        grid_map = {
-            "h": self._h,
-            "u": self._u,
-            "v": self._v,
-            "xy_corner": self._xy_corner,
-            "xy_corner_strict": self._xy_corner_strict,
-        }
-        if source not in grid_map:
-            raise ValueError(
-                f"source must be one of {list(grid_map)!r}, got {source!r}"
-            )
-        if source == "h":
-            return self.stencil_capability
-        return StencilCapability2D.from_mask(grid_map[source])
+        return _wet(self, self._axes, at, kind)
 
     # ── factory class-methods ─────────────────────────────────────────────────
 
@@ -682,8 +457,8 @@ class Mask2D:
     ) -> Mask2D:
         """Construct from a binary h-grid (cell-centre) mask.
 
-        All intermediate computations use numpy/scipy for efficiency.
-        Stored arrays are converted to JAX at the end.
+        All intermediate computations use numpy, and so are the stored
+        arrays.
 
         Parameters
         ----------
@@ -711,12 +486,10 @@ class Mask2D:
         ``xy_corner_strict`` ``(2, 2)`` ``7/8``    all 4 NE-corner h-cells wet
         ==================== ========== =========  ====================================
 
-        The land/coast classification uses two successive
-        :func:`dilate_mask` passes on ``~mask_hgrid``; the stencil
-        capability is built via :meth:`StencilCapability2D.from_mask`.
+        The stencil capability is built via
+        :meth:`StencilCapability2D.from_mask`.
         """
         h_np = np.asarray(mask_hgrid, dtype=bool)
-        Ny, Nx = h_np.shape
         hf = h_np.astype(np.float32)
 
         # ── staggered masks ───────────────────────────────────────────────
@@ -738,41 +511,6 @@ class Mask2D:
             hf, kernel=(2, 2), threshold=7.0 / 8.0, direction="trailing"
         )
 
-        # ── corner boundary classification ────────────────────────────────
-        # For xy_corner[j, i] at NE corner of h[j, i], the 4 incident
-        # velocity faces are:
-        #   u[j,   i] = east face of h[j,i]    → south of corner (vertical)
-        #   u[j+1, i] = east face of h[j+1,i]  → north of corner (vertical)
-        #   v[j, i  ] = north face of h[j,i]   → west of corner  (horizontal)
-        #   v[j, i+1] = north face of h[j,i+1] → east of corner  (horizontal)
-        # u_north and v_east are the +1-shifted neighbours; trailing-side
-        # zero-pad supplies the implicit boundary face beyond the array.
-        u_north = np.pad(u_np[1:, :], ((0, 1), (0, 0)))  # u[j+1, i]
-        v_east = np.pad(v_np[:, 1:], ((0, 0), (0, 1)))  # v[j, i+1]
-
-        # y-wall (vertical wall): one of the two u-faces (vertical lines) dry
-        xy_corner_y_wall = xy_corner_np & (~u_np | ~u_north)
-        # x-wall (horizontal wall): one of the two v-faces (horizontal lines) dry
-        xy_corner_x_wall = xy_corner_np & (~v_np | ~v_east)
-        # convex corner: both walls present
-        xy_corner_convex = xy_corner_y_wall & xy_corner_x_wall
-        # valid interior corner: all 4 adjacent faces wet
-        xy_corner_valid = xy_corner_np & u_np & u_north & v_np & v_east
-
-        # ── land / coast classification ───────────────────────────────────
-        # 0 = land, 1 = coast (ocean adj. to land), 2 = near-coast, 3 = ocean
-        land = ~h_np
-        land_d1 = dilate_mask(land)
-        coast = h_np & land_d1  # first ring of ocean
-        land_d2 = dilate_mask(land_d1)
-        near_coast = h_np & land_d2 & ~coast  # second ring
-        open_ocean = h_np & ~land_d2  # interior ocean
-
-        classification = np.zeros((Ny, Nx), dtype=np.int8)
-        classification[coast] = 1
-        classification[near_coast] = 2
-        classification[open_ocean] = 3
-
         # ── stencil capability ────────────────────────────────────────────
         sc = StencilCapability2D.from_mask(h_np)
 
@@ -784,11 +522,6 @@ class Mask2D:
             "_v": v_np,
             "_xy_corner": xy_corner_np,
             "_xy_corner_strict": xy_corner_strict_np,
-            "_xy_corner_y_wall": xy_corner_y_wall,
-            "_xy_corner_x_wall": xy_corner_x_wall,
-            "_xy_corner_convex": xy_corner_convex,
-            "_xy_corner_valid": xy_corner_valid,
-            "classification": classification,
             "stencil_capability": sc,
             "k_bottom": np.asarray(k_bottom) if k_bottom is not None else None,
         }
@@ -1037,13 +770,13 @@ class Mask2D:
 
 
 @pytree_dataclass
-class Mask3D:
+class Mask3D(MaskBase):
     """Unified Arakawa C-grid mask for a 3-D Cartesian domain.
 
-    Stores binary masks on the six 3-D Arakawa C-grid staggerings,
-    boundary-type flags for the xy-corner cells (replicated per z-level),
-    a 4-level land/coast classification, directional stencil capability,
-    and an optional sea-floor index array.
+    Stores binary masks on the six 3-D Arakawa C-grid staggerings, the
+    directional stencil capability, and an optional sea-floor index array.
+    The stencil tiers, the coastal ghosts, the kinds of corner (per z-level)
+    and the land / coast classification are derived from them when asked for.
 
     Construct via one of the factory class-methods:
 
@@ -1097,26 +830,13 @@ class Mask3D:
         same z-level are wet — useful for quantities (e.g. relative
         vorticity) that require the full 4-point horizontal stencil to
         be inside the fluid.
-    xy_corner_y_wall : Bool[Array, "Nz Ny Nx"]
-        xy-corner cells on a y-direction wall: wet xy_corner cell where
-        at least one of the two u-faces meeting at the corner is dry
-        (per z-level).
-    xy_corner_x_wall : Bool[Array, "Nz Ny Nx"]
-        xy-corner cells on an x-direction wall: wet xy_corner cell where
-        at least one of the two v-faces meeting at the corner is dry
-        (per z-level).
-    xy_corner_convex : Bool[Array, "Nz Ny Nx"]
-        xy-corner cells at convex corners (on both walls).
-    xy_corner_valid : Bool[Array, "Nz Ny Nx"]
-        Interior xy-corner cells with all 4 adjacent faces wet.
-    classification : Int[Array, "Nz Ny Nx"]
-        4-level integer classification: 0 = land, 1 = coast, 2 = near-coast,
-        3 = open ocean.  Built from a 3-D 6-connected dilation.
     stencil_capability : StencilCapability3D
         Directional contiguous-wet-cell counts on the h-grid (x, y, z).
     k_bottom : Array or None
         Optional 2-D ``[Ny, Nx]`` array of vertical sea-floor indices.
     """
+
+    _axes: ClassVar[tuple[str, ...]] = ("z", "y", "x")
 
     # ── staggered masks ───────────────────────────────────────────────────────
     _h: Bool[Array, "Nz Ny Nx"]
@@ -1125,15 +845,6 @@ class Mask3D:
     _w: Bool[Array, "Nz Ny Nx"]
     _xy_corner: Bool[Array, "Nz Ny Nx"]
     _xy_corner_strict: Bool[Array, "Nz Ny Nx"]
-
-    # ── corner boundary classification (per z-level) ──────────────────────────
-    _xy_corner_y_wall: Bool[Array, "Nz Ny Nx"]
-    _xy_corner_x_wall: Bool[Array, "Nz Ny Nx"]
-    _xy_corner_convex: Bool[Array, "Nz Ny Nx"]
-    _xy_corner_valid: Bool[Array, "Nz Ny Nx"]
-
-    # ── land/coast classification ─────────────────────────────────────────────
-    classification: Int[Array, "Nz Ny Nx"]
 
     # ── stencil capability ────────────────────────────────────────────────────
     stencil_capability: StencilCapability3D
@@ -1174,92 +885,7 @@ class Mask3D:
         >>> int(mask.wet().sum()), int(mask.wet(at="U").sum())
         (48, 36)
         """
-        return _wet(self, ("z", "y", "x"), at, kind)
-
-    # ── Boolean accessors for land/coast classification ───────────────────────
-
-    @property
-    def ind_land(self) -> Bool[Array, "Nz Ny Nx"]:
-        """Boolean mask: land cells (classification == 0)."""
-        return self.classification == 0
-
-    @property
-    def ind_coast(self) -> Bool[Array, "Nz Ny Nx"]:
-        """Boolean mask: coast cells (classification == 1)."""
-        return self.classification == 1
-
-    @property
-    def ind_near_coast(self) -> Bool[Array, "Nz Ny Nx"]:
-        """Boolean mask: near-coast cells (classification == 2)."""
-        return self.classification == 2
-
-    @property
-    def ind_ocean(self) -> Bool[Array, "Nz Ny Nx"]:
-        """Boolean mask: open-ocean cells (classification == 3)."""
-        return self.classification == 3
-
-    @property
-    def ind_boundary(self) -> Bool[Array, "Nz Ny Nx"]:
-        """Boolean mask: outermost domain-boundary ring (all six faces)."""
-        Nz, Ny, Nx = self._h.shape
-        bnd = np.zeros((Nz, Ny, Nx), dtype=bool)
-        bnd[0, :, :] = True
-        bnd[-1, :, :] = True
-        bnd[:, 0, :] = True
-        bnd[:, -1, :] = True
-        bnd[:, :, 0] = True
-        bnd[:, :, -1] = True
-        return bnd
-
-    # ── adaptive stencil masks ────────────────────────────────────────────────
-
-    def get_adaptive_masks(
-        self,
-        direction: str = "x",
-        stencil_sizes: tp.Sequence[int] = (2, 4, 6, 8, 10),
-    ) -> dict[int, Bool[Array, "Nz Ny Nx"]]:
-        """Per-point adaptive stencil-size masks for 3-D operators.
-
-        For each stencil size *s*, returns a boolean mask that is ``True``
-        at cells where a symmetric stencil of half-width ``s//2`` is
-        fully supported by contiguous wet neighbours along ``direction``.
-
-        These masks are useful for any operator that wants to fall back
-        to a narrower stencil near coastlines or irregular boundaries —
-        not just WENO reconstruction, but also higher-order upwind
-        advection, higher-order finite-difference operators, and
-        higher-order interpolation kernels.
-
-        Parameters
-        ----------
-        direction : {'x', 'y', 'z'}
-            Stencil direction.
-        stencil_sizes : sequence of int
-            Ordered candidate stencil sizes (even integers).
-
-        Returns
-        -------
-        dict[int, Bool[Array, "Nz Ny Nx"]]
-            Mapping from stencil size to its mutually-exclusive boolean mask.
-        """
-        sc = self.stencil_capability
-        if direction == "x":
-            cnt_pos, cnt_neg = sc.x_pos, sc.x_neg
-        elif direction == "y":
-            cnt_pos, cnt_neg = sc.y_pos, sc.y_neg
-        elif direction == "z":
-            cnt_pos, cnt_neg = sc.z_pos, sc.z_neg
-        else:
-            raise ValueError(f"direction must be 'x', 'y' or 'z', got {direction!r}")
-
-        xp = array_namespace(cnt_pos, cnt_neg)
-        max_s = xp.zeros(cnt_pos.shape, dtype=xp.int32)
-        for s in sorted(stencil_sizes):
-            hw = s // 2
-            can_use = (cnt_pos >= hw) & (cnt_neg >= hw)
-            max_s = xp.where(can_use, s, max_s)
-
-        return {s: (max_s == s) for s in stencil_sizes}
+        return _wet(self, self._axes, at, kind)
 
     # ── factory class-methods ─────────────────────────────────────────────────
 
@@ -1298,13 +924,10 @@ class Mask3D:
         ``xy_corner_strict`` ``(1, 2, 2)`` ``7/8``    all 4 NE-corner h-cells wet (per k)
         ==================== ============= =========  =========================================
 
-        The land/coast classification uses two successive
-        :func:`dilate_mask` passes on ``~mask_hgrid`` with a 6-connected
-        cross structuring element; the stencil capability is built via
+        The stencil capability is built via
         :meth:`StencilCapability3D.from_mask`.
         """
         h_np = np.asarray(mask_hgrid, dtype=bool)
-        Nz, Ny, Nx = h_np.shape
         hf = h_np.astype(np.float32)
 
         # ── staggered masks ───────────────────────────────────────────────
@@ -1332,34 +955,6 @@ class Mask3D:
             hf, kernel=(1, 2, 2), threshold=7.0 / 8.0, direction="trailing"
         )
 
-        # ── corner boundary classification (per z-level) ──────────────────
-        # For xy_corner[k, j, i] at NE corner of h[k, j, i] (per z-level),
-        # the 4 incident horizontal velocity faces are u[k, j, i] /
-        # u[k, j+1, i] (vertical lines) and v[k, j, i] / v[k, j, i+1]
-        # (horizontal lines).  Trailing-side zero-pad supplies the implicit
-        # boundary face beyond the array.
-        u_north = np.pad(u_np[:, 1:, :], ((0, 0), (0, 1), (0, 0)))  # u[k, j+1, i]
-        v_east = np.pad(v_np[:, :, 1:], ((0, 0), (0, 0), (0, 1)))  # v[k, j, i+1]
-
-        xy_corner_y_wall = xy_corner_np & (~u_np | ~u_north)
-        xy_corner_x_wall = xy_corner_np & (~v_np | ~v_east)
-        xy_corner_convex = xy_corner_y_wall & xy_corner_x_wall
-        xy_corner_valid = xy_corner_np & u_np & u_north & v_np & v_east
-
-        # ── land / coast classification (3-D 6-connected dilation) ────────
-        # 0 = land, 1 = coast (ocean adj. to land), 2 = near-coast, 3 = ocean
-        land = ~h_np
-        land_d1 = dilate_mask(land)
-        coast = h_np & land_d1
-        land_d2 = dilate_mask(land_d1)
-        near_coast = h_np & land_d2 & ~coast
-        open_ocean = h_np & ~land_d2
-
-        classification = np.zeros((Nz, Ny, Nx), dtype=np.int8)
-        classification[coast] = 1
-        classification[near_coast] = 2
-        classification[open_ocean] = 3
-
         # ── stencil capability (3-D, includes z) ──────────────────────────
         sc = StencilCapability3D.from_mask(h_np)
 
@@ -1372,11 +967,6 @@ class Mask3D:
             "_w": w_np,
             "_xy_corner": xy_corner_np,
             "_xy_corner_strict": xy_corner_strict_np,
-            "_xy_corner_y_wall": xy_corner_y_wall,
-            "_xy_corner_x_wall": xy_corner_x_wall,
-            "_xy_corner_convex": xy_corner_convex,
-            "_xy_corner_valid": xy_corner_valid,
-            "classification": classification,
             "stencil_capability": sc,
             "k_bottom": np.asarray(k_bottom) if k_bottom is not None else None,
         }

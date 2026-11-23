@@ -127,8 +127,8 @@ domain topologies:
 
 ## Land / coast classification
 
-The mask includes a 4-level classification (0 = land, 1 = coast,
-2 = near-coast, 3 = open ocean):
+`mask.classification` has four levels (0 = land, 1 = coast,
+2 = near-coast, 3 = open ocean), derived from the wet cells when asked for:
 
 ### Rectangular basin
 
@@ -164,12 +164,23 @@ selection for WENO reconstruction near coastlines:
 
 ```python
 # Mutually-exclusive masks: largest usable stencil at each point
-adaptive = masks.get_adaptive_masks(direction="x", source="h")
+adaptive = masks.tiers("x")  # at="U", sizes=(2, 4, 6), …
 # adaptive[2]  → 1st-order upwind only
 # adaptive[4]  → WENO3
 # adaptive[6]  → WENO5
 # adaptive[8]  → WENO7
 # adaptive[10] → WENO9
+```
+
+## Coastal ghosts
+
+The dry points next to the water are to a coast what the ghost ring is to a domain edge. `coast_ghosts` gives them one side at a time, with the offset of the wet point they mirror, at any point of the staggering and for as many layers as a stencil reads:
+
+```python
+east = masks.coast_ghosts("x", "high")  # coasts on the east side of the water
+east.points  # the dry T points whose west neighbour is wet
+east.offset  # -1: that neighbour, the φ₁ of the mirror rules
+masks.coast_ghosts("y", "low", at="V", layer=2)  # the second layer of V points
 ```
 
 ## Jupyter notebook
@@ -380,31 +391,9 @@ The canonical functions need no such pattern: `advect`, `diffuse`, `coriolis`
 and the others act on the last two axes of the interior levels, with the 3-D
 masks, and pad a zero ghost slab.
 
-### Advection hierarchy pre-build
+### Stencil tiers in advection
 
-`Advection1D` / `Advection2D` / `Advection3D` are the special case
-where "mask as field" matters for performance, not just ergonomics.
-When constructed with a mask, `__init__` pre-builds the `(2, 4, 6, 8, 10)`
-adaptive stencil hierarchy via `mask.get_adaptive_masks(...)` — once,
-up-front — and stores the result on the operator.  Every subsequent
-call then uses the cached hierarchy, narrowed at dispatch time (by the
-`narrow_mask_hierarchy` helper) to the subset of tiers the chosen
-scheme needs:
-
-```python
-adv = fvx.Advection2D(grid=grid, mask=mask)  # builds (2,4,6,8,10) hierarchies
-
-# First call uses the cached hierarchies; no get_adaptive_masks recomputation.
-dh_dt = adv(h, u, v, scheme=WENO(5))
-
-# A call with another scheme on the same instance reuses the cache and
-# narrows to (2, 4) on the fly for WENO3.
-dh_dt = adv(h, u, v, scheme=WENO(3))
-```
-
-This is the main reason the Advection API moved from a per-call
-`mask=` kwarg to a class field: masks under JIT now compile once per
-`Advection*` instance instead of once per (instance, scheme) pair.
+`advect` and `reconstruct` read `mask.tiers(axis)` at each call. The stored counts make a tier one comparison, so nothing is cached on an operator: `Advection2D` with a mask is `advect` with that mask, and takes any scheme.
 
 ### Changing the mask on an operator
 

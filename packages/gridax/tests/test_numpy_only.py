@@ -29,10 +29,10 @@ CHECKS = textwrap.dedent(
     h = np.ones((8, 8), dtype=bool)
     h[3:5, 3:5] = False
     m2 = gridax.Mask2D.from_mask(h)
-    m2.get_adaptive_masks(direction="y"), m2.ind_boundary, ~m2.wet(at="X")
+    m2.tiers("y"), m2.ind_boundary, ~m2.wet(at="X")
     gridax.Mask2D.from_bathymetry(np.where(h, 50.0, -1.0), min_depth=1.0)
-    gridax.Mask1D.from_dimensions(8).get_adaptive_masks()
-    gridax.Mask3D.from_mask(np.broadcast_to(h, (4, 8, 8))).get_adaptive_masks("z")
+    gridax.Mask1D.from_dimensions(8).tiers("x")
+    gridax.Mask3D.from_mask(np.broadcast_to(h, (4, 8, 8))).tiers("z")
 
     h2 = np.arange(30.0).reshape(5, 6)
     gridax.interior(gridax.diff_x_fwd_2d(h2) + gridax.avg_y_bwd_2d(h2), h2)

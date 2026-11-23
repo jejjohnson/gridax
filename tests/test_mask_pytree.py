@@ -151,8 +151,7 @@ def test_kept_fields_match_the_equinox_masks():
         m = MASKS[dim]()
         if name.startswith("adaptive_x."):
             size = int(name.split(".")[1])
-            kwargs = {} if dim == "1d" else {"direction": "x"}
-            value = m.get_adaptive_masks(stencil_sizes=(2, 4, 6, 8, 10), **kwargs)[size]
+            value = m.tiers("x")[size]
         elif name.startswith("stencil_capability."):
             value = getattr(m.stencil_capability, name.split(".")[1])
         else:
@@ -168,7 +167,7 @@ def test_stencil_counts_saturate_at_127():
     m = Mask1D.from_mask(np.ones(300, dtype=bool))
     counts = m.stencil_capability.x_pos
     assert counts.max() == 127 and counts.min() == 1
-    tiers = m.get_adaptive_masks(stencil_sizes=(2, 4, 6, 8, 10))
+    tiers = m.tiers("x", sizes=(2, 4, 6, 8, 10))
     assert tiers[10][5:-5].all()
 
 
@@ -186,12 +185,9 @@ class TestPytree:
         assert type(rebuilt) is type(mask)
         assert rebuilt == mask
 
-    def test_adaptive_masks_under_jit(self, mask):
-        kwargs = {} if isinstance(mask, Mask1D) else {"direction": "x"}
-        eager = mask.get_adaptive_masks(stencil_sizes=(2, 4, 6), **kwargs)
-        traced = jax.jit(
-            lambda m: m.get_adaptive_masks(stencil_sizes=(2, 4, 6), **kwargs)
-        )(mask)
+    def test_tiers_under_jit(self, mask):
+        eager = mask.tiers("x", sizes=(2, 4, 6))
+        traced = jax.jit(lambda m: m.tiers("x", sizes=(2, 4, 6)))(mask)
         for size in (2, 4, 6):
             np.testing.assert_array_equal(traced[size], eager[size])
 

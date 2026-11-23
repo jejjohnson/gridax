@@ -135,6 +135,7 @@ from gridax._src.grid import (
     t_point_coordinates,
 )
 from gridax._src.mask import (
+    CoastGhosts,
     Mask1D,
     Mask2D,
     Mask3D,
@@ -328,6 +329,7 @@ __all__ = [
     "StencilCapability1D",
     "StencilCapability2D",
     "StencilCapability3D",
+    "CoastGhosts",
     # Mask construction primitives
     "count_contiguous",
     "dilate_mask",

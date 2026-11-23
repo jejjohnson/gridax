@@ -265,7 +265,7 @@ print(np.asarray(sc.x_pos))
 
 # %%
 # Get mutually-exclusive adaptive masks for x-direction reconstruction
-adaptive = masks_island.get_adaptive_masks(direction="x", source="h")
+adaptive = masks_island.tiers("x")
 print("Adaptive stencil masks (x-direction, island domain):")
 for size, mask in sorted(adaptive.items()):
     count = int(mask.sum())

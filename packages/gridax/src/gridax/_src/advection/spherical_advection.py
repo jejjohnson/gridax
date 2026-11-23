@@ -59,11 +59,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from jaxtyping import Bool, Float
+from jaxtyping import Float
 import numpy as np
 
-from gridax._src.advection.advect import Wall, cache
-from gridax._src.advection.advection import UPWIND, tendency
+from gridax._src.advection.advect import Wall, advect
+from gridax._src.advection.advection import UPWIND
 from gridax._src.grid import SphericalCGrid2D, SphericalCGrid3D
 from gridax._src.mask import Mask2D, Mask3D
 from gridax._src.pytree import pytree_dataclass
@@ -79,8 +79,7 @@ else:
 class SphericalAdvection2D:
     """Advection of a tracer on a 2-D spherical C-grid.
 
-    `gridax.advect` with a fixed grid and mask. With a mask, the adaptive
-    masks of the schemes up to order 9 are computed once, here.
+    `gridax.advect` with a fixed grid and mask.
 
     Parameters
     ----------
@@ -92,13 +91,7 @@ class SphericalAdvection2D:
     """
 
     grid: SphericalCGrid2D
-    mask: Mask2D | None
-    _hierarchies: dict[str, dict[int, Bool[Array, "Ny Nx"]]] | None
-
-    def __init__(self, grid: SphericalCGrid2D, mask: Mask2D | None = None) -> None:
-        self.grid = grid
-        self.mask = mask
-        self._hierarchies = cache(mask, grid.axes)
+    mask: Mask2D | None = None
 
     def __call__(
         self,
@@ -128,15 +121,14 @@ class SphericalAdvection2D:
         Float[Array, "*batch Ny Nx"]
             The tendency at T.
         """
-        return tendency(self, h, u, v, scheme, wall)
+        return advect(h, u, v, self.grid, scheme=scheme, mask=self.mask, wall=wall)
 
 
 @pytree_dataclass
 class SphericalAdvection3D:
     """Horizontal advection of a tracer on a 3-D spherical C-grid, level by level.
 
-    `gridax.advect` with a fixed grid and mask. With a mask, the adaptive
-    masks of the schemes up to order 9 are computed once, here.
+    `gridax.advect` with a fixed grid and mask.
 
     Parameters
     ----------
@@ -148,13 +140,7 @@ class SphericalAdvection3D:
     """
 
     grid: SphericalCGrid3D
-    mask: Mask3D | None
-    _hierarchies: dict[str, dict[int, Bool[Array, "Nz Ny Nx"]]] | None
-
-    def __init__(self, grid: SphericalCGrid3D, mask: Mask3D | None = None) -> None:
-        self.grid = grid
-        self.mask = mask
-        self._hierarchies = cache(mask, grid.axes)
+    mask: Mask3D | None = None
 
     def __call__(
         self,
@@ -184,4 +170,4 @@ class SphericalAdvection3D:
         Float[Array, "*batch Nz Ny Nx"]
             The tendency at T.
         """
-        return tendency(self, h, u, v, scheme, wall)
+        return advect(h, u, v, self.grid, scheme=scheme, mask=self.mask, wall=wall)
