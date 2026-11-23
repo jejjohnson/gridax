@@ -209,7 +209,8 @@ class Upwind(Scheme):
 
     ``order=1`` reads the upwind cell; ``3`` and ``5`` have the weights WENO-3
     and WENO-5 have on smooth data. Near a wall the stencil narrows, down to
-    the upwind cell. ``order=2``, kept for compatibility, reads the upwind cell
+    the upwind cell. ``order=2`` is not one of the family and is kept for
+    compatibility only; do not use it in new code. It reads the upwind cell
     and the one behind it, ``3/2 q[i] - 1/2 q[i-1]``, and is dispersive.
 
     Parameters

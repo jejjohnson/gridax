@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 import functools
 from typing import TYPE_CHECKING, Literal, NamedTuple
 
@@ -117,6 +118,86 @@ def _weno_reconstruct(
         )
         / alpha_sum
     )
+
+
+#: The weights of WENO-Z's global indicator ``tau = |sum_k t_k beta_k|``, by
+#: the number of sub-stencils.
+_TAU: dict[int, tuple[int, ...]] = {
+    2: (1, -1),
+    3: (1, 0, -1),
+    4: (1, 3, -3, -1),
+    5: (1, 2, -6, 2, 1),
+}
+
+
+@functools.lru_cache(maxsize=64)
+def weno_kernel(
+    order: int, bias: Literal["left", "right"], variant: Literal["js", "z"] = "js"
+) -> Callable[..., Array]:
+    """The WENO face value of any odd order, generated from Layer 0.
+
+    ``r = (order + 1) / 2`` sub-stencils of ``r`` cells, with the face values
+    ``q_k`` of their cell averages, the smoothness ``beta_k = q^T B_k q`` and the
+    weights ``g_k`` whose combination is the upwind value of order ``2 r - 1``
+    (``_weno_tables``). With ``b_k = beta_k / sum beta`` and the floor ``eps``::
+
+        "js"    alpha_k = g_k / (eps + b_k)^2
+        "z"     alpha_k = g_k (1 + (tau / (eps + b_k))^2)
+
+    ``tau`` is the modulus of the combination of the ``beta_k`` that vanishes
+    to the highest order on smooth data (``_TAU``).
+
+    Parameters
+    ----------
+    order : int
+        Odd, at least 3; at most 9 for ``"z"``.
+    bias : {"left", "right"}
+        The upwind side.
+    variant : {"js", "z"}
+        Jiang-Shu or WENO-Z.
+
+    Returns
+    -------
+    Callable
+        ``order`` cell values, in order → the face value.
+    """
+    r = (order + 1) // 2
+    # The matrices annihilate constants, so the reconstructed cell may be taken
+    # off, and a large mean costs no digits. The orders that have a hand-written
+    # kernel are evaluated as it is, without.
+    upwind = r - 1
+    centred = variant == "z" or order > 9
+
+    def kernel(*q: Array) -> Array:
+        tables = _weno_tables(order, bias)
+        xp = array_namespace(*q)
+        departures = [value - q[upwind] for value in q] if centred else q
+        face, betas = [], []
+        for k in range(r):
+            face.append(_linear_combo(tables.coeffs[k], q[k : k + r]))
+            betas.append(
+                _smoothness_indicator(tables.betas[k], tuple(departures[k : k + r]))
+            )
+        # a sum of squares, up to rounding
+        betas = [xp.maximum(beta, xp.zeros_like(beta)) for beta in betas]
+        if variant == "js":
+            alphas = [
+                g / (b + _WENO_EPS_REL) ** 2
+                for g, b in zip(tables.weights, _normalised(tuple(betas)), strict=True)
+            ]
+        else:
+            tau = xp.abs(
+                sum(t * beta for t, beta in zip(_TAU[r], betas, strict=True) if t)
+            )
+            *normalised, t = _normalised(tuple(betas), tau)
+            alphas = [
+                g * (1.0 + (t / (b + _WENO_EPS_REL)) ** 2)
+                for g, b in zip(tables.weights, normalised, strict=True)
+            ]
+        total = sum(alphas)
+        return sum(a * v for a, v in zip(alphas, face, strict=True)) / total
+
+    return kernel
 
 
 def weno_3pts(qm: Array, q0: Array, qp: Array) -> Array:

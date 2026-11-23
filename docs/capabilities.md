@@ -527,7 +527,7 @@ Every public name in gridax (439 entries), listed per public module (`gridax`, i
 | Name | Kind | What it does |
 |---|---|---|
 | `TVD` | class | Second-order TVD: first-order upwind plus a limited anti-diffusive correction. |
-| `WENO` | class | WENO face values of cell averages, of ``order`` 3, 5, 7 or 9. |
+| `WENO` | class | WENO face values of cell averages, of any odd ``order`` from 3 on. |
 
 ### `gridax.advection`
 
