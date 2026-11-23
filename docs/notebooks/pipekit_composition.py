@@ -18,8 +18,8 @@
 # finitevolX ships two tiers of the same operators:
 #
 # ```
-# Tier A  gridax                     Difference2D(grid).diff_x_T_to_U(h)
-#         arrays in, arrays out      eqx.Module / pure function, no config
+# Tier A  gridax                     difference(h, G, axis="x", src="T", dst="U")
+#         arrays in, arrays out      pure function, no config
 #                 │
 #                 ▼
 # Tier B  gridax.pipekit             Difference(grid=G, axis="x", src="T", dst="U")
@@ -143,17 +143,17 @@ print(f"compile + run: {time.perf_counter() - t:.1f} s;  h: {traj['h'].shape}")
 # the pipekit layer is free.
 
 # %%
-D = fvx.Difference2D(grid=grid)
+ops = fvx.GridOps(grid)
 f_T = F0 * jnp.ones((grid.Ny, grid.Nx))
 
 
 def rhs_tier_a(s):
     h, u, v = (fvx.fill_ghosts(s[k], grid, fvx.BC.periodic()) for k in "huv")
-    cu, cv = fvx.Coriolis2D(grid=grid)(u, v, f_T)
+    cu, cv = ops.coriolis(u, v, f=f_T)
     return {
-        "h": -H * D.divergence(u, v),
-        "u": cu - GRAV * D.diff_x_T_to_U(h),
-        "v": cv - GRAV * D.diff_y_T_to_V(h),
+        "h": -H * ops.divergence(u, v),
+        "u": cu - GRAV * ops.difference(h, axis="x", src="T", dst="U"),
+        "v": cv - GRAV * ops.difference(h, axis="y", src="T", dst="V"),
     }
 
 

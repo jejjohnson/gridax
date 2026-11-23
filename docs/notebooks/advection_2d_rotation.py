@@ -22,7 +22,7 @@
 #
 # By the end you will understand:
 #
-# 1. How `Advection2D` computes the flux-form tendency
+# 1. How `advect` computes the flux-form tendency
 #    $-\nabla \cdot (\mathbf{u}\,q)$ on a staggered grid.
 # 2. How to set up a **non-trivial velocity field** on the staggered
 #    U/V-points.
@@ -308,7 +308,7 @@ print(f"|u|_max = {u_max:.2f}, |v|_max = {v_max:.2f}, CFL ≈ {cfl:.2f}")
 # We compare six schemes spanning upwind, TVD, and WENO families.
 
 # %%
-advect = fvx.Advection2D(grid)
+advect = fvx.GridOps(grid).advect
 SCHEMES = {
     "upwind1": Upwind(1),
     "upwind3": Upwind(3),

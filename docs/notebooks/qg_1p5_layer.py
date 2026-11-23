@@ -237,7 +237,9 @@ wind_curl_x = interior(-fvx.diff_y_fwd_2d(tau_x_u) / (dy * rho0 * H), tau_x)
 # west wall column equals its neighbour; on the south wall (y = 0) the curl
 # -F0 sin(0) is zero already.
 wind_curl_x = wind_curl_x.at[:, 0].set(wind_curl_x[:, 1])
-wind_curl = fvx.Interpolation2D(grid=grid).X_to_T(wind_curl_x)  # zero ghost ring
+wind_curl = fvx.interpolate(
+    wind_curl_x, grid, src="X", dst="T"
+)  # zero ghost ring
 wind_curl_interior = wind_curl[1:-1, 1:-1]
 
 print(f"Wind curl shape (interior): {wind_curl_interior.shape}")
@@ -299,8 +301,7 @@ plt.show()
 # interface displacement.
 
 # %%
-diff_op = fvx.Difference2D(grid)
-interp_op = fvx.Interpolation2D(grid)
+ops = fvx.GridOps(grid)
 
 
 def invert_streamfunction(q_field):
@@ -382,9 +383,9 @@ plt.show()
 # %%
 def geostrophic_velocity(psi_field):
     """Recover (u, v) from streamfunction at T-points."""
-    psi_on_x = interp_op.T_to_X(psi_field)
-    u_field = -diff_op.diff_y_X_to_U(psi_on_x)
-    v_field = diff_op.diff_x_X_to_V(psi_on_x)
+    psi_on_x = ops.interpolate(psi_field, src="T", dst="X")
+    u_field = -ops.difference(psi_on_x, axis="y", src="X", dst="U")
+    v_field = ops.difference(psi_on_x, axis="x", src="X", dst="V")
     return u_field, v_field
 
 
@@ -402,11 +403,8 @@ print(f"max |v| = {float(jnp.abs(v_test).max()):.4e} m/s")
 # We now assemble the full PV tendency, line by line.  Each physical
 # process maps onto a specific gridax operation.
 
+
 # %%
-adv_op = fvx.Advection2D(grid=grid)
-vort_op = fvx.Vorticity2D(grid=grid)
-
-
 def tendency(q_field):
     """Compute dq_a/dt and return (tendency, psi, u, v).
 
@@ -426,11 +424,11 @@ def tendency(q_field):
     u_field, v_field = geostrophic_velocity(psi_field)
 
     # 3. PV advection: -u . grad(q_a)  (writes to interior [2:-2, 2:-2])
-    q_rhs = adv_op(q_field, u_field, v_field, scheme=Upwind(1))
+    q_rhs = ops.advect(q_field, u_field, v_field, scheme=Upwind(1))
 
     # 4. Beta term: -beta * v at interior T-points
     #    We interpolate v from V-points to T-points first.
-    v_center = interp_op.V_to_T(v_field)
+    v_center = ops.interpolate(v_field, src="V", dst="T")
     q_rhs = q_rhs.at[1:-1, 1:-1].add(-beta * v_center[1:-1, 1:-1])
 
     # 5. Wind forcing (already on full grid with zero ghosts)
@@ -440,11 +438,11 @@ def tendency(q_field):
     #    Drag acts on relative vorticity zeta = laplacian(psi).
     #    If we dragged q_a instead, we would get an extra +r*psi/Ld^2 term
     #    that acts as anti-damping on the interface displacement.
-    zeta = diff_op.laplacian(psi_field)
+    zeta = ops.laplacian(psi_field)
     q_rhs = q_rhs - drag * zeta
 
     # 7. Diffusion: nu * laplacian(q_a)
-    q_rhs = q_rhs + viscosity * diff_op.laplacian(q_field)
+    q_rhs = q_rhs + viscosity * ops.laplacian(q_field)
 
     return q_rhs, psi_field, u_field, v_field
 
@@ -532,10 +530,10 @@ print("Done.")
 
 # %%
 # Diagnose fields for plotting
-u_center = interp_op.U_to_T(u)
-v_center = interp_op.V_to_T(v)
-zeta_corner = vort_op.relative_vorticity(u, v)
-zeta_center = interp_op.X_to_T(zeta_corner)
+u_center = ops.interpolate(u, src="U", dst="T")
+v_center = ops.interpolate(v, src="V", dst="T")
+zeta_corner = ops.curl(u, v)
+zeta_center = ops.interpolate(zeta_corner, src="X", dst="T")
 
 # --- Coordinate extents ---
 # Full interior [1:-1, 1:-1] for native T-point fields (q, eta/SSH)
@@ -652,10 +650,10 @@ plt.show()
 # |-----------|---------------|---------|
 # | **Grid** | `CartesianCGrid2D.from_interior(nx, ny, Lx, Ly)` | C-grid with ghost ring |
 # | **Helmholtz inversion** | `solve_helmholtz_dst(rhs, dx, dy, lambda_)` | $(\\nabla^2 - \\lambda)\\psi = q_a$ |
-# | **Differences** | `Difference2D(grid)` | Finite differences, Laplacian |
-# | **Interpolation** | `Interpolation2D(grid)` | T-to-X, V-to-T, U-to-T, X-to-T |
-# | **Advection** | `Advection2D(grid)(q, u, v, scheme=Upwind(1))` | PV transport |
-# | **Vorticity** | `Vorticity2D(grid).relative_vorticity(u, v)` | $\\zeta$ at X-points |
+# | **Differences** | `GridOps(grid).difference`, `.laplacian` | Finite differences, Laplacian |
+# | **Interpolation** | `GridOps(grid).interpolate` | T-to-X, V-to-T, U-to-T, X-to-T |
+# | **Advection** | `GridOps(grid).advect(q, u, v, scheme=Upwind(1))` | PV transport |
+# | **Vorticity** | `GridOps(grid).curl(u, v)` | $\\zeta$ at X-points |
 # | **Boundary conditions** | `embed(interior(q, grid), grid)` | Zero ghost ring (solid walls) |
 # | **Time stepping** | `heun_step(q, tendency_fn, dt)` | Heun / RK2 predictor-corrector |
 #

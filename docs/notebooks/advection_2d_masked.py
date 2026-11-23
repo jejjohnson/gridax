@@ -310,16 +310,16 @@ q0 = jnp.where(
 # %% [markdown]
 # ### Run three experiments
 #
-# 1. **Masked WENO5** — the correct approach.  Construct a second
-#    ``Advection2D`` instance with ``mask=mask`` so the operator
-#    automatically cascades near coasts.
+# 1. **Masked WENO5** — the correct approach.  Bind the mask too,
+#    ``GridOps(grid, mask)``, so that ``advect`` cascades to narrower
+#    stencils near coasts.
 # 2. **Unmasked WENO5** — what happens if you *forget* the mask.  The
 #    stencil reads land cells (zeros) as real data.
 # 3. **Upwind1** — the safe but diffusive baseline.
 
 # %%
-advect_unmasked = fvx.Advection2D(grid)
-advect_masked = fvx.Advection2D(grid, mask=mask)
+advect_unmasked = fvx.GridOps(grid).advect
+advect_masked = fvx.GridOps(grid, mask).advect
 
 cfl = 0.4
 u_max = float(jnp.max(jnp.abs(u_field)))
@@ -410,7 +410,7 @@ fig.savefig(IMG_DIR / "comparison.png", dpi=150, bbox_inches="tight")
 # after each stage:
 #
 # ```python
-# advect_masked = fvx.Advection2D(grid, mask=mask)
+# advect_masked = fvx.GridOps(grid, mask).advect
 #
 # def rhs(q):
 #     q = q * ocean_jnp       # ← clean up land before reconstruction
@@ -423,7 +423,7 @@ fig.savefig(IMG_DIR / "comparison.png", dpi=150, bbox_inches="tight")
 #
 # ### Tip 2: Zero velocity at land faces
 #
-# `Advection2D` multiplies the reconstructed face value by the face
+# `advect` multiplies the reconstructed face value by the face
 # velocity.  If the velocity at a land face is nonzero, you get a flux
 # through the wall.  Safest:
 #
@@ -442,7 +442,7 @@ fig.savefig(IMG_DIR / "comparison.png", dpi=150, bbox_inches="tight")
 # mask.tiers('x', sizes=(2, 4, 6))
 # ```
 #
-# `Advection2D(grid, mask=mask)` does so for the scheme of each call.
+# `advect(..., mask=mask)` does so for the scheme of each call.
 #
 # ### Tip 4: Inspect stencil assignment before running
 #

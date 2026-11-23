@@ -227,21 +227,19 @@ print(f"Saved: {IMG_DIR / 'wind_forcing.png'}")
 # %% [markdown]
 # ## 5. Operator Construction
 #
-# gridax provides stateless operator modules that know about the grid
-# spacing and stencil layout.  We need three operators:
+# gridax has one function per operation; `GridOps(grid)` fills in the grid, so
+# the methods know the spacing and the stencil layout.  We need four kinds:
 #
-# - **`Difference2D`** -- finite differences: `diff_x_T_to_U`, `diff_y_T_to_V`,
-#   `divergence`, and `laplacian`.
-# - **`Interpolation2D`** -- cross-averaging between staggered locations:
-#   `T_to_U`, `T_to_V`, `V_to_U`, `U_to_V`, `U_to_T`, `V_to_T`, `X_to_T`.
-# - **`Vorticity2D`** -- `relative_vorticity` at corner (X) points.
+# - **`difference`** -- finite differences along one axis, from the points
+#   `src` to the points `dst`.
+# - **`divergence`** and **`laplacian`**.
+# - **`interpolate`** -- averaging between staggered locations.
+# - **`curl`** -- the relative vorticity at corner (X) points.
 
 # %%
-diff_op = fvx.Difference2D(grid)
-interp_op = fvx.Interpolation2D(grid)
-vort_op = fvx.Vorticity2D(grid)
+ops = fvx.GridOps(grid)
 
-print("Operators created (stateless equinox Modules, JIT-compatible).")
+print("Operations bound to the grid (a pytree, so it crosses jit).")
 
 # %% [markdown]
 # ## 6. Tendency Function
@@ -252,8 +250,8 @@ print("Operators created (stateless equinox Modules, JIT-compatible).")
 # - the staggered grid location of the result
 #
 # The key idea: operators move values between staggered locations.  For
-# example, `diff_op.diff_x_T_to_U` differentiates a T-point field and
-# returns the result at U-points.
+# example, `ops.difference(h, axis="x", src="T", dst="U")` differentiates a
+# T-point field and returns the result at U-points.
 
 
 # %%
@@ -274,43 +272,47 @@ def tendency(eta_field, u_field, v_field):
 
     # Divergence of velocity at T-points: shape (Ny, Nx)
     # Uses backward differences: div = du/dx + dv/dy
-    eta_rhs = -mean_depth * diff_op.divergence(u_field, v_field)
+    eta_rhs = -mean_depth * ops.divergence(u_field, v_field)
 
     # Diffusion of eta at T-points: shape (Ny, Nx)
     # 5-point Laplacian stencil
-    eta_rhs = eta_rhs + viscosity * diff_op.laplacian(eta_field)
+    eta_rhs = eta_rhs + viscosity * ops.laplacian(eta_field)
 
     # === Coriolis cross-terms ===
     # f lives at T-points; we need it at U-points and V-points
     # v lives at V-points; we need it at U-points for f*v in the u-equation
     # u lives at U-points; we need it at V-points for f*u in the v-equation
 
-    v_on_u = interp_op.V_to_U(v_field)  # V-pts -> U-pts, shape (Ny, Nx)
-    u_on_v = interp_op.U_to_V(u_field)  # U-pts -> V-pts, shape (Ny, Nx)
-    coriolis_on_u = interp_op.T_to_U(coriolis)  # T-pts -> U-pts, shape (Ny, Nx)
-    coriolis_on_v = interp_op.T_to_V(coriolis)  # T-pts -> V-pts, shape (Ny, Nx)
+    # V-pts -> U-pts, shape (Ny, Nx)
+    v_on_u = ops.interpolate(v_field, src="V", dst="U")
+    # U-pts -> V-pts, shape (Ny, Nx)
+    u_on_v = ops.interpolate(u_field, src="U", dst="V")
+    # T-pts -> U-pts, shape (Ny, Nx)
+    coriolis_on_u = ops.interpolate(coriolis, src="T", dst="U")
+    # T-pts -> V-pts, shape (Ny, Nx)
+    coriolis_on_v = ops.interpolate(coriolis, src="T", dst="V")
 
     # === u equation: d(u)/dt = -g * d(eta)/dx + f*v - r*u + nu*lap(u) + F_x ===
 
     # Pressure gradient: -g * d(eta)/dx at U-points
-    u_rhs = -gravity * diff_op.diff_x_T_to_U(eta_field)
+    u_rhs = -gravity * ops.difference(eta_field, axis="x", src="T", dst="U")
 
     # Coriolis: +f*v at U-points (f averaged to U, v averaged to U)
     u_rhs = u_rhs + coriolis_on_u * v_on_u
 
     # Wind forcing + drag + diffusion, all at U-points
-    u_rhs = u_rhs + wind_u - drag * u_field + viscosity * diff_op.laplacian(u_field)
+    u_rhs = u_rhs + wind_u - drag * u_field + viscosity * ops.laplacian(u_field, at="U")
 
     # === v equation: d(v)/dt = -g * d(eta)/dy - f*u - r*v + nu*lap(v) ===
 
     # Pressure gradient: -g * d(eta)/dy at V-points
-    v_rhs = -gravity * diff_op.diff_y_T_to_V(eta_field)
+    v_rhs = -gravity * ops.difference(eta_field, axis="y", src="T", dst="V")
 
     # Coriolis: -f*u at V-points (f averaged to V, u averaged to V)
     v_rhs = v_rhs - coriolis_on_v * u_on_v
 
     # Drag + diffusion, all at V-points (no meridional wind forcing)
-    v_rhs = v_rhs - drag * v_field + viscosity * diff_op.laplacian(v_field)
+    v_rhs = v_rhs - drag * v_field + viscosity * ops.laplacian(v_field, at="V")
 
     return eta_rhs, u_rhs, v_rhs
 
@@ -386,12 +388,12 @@ print(f"max |eta| = {float(jnp.abs(eta[1:-1, 1:-1]).max()):.4e} m")
 # %%
 # --- Compute diagnostics ---
 # Interpolate u, v to T-points for plotting
-u_center = interp_op.U_to_T(u)  # U-pts -> T-pts
-v_center = interp_op.V_to_T(v)  # V-pts -> T-pts
+u_center = ops.interpolate(u, src="U", dst="T")  # U-pts -> T-pts
+v_center = ops.interpolate(v, src="V", dst="T")  # V-pts -> T-pts
 
 # Relative vorticity at corner (X) points, then average to T-points
-zeta_corner = vort_op.relative_vorticity(u, v)
-zeta_center = interp_op.X_to_T(zeta_corner)
+zeta_corner = ops.curl(u, v)
+zeta_center = ops.interpolate(zeta_corner, src="X", dst="T")
 
 # --- Coordinate grids ---
 # [1:-1, 1:-1] coords for native T-point fields (eta)
@@ -524,9 +526,9 @@ print(f"Saved: {IMG_DIR / 'demo_results.png'}")
 # | Concept | gridax API | Detail |
 # |---------|---------------|--------|
 # | **Grid** | `CartesianCGrid2D.from_interior(nx, ny, Lx, Ly)` | Creates the C-grid with 2-cell ghost ring |
-# | **Differences** | `Difference2D(grid)` | `diff_x_T_to_U`, `diff_y_T_to_V`, `divergence`, `laplacian` |
-# | **Interpolation** | `Interpolation2D(grid)` | `T_to_U`, `T_to_V`, `V_to_U`, `U_to_V`, `U_to_T`, `V_to_T`, `X_to_T` |
-# | **Vorticity** | `Vorticity2D(grid)` | `relative_vorticity` at corner (X) points |
+# | **Differences** | `GridOps(grid)` | `difference` (T to U, T to V), `divergence`, `laplacian` |
+# | **Interpolation** | `GridOps(grid).interpolate` | between any two of T, U, V and X |
+# | **Vorticity** | `GridOps(grid).curl` | at corner (X) points |
 # | **Time stepping** | `heun_step(state, rhs, dt)` | Heun / modified Euler (RK2) |
 # | **Boundary conditions** | `embed(interior(field, grid), grid)` | Zero ghost cells = solid walls |
 # | **Variable placement** | T-points (centres), U-points (east faces), V-points (north faces) | Standard Arakawa C-grid staggering |

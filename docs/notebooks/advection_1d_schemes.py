@@ -26,7 +26,7 @@
 #    C-grid.
 # 2. How **upwind**, **TVD**, and **WENO** reconstruction schemes differ in
 #    practice.
-# 3. How to use `gridax.Advection1D` with different schemes of `gridax.schemes`.
+# 3. How to use `gridax.advect` with different schemes of `gridax.schemes`.
 #
 # > **Prerequisites** — read the
 # > [Advection Theory](../advection.md) page for the mathematical
@@ -138,7 +138,7 @@ IMG_DIR.mkdir(parents=True, exist_ok=True)
 #
 # We construct a 1-D Arakawa C-grid on the periodic domain $[0, 1]$.
 #
-# **Ghost cells** — The `Advection1D` operator writes its tendency to the
+# **Ghost cells** — `gridax.advect` writes its tendency to the
 # interior region `[2:-2]`, meaning the outermost 2 cells on each side
 # receive zero tendency.  For periodic advection we need the stencil to
 # "see through" the boundary, so we pad the domain with extra ghost cells
@@ -176,7 +176,7 @@ print(f"Grid: {nx} physical cells, dx = {dx:.4e}, Nx (with ghosts) = {grid.Nx}")
 # %% [markdown]
 # ## Periodic Boundary Conditions
 #
-# Before each call to `Advection1D` we must fill the ghost cells with
+# Before each call to `advect` we must fill the ghost cells with
 # periodic copies from the opposite end of the physical domain.
 #
 # ```
@@ -284,14 +284,14 @@ print(f"CFL = {cfl}, dt = {dt:.4e}, nsteps = {nsteps}")
 # ## Running the Four Schemes
 #
 # For each scheme we:
-# 1. Create an `Advection1D` operator.
+# 1. Bind `advect` to the grid (`GridOps`).
 # 2. Define a right-hand-side function that applies periodic BCs then
 #    computes the tendency.
 # 3. Advance `nsteps` timesteps with `rk3_ssp_step`.
 # 4. Extract the physical cells and compare to the exact solution.
 
 # %%
-advect = fvx.Advection1D(grid)
+advect = fvx.GridOps(grid).advect
 SCHEMES = {
     "upwind1": Upwind(1),
     "upwind3": Upwind(3),
@@ -310,7 +310,7 @@ for method in methods:
 
         def rhs(q):
             q = enforce_periodic_1d(q, ng)
-            return advect(q, u_field, scheme=SCHEMES[m])
+            return advect(q, u_field, None, scheme=SCHEMES[m])
 
         return rhs
 
@@ -458,7 +458,7 @@ for nx_test in resolutions:
     dt_test = T_final / nsteps_test
 
     grid_test = fvx.CartesianCGrid1D(Nx=nx_test + 2 * ng, Lx=Lx, ghost=ng)
-    advect_test = fvx.Advection1D(grid_test)
+    advect_test = fvx.GridOps(grid_test).advect
     x_test = jnp.linspace(0.5 * dx_test, Lx - 0.5 * dx_test, nx_test)
     u_test = c * jnp.ones(grid_test.Nx)
 
@@ -472,7 +472,7 @@ for nx_test in resolutions:
         def make_rhs_conv(m, adv, u):
             def rhs(q):
                 q = enforce_periodic_1d(q, ng)
-                return adv(q, u, scheme=SCHEMES[m])
+                return adv(q, u, None, scheme=SCHEMES[m])
 
             return rhs
 
