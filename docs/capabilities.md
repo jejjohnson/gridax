@@ -131,7 +131,7 @@ Every public name in gridax (426 entries), listed per public module (`gridax`, i
 | Name | Kind | What it does |
 |---|---|---|
 | `BC` | class | The boundary condition of each face of a grid. |
-| `fill_ghosts` | function | Fill the ghost ring of a field from its boundary conditions. |
+| `fill_ghosts` | function | Fill the ghost ring of a field, or of every field of a state. |
 
 #### Harmonic and biharmonic diffusion operators (flux form) on Arakawa C-grids (`gridax._src.diffusion.diffusion`)
 
