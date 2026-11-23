@@ -124,9 +124,7 @@ $$
 $$
 
 This is the composition of two backward differences: `diff_x_U_to_T` + `diff_y_V_to_T`.
-It is available as `Difference2D.divergence(u, v)`; without a grid object,
-write `interior(diff_x_bwd_2d(u) / dx + diff_y_bwd_2d(v) / dy, u)` (the
-standalone `divergence_2d` is deprecated, #456).
+It is `gridax.divergence(u, v, grid)`, which `Difference2D.divergence(u, v)` calls; without a grid object, write `interior(diff_x_bwd_2d(u) / dx + diff_y_bwd_2d(v) / dy, u)`.
 
 ### Curl (Relative Vorticity)
 
@@ -259,7 +257,7 @@ What derivative do you need?
 └── geostrophic u, v      → diff.grad_perp(psi)
 ```
 
-The same quantities for a **collocated** field (every component on the same points, as in model output on a lat-lon grid) come from `gridax.analysis`, with the Layer 0 coefficients of `gridax.stencils` underneath:
+The functions `gridax.divergence`, `curl`, `laplacian`, `gradient` and `grad_perp` take any grid. On a [collocated grid](https://jejjohnson.github.io/gridax/reference/grids/) (every component on the same points, as in model output on a lat-lon grid) they run the collocated stencils, so one call serves both. On bare arrays without a grid those stencils are `gridax.analysis`, with the Layer 0 coefficients of `gridax.stencils` underneath:
 
 | Quantity | Staggered C-grid (`Difference2D`) | Collocated (`gridax.analysis`) |
 |---|---|---|

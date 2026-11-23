@@ -123,41 +123,6 @@ def bernoulli_potential(
 # ======================================================================
 
 
-def relative_vorticity_cgrid(
-    u: Float[Array, "*batch Ny Nx"],
-    v: Float[Array, "*batch Ny Nx"],
-    dx: float | Float[Array, ""],
-    dy: float | Float[Array, ""],
-) -> Float[Array, "*batch Ny Nx"]:
-    """Relative vorticity at X-points (corners) on an Arakawa C-grid.
-
-    zeta[j+1/2, i+1/2] = (v[j+1/2, i+1] - v[j+1/2, i]) / dx
-                        - (u[j+1, i+1/2] - u[j, i+1/2]) / dy
-
-    This is a standalone functional form of the class-based
-    :meth:`Vorticity2D.relative_vorticity`.  Both share the same
-    underlying implementation
-    (:func:`gridax._src.operators.difference._curl_2d`).
-
-    Parameters
-    ----------
-    u : Float[Array, "*batch Ny Nx"]
-        x-velocity at U-points.
-    v : Float[Array, "*batch Ny Nx"]
-        y-velocity at V-points.
-    dx : float
-        Grid spacing in x.
-    dy : float
-        Grid spacing in y.
-
-    Returns
-    -------
-    Float[Array, "*batch Ny Nx"]
-        Relative vorticity at X-points.  Ghost ring is zero.
-    """
-    return _curl_2d(u, v, dx, dy)
-
-
 def potential_vorticity(
     omega: Float[Array, "*batch Ny Nx"],
     f: Float[Array, "*batch Ny Nx"],

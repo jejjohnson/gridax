@@ -27,7 +27,7 @@ in `AGENTS.md`.
      (`_Atom`, `_face_spacing`, `_value_like`); `advection/flux.narrow_mask_hierarchy`;
      `advection/reconstruction._get_limiter`; `mask/utils.py` (`pool_bool`,
      `h_from_pooled`, `dilate_mask`, `count_contiguous`, `make_sponge`);
-     `operators/difference.py` (`_curl_2d`, `_divergence_2d`);
+     `operators/calculus.py` (`gridax.divergence`, `curl`, `laplacian`, `gradient`, `grad_perp`);
      `diffusion/diffusion._diffusion_2d_impl`; `solvers/elliptic.py`
      (`_resolve_mask_arr`, `_resolve_bc`); `solvers/inhomogeneous.py`
      (`lift_rhs`, `reconstruct_from_lift`); and, in tests,

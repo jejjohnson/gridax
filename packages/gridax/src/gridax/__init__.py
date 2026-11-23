@@ -173,6 +173,13 @@ from gridax._src.mask import (
     pool_bool,
 )
 from gridax._src.operators._ghost import interior
+from gridax._src.operators.calculus import (
+    curl,
+    divergence,
+    grad_perp,
+    gradient,
+    laplacian,
+)
 from gridax._src.operators.coriolis import (
     Coriolis2D,
     Coriolis3D,
@@ -316,6 +323,12 @@ __all__ = [
     # Canonical moves between staggered points
     "difference",
     "interpolate",
+    # Canonical vector calculus
+    "curl",
+    "divergence",
+    "grad_perp",
+    "gradient",
+    "laplacian",
     # Located fields (element-wise functions in gridax.fields)
     "CField",
     "combine",
@@ -531,35 +544,3 @@ __all__ = [
     "zero_gradient_boundaries",
     # Constants
 ]
-
-
-# One route per C-grid calculus operation (#456): these two free functions are
-# one line of the Layer 1 stencils and repeat a Difference2D method, so they
-# warn for one release. gridax.analysis.divergence_2d is the collocated one.
-_DEPRECATED_CALCULUS = {
-    "divergence_2d": (
-        "gridax.Difference2D(grid=grid, mask=mask).divergence(u, v), or without a"
-        " grid gridax.interior(diff_x_bwd_2d(u) / dx + diff_y_bwd_2d(v) / dy, u);"
-        " gridax.analysis.divergence_2d is the collocated divergence"
-    ),
-    "relative_vorticity_cgrid": (
-        "gridax.Difference2D(grid=grid, mask=mask).curl(u, v), or without a grid"
-        " gridax.interior(diff_x_fwd_2d(v) / dx - diff_y_fwd_2d(u) / dy, u)"
-    ),
-}
-
-
-def __getattr__(name: str) -> object:
-    if name in _DEPRECATED_CALCULUS:
-        import warnings
-
-        from gridax._src.operators import diagnostics, divergence
-
-        warnings.warn(
-            f"gridax.{name} is deprecated and will be removed in the next release:"
-            f" use {_DEPRECATED_CALCULUS[name]}.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return getattr(divergence if name == "divergence_2d" else diagnostics, name)
-    raise AttributeError(f"module 'gridax' has no attribute {name!r}")

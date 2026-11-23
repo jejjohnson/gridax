@@ -49,6 +49,11 @@ def keywords(name, grid):
     if getattr(grid, "_collocated", False):
         axes = [{"axis": axis} for axis in grid.axes]
         return axes if name == "difference" else [{}]
+    if name == "laplacian":
+        points = [p for p, along in POINT_AXES.items() if set(along) <= set(grid.axes)]
+        return [{"at": p} for p in points]
+    if name == "grad_perp":
+        return [{"at": "X"}, {"at": "T"}]
     if name == "difference":
         return [
             {"axis": a, "src": s, "dst": d} for a, s, d in sorted(TRIPLES[grid.axes])
