@@ -888,7 +888,7 @@ class TestConstantsAudit:
         modules = list(_audited_modules())
         assert len(modules) > 20
         names = {p.name for p in modules}
-        assert "difference.py" in names
+        assert "calculus.py" in names
         assert "spherical_diffusion.py" in names
 
     def test_audit_detects_an_aliased_constant(self, tmp_path):
