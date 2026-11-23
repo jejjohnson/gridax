@@ -58,7 +58,7 @@ pass.
 
 3. **Fuse sums of operators.** `op_a(u) + op_b(v)` with each returning a
    padded full-size array is two passes plus an add; one `interior(a + b)`
-   is one pass (`Difference3D.divergence`: 1.5–2.5× faster forward).
+   is one pass (`divergence` in 3-D: 1.5–2.5× faster forward).
 
 4. **Materialise an intermediate that the next stencil reads at several
    offsets.** XLA may otherwise fuse a cheap producer into every shifted
@@ -102,7 +102,7 @@ experiments that did not work and the plan.
   # … change code …
   uv run python scripts/benchmark_operators.py --n 514 --repeat 3 --out after.json
   uv run python scripts/benchmark_operators.py --compare before.json after.json
-  uv run python scripts/benchmark_operators.py --profile "Advection2D.weno5"
+  uv run python scripts/benchmark_operators.py --profile "advect.*weno5"
   ```
 
   On a shared machine, sequential runs are noisy (±30 % below 0.3 ms, and

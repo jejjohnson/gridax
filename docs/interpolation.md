@@ -94,23 +94,23 @@ $$
 
 ## Complete Operator Map
 
-The table below lists every averaging operator in `Interpolation2D` and its
+`gridax.interpolate(f, grid, src=…, dst=…)` moves a field between any two of the points. The table below lists the moves and their
 physical interpretation.
 
-| Method | From → To | Average | Typical use |
-|--------|-----------|---------|-------------|
-| `T_to_U` | T → U | ½(T_i + T_{i+1}) | Height at east face (pressure gradient) |
-| `T_to_V` | T → V | ½(T_j + T_{j+1}) | Height at north face (pressure gradient) |
-| `T_to_X` | T → X | ¼(T_{j,i} + T_{j,i+1} + T_{j+1,i} + T_{j+1,i+1}) | h at corners for PV = (ζ+f)/h |
-| `U_to_T` | U → T | ½(U_i + U_{i-1}) | u² at T-points for kinetic energy |
-| `V_to_T` | V → T | ½(V_j + V_{j-1}) | v² at T-points for kinetic energy |
-| `X_to_T` | X → T | ¼(X_{j+½,i+½} + X_{j-½,i+½} + X_{j+½,i-½} + X_{j-½,i-½}) | Vorticity from corner to centre |
-| `U_to_X` | U → X | ½(U_j + U_{j+1}) | u at corners for vorticity-flux |
-| `V_to_X` | V → X | ½(V_i + V_{i+1}) | v at corners for vorticity-flux |
-| `X_to_U` | X → U | ½(X_j + X_{j-1}) | Vorticity at face for Coriolis |
-| `X_to_V` | X → V | ½(X_i + X_{i-1}) | Vorticity at face for Coriolis |
-| `U_to_V` | U → V | ¼(4-point bilinear) | Cross-velocity for Coriolis term |
-| `V_to_U` | V → U | ¼(4-point bilinear) | Cross-velocity for Coriolis term |
+| From → To | Average | Typical use |
+|-----------|---------|-------------|
+| T → U | ½(T_i + T_{i+1}) | Height at east face (pressure gradient) |
+| T → V | ½(T_j + T_{j+1}) | Height at north face (pressure gradient) |
+| T → X | ¼(T_{j,i} + T_{j,i+1} + T_{j+1,i} + T_{j+1,i+1}) | h at corners for PV = (ζ+f)/h |
+| U → T | ½(U_i + U_{i-1}) | u² at T-points for kinetic energy |
+| V → T | ½(V_j + V_{j-1}) | v² at T-points for kinetic energy |
+| X → T | ¼(X_{j+½,i+½} + X_{j-½,i+½} + X_{j+½,i-½} + X_{j-½,i-½}) | Vorticity from corner to centre |
+| U → X | ½(U_j + U_{j+1}) | u at corners for vorticity-flux |
+| V → X | ½(V_i + V_{i+1}) | v at corners for vorticity-flux |
+| X → U | ½(X_j + X_{j-1}) | Vorticity at face for Coriolis |
+| X → V | ½(X_i + X_{i-1}) | Vorticity at face for Coriolis |
+| U → V | ¼(4-point bilinear) | Cross-velocity for Coriolis term |
+| V → U | ¼(4-point bilinear) | Cross-velocity for Coriolis term |
 
 ---
 
@@ -127,19 +127,18 @@ stencil data for the last interior cell:
 | V → T (y-backward) | South V ghost `V[0, :]` | `v[:-2, 1:-1]` |
 
 :::{note} Bilinear averages
-`T_to_X`, `U_to_V`, `V_to_U`, and `X_to_T` each read ghost cells in
+The moves T to X, U to V, V to U and X to T each read ghost cells in
 *both* directions.  Make sure the appropriate BCs are applied before
-calling these operators in a boundary region.
+making these moves in a boundary region.
 :::
 
 ---
 
 ## 3-D Extension
 
-`Interpolation3D` applies the same 2-D horizontal stencils to each z-level
+On a 3-D grid `interpolate` applies the same 2-D horizontal stencils to each z-level
 independently.  Array shapes are `[Nz, Ny, Nx]` and only the interior
-`[1:-1, 1:-1, 1:-1]` is written.  Currently `T_to_U`, `T_to_V`, `U_to_T`,
-and `V_to_T` are provided.
+`[1:-1, 1:-1, 1:-1]` is written.
 
 ---
 
@@ -147,10 +146,10 @@ and `V_to_T` are provided.
 
 ```python
 import jax.numpy as jnp
-from gridax import CartesianCGrid2D, Interpolation2D
+from gridax import CartesianCGrid2D, GridOps
 
 grid = CartesianCGrid2D.from_interior(64, 64, 1e6, 1e6)
-interp = Interpolation2D(grid=grid)
+ops = GridOps(grid)
 
 h = jnp.ones((grid.Ny, grid.Nx))   # T-point thickness
 u = jnp.zeros((grid.Ny, grid.Nx))  # U-point velocity
@@ -158,18 +157,18 @@ v = jnp.zeros((grid.Ny, grid.Nx))  # V-point velocity
 f = jnp.ones((grid.Ny, grid.Nx))   # T-point Coriolis parameter
 
 # Height at east faces (for shallow-water pressure gradient)
-h_u = interp.T_to_U(h)   # shape [Ny, Nx], values at U-points
+h_u = ops.interpolate(h, src="T", dst="U")   # shape [Ny, Nx], values at U-points
 
 # Height at NE corners (for potential vorticity)
-h_q = interp.T_to_X(h)   # shape [Ny, Nx], values at X-points
+h_q = ops.interpolate(h, src="T", dst="X")   # shape [Ny, Nx], values at X-points
 
 # Cross-face velocity average (for Coriolis term)
-v_on_u = interp.V_to_U(v)   # v interpolated to U-points
-u_on_v = interp.U_to_V(u)   # u interpolated to V-points
+v_on_u = ops.interpolate(v, src="V", dst="U")   # v interpolated to U-points
+u_on_v = ops.interpolate(u, src="U", dst="V")   # u interpolated to V-points
 
 # Coriolis parameter at velocity points
-f_on_u = interp.T_to_U(f)   # f at U-points (x-average)
-f_on_v = interp.T_to_V(f)   # f at V-points (y-average)
+f_on_u = ops.interpolate(f, src="T", dst="U")   # f at U-points (x-average)
+f_on_v = ops.interpolate(f, src="T", dst="V")   # f at V-points (y-average)
 ```
 
 ---
@@ -180,22 +179,22 @@ f_on_v = interp.T_to_V(f)   # f at V-points (y-average)
 What quantity do you need and where?
 │
 ├── Scalar from T-points to...
-│   ├── U-points (east face)   → T_to_U
-│   ├── V-points (north face)  → T_to_V
-│   └── X-points (NE corner)   → T_to_X
+│   ├── U-points (east face)   → interpolate(src="T", dst="U")
+│   ├── V-points (north face)  → interpolate(src="T", dst="V")
+│   └── X-points (NE corner)   → interpolate(src="T", dst="X")
 │
 ├── Velocity from face to...
-│   ├── U → T  (x-mean)        → U_to_T
-│   ├── V → T  (y-mean)        → V_to_T
-│   ├── U → X  (y-mean)        → U_to_X
-│   ├── V → X  (x-mean)        → V_to_X
-│   ├── X → T  (bilinear)      → X_to_T
-│   ├── X → U  (y-mean)        → X_to_U
-│   └── X → V  (x-mean)        → X_to_V
+│   ├── U → T  (x-mean)        → interpolate(src="U", dst="T")
+│   ├── V → T  (y-mean)        → interpolate(src="V", dst="T")
+│   ├── U → X  (y-mean)        → interpolate(src="U", dst="X")
+│   ├── V → X  (x-mean)        → interpolate(src="V", dst="X")
+│   ├── X → T  (bilinear)      → interpolate(src="X", dst="T")
+│   ├── X → U  (y-mean)        → interpolate(src="X", dst="U")
+│   └── X → V  (x-mean)        → interpolate(src="X", dst="V")
 │
 └── Cross-face velocity for Coriolis...
-    ├── u at V-points           → U_to_V  (bilinear 4-pt)
-    └── v at U-points           → V_to_U  (bilinear 4-pt)
+    ├── u at V-points           → interpolate(src="U", dst="V")  (bilinear 4-pt)
+    └── v at U-points           → interpolate(src="V", dst="U")  (bilinear 4-pt)
 ```
 
 ---

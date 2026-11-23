@@ -31,7 +31,7 @@ where $F^x = u \hat{q}$ and $F^y = v \hat{q}$ are the fluxes through the east an
 
 ### The grid and the mask
 
-`CartesianCGrid2D.from_interior` takes the interior size and the domain lengths and adds one ghost ring, so a 32 × 32 interior gives arrays of shape $(34, 34)$. We put the origin on the south-west corner of the walls, so T point $(j, i)$ sits at $x_i = (i - 1/2) \Delta x$, $y_j = (j - 1/2) \Delta y$, and the walls at $x = 0, 1$ and $y = 0, 1$ (`gridax.t_point_coordinates` measures from T point $(0, 0)$ instead, half a cell further out). The mask starts from a boolean array of wet T points, and `Mask2D.from_mask` derives the wet U, V and X points from it, with the coast classification and the stencil capability that `Advection2D` reads near land.
+`CartesianCGrid2D.from_interior` takes the interior size and the domain lengths and adds one ghost ring, so a 32 × 32 interior gives arrays of shape $(34, 34)$. We put the origin on the south-west corner of the walls, so T point $(j, i)$ sits at $x_i = (i - 1/2) \Delta x$, $y_j = (j - 1/2) \Delta y$, and the walls at $x = 0, 1$ and $y = 0, 1$ (`gridax.t_point_coordinates` measures from T point $(0, 0)$ instead, half a cell further out). The mask starts from a boolean array of wet T points, and `Mask2D.from_mask` derives the wet U, V and X points from it, with the coast classification and the stencil capability that `advect` reads near land.
 
 ```python
 import gridax
@@ -57,35 +57,33 @@ The line that sets `wet[:2, :]` and its three partners makes the ghost ring and 
 
 ### The flow and the tracer
 
-The flow is one gyre with streamfunction $\psi = \sin(\pi x) \sin(\pi y) / \pi$ at the T points. `Difference2D.grad_perp` turns it into $u = -\partial \psi / \partial y$ at the U points and $v = \partial \psi / \partial x$ at the V points. Without a mask that velocity is discretely non-divergent; with one, `grad_perp` zeroes it on the dry faces, so it no longer is. The flux form does not need it to be: a dry face carries no flux whatever the velocity next to it.
+The flow is one gyre with streamfunction $\psi = \sin(\pi x) \sin(\pi y) / \pi$ at the T points. `grad_perp` turns it into $u = -\partial \psi / \partial y$ at the U points and $v = \partial \psi / \partial x$ at the V points. Without a mask that velocity is discretely non-divergent; with one, `grad_perp` zeroes it on the dry faces, so it no longer is. The flux form does not need it to be: a dry face carries no flux whatever the velocity next to it.
 
 ```python
 # ψ = sin(πx) sin(πy) / π, one gyre
 psi = np.sin(np.pi * x) * np.sin(np.pi * y) / np.pi  # → (N_y, N_x)
 # today (gridax)
-difference = gridax.Difference2D(grid=grid, mask=mask)
+ops = gridax.GridOps(grid, mask)
 # today (gridax)
 # u = −∂ψ/∂y at U points, v = ∂ψ/∂x at V points
-u, v = difference.grad_perp(psi)  # → (N_y, N_x), (N_y, N_x)
+u, v = ops.grad_perp(psi, at="T")  # → (N_y, N_x), (N_y, N_x)
 # a Gaussian blob of tracer west of the island
 q = np.exp(-((x - 0.25) ** 2 + (y - 0.5) ** 2) / 0.01) * wet  # → (N_y, N_x)
 ```
 
 ### Stepping and the budget
 
-`Advection2D` is a Layer 3 operator: it holds the grid and the mask, and its call returns $\mathrm{d}\bar{q}/\mathrm{d}t$ on the T points. We step it with Heun's method and $\Delta t = 0.2 \Delta x$, a Courant number of at most 0.2 since $|u| \le 1$, and compare the tracer total $\sum_{j,i} A_{j,i} \bar{q}_{j,i}$ over the wet cells before and after, where $A_{j,i}$ are the cell areas.
+`GridOps` is the Layer 3 binding: it holds the grid and the mask, and its method `advect` returns $\mathrm{d}\bar{q}/\mathrm{d}t$ on the T points. We step it with Heun's method and $\Delta t = 0.2 \Delta x$, a Courant number of at most 0.2 since $|u| \le 1$, and compare the tracer total $\sum_{j,i} A_{j,i} \bar{q}_{j,i}$ over the wet cells before and after, where $A_{j,i}$ are the cell areas.
 
 ```python
-# today (gridax)
-advection = gridax.Advection2D(grid=grid, mask=mask)
 # today (gridax)
 # ∑ A_ji q̄_ji over the wet cells
 total = gridax.area_sum(q, grid, mask=mask)  # → ()
 dt = 0.2 * grid.spacing("x")
 for _ in range(200):
     # Heun's method on dq̄/dt, with WENO-5 face values
-    q1 = q + dt * advection(q, u, v, scheme=WENO(5))  # (N_y, N_x) → (N_y, N_x)
-    q = 0.5 * (q + q1 + dt * advection(q1, u, v, scheme=WENO(5)))
+    q1 = q + dt * ops.advect(q, u, v, scheme=WENO(5))  # (N_y, N_x) → (N_y, N_x)
+    q = 0.5 * (q + q1 + dt * ops.advect(q1, u, v, scheme=WENO(5)))
 # today (gridax)
 change = gridax.area_sum(q, grid, mask=mask) / total - 1.0  # → ()
 print(f"{float(change):.1e} {float(q.max()):.3f} {float(q.min()):.1e}")
@@ -93,11 +91,11 @@ print(f"{float(change):.1e} {float(q.max()):.3f} {float(q.min()):.1e}")
 
 This prints `0.0e+00 0.807 -4.8e-14`. The tracer total after 200 steps equals the initial one to the last bit: each flux leaves one cell and enters the next, so the sum of the tendencies telescopes to the fluxes through the walls, and those are zero. The peak falls from 0.952 to 0.807, which is the numerical diffusion of WENO-5 on a grid with about six cells across the blob. The smallest value is $-4.8 \times 10^{-14}$: WENO is not positivity-preserving, but here its undershoot is at the level of rounding.
 
-The time loop is written out to keep the example in one library. In a model, the steppers of `integrix.march` (`heun_step`, `rk3_ssp_step` and the others) take a right-hand side built on `advection` instead.
+The time loop is written out to keep the example in one library. In a model, the steppers of `integrix.march` (`heun_step`, `rk3_ssp_step` and the others) take a right-hand side built on `ops.advect` instead.
 
 ## Where the walls need care
 
-`Advection2D` treats the four domain walls as closed by default (`wall="closed"`). It writes the tendency only on the strict interior `[2:-2, 2:-2]`, two cells in from each edge, so that no stencil reads a ghost flux. The cells of the first interior ring are therefore not updated, and if the flow crosses the faces between them and the strict interior, the tracer total drifts. In this example, with the dry ring removed and no mask, the sum of one WENO-5 tendency is $-3.9 \times 10^{-6}$ instead of zero.
+`advect` treats the four domain walls as closed by default (`wall="closed"`). It writes the tendency only on the strict interior `[2:-2, 2:-2]`, two cells in from each edge, so that no stencil reads a ghost flux. The cells of the first interior ring are therefore not updated, and if the flow crosses the faces between them and the strict interior, the tracer total drifts. In this example, with the dry ring removed and no mask, the sum of one WENO-5 tendency is $-3.9 \times 10^{-6}$ instead of zero.
 
 There are two ways to close a basin that keep the budget:
 
@@ -126,7 +124,7 @@ q_j, u_j, v_j = jnp.asarray(q), jnp.asarray(u), jnp.asarray(v)  # → (N_y, N_x)
 @jax.jit
 def tendency(q, u, v):
     # dq̄/dt, with WENO-5 face values
-    return advection(q, u, v, scheme=WENO(5))  # (N_y, N_x) → (N_y, N_x)
+    return ops.advect(q, u, v, scheme=WENO(5))  # (N_y, N_x) → (N_y, N_x)
 
 
 # today (gridax)
@@ -137,7 +135,7 @@ def cost(q):
 
 # ∂J/∂q̄, by reverse-mode autodiff through the WENO weights
 grad_q = jax.grad(cost)(q_j)  # (N_y, N_x) → (N_y, N_x)
-gap = jnp.abs(tendency(q_j, u_j, v_j) - advection(q, u, v, scheme=WENO(5))).max()
+gap = jnp.abs(tendency(q_j, u_j, v_j) - ops.advect(q, u, v, scheme=WENO(5))).max()
 print(f"{float(gap):.1e} {grad_q.shape} {float(jnp.abs(grad_q).max()):.3f}")
 ```
 

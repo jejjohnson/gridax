@@ -209,10 +209,10 @@ gridax has one derivative stack for collocated and staggered fields, in four lay
 |---|---|---|---|
 | **0 — coefficients** | offsets and exact coefficients | `gridax.stencils.difference_offsets`, `difference_coeffs`, `nonuniform_coeffs` | the same with `method="staggered"`, `bias=` and `data="cell"`; `weno_stencils`, `optimal_weights`, `smoothness_matrix` |
 | **1 — raw stencils** | index arithmetic, no metric, no mask | applied inside Layer 2 | the 32 named stencils on this page; `staggered_difference`, `staggered_average`; the `linear_*` and `weno_*` reconstructions of `gridax.advection.kernels` |
-| **2 — canonical functions** | one per operation: the grid positional, the mask a keyword | `difference`, `gradient`, `divergence`, `curl`, `laplacian`, `kinetic_energy`, `area_sum`, …; on bare arrays `gridax.analysis` | the same, and `interpolate`, `grad_perp`, `advect`, `reconstruct`, `diffuse`, `biharmonic`, `coriolis`, `arakawa_jacobian`, `shear_strain`, `tensor_strain` |
-| **3 — bindings** | hold a grid, a mask and caches derived from them; each method is one call of a Layer 2 function | none | `GridOps`, `Difference2D`, `Divergence2D`, `Vorticity2D`, `Reconstruction2D`, `Advection2D`, `SphericalDifference2D`, … |
+| **2 — canonical functions** | one per operation: the grid positional, the mask a keyword | `difference`, `gradient`, `divergence`, `curl`, `laplacian`, `kinetic_energy`, `area_sum`, …; on bare arrays `gridax.analysis` | the same, and `interpolate`, `grad_perp`, `advect`, `reconstruct`, `diffuse`, `biharmonic`, `coriolis`, `arakawa_jacobian`, `advect_momentum`, `pv_flux`, `shear_strain`, `tensor_strain`, … |
+| **3 — binding** | holds a grid and a mask; each method is one call of a Layer 2 function | `GridOps` | `GridOps` |
 
-The definitions of Layers 2 and 3 are those of [ADR 1](design/adr/0001-canonical-functions.md), and the code has moved to them family by family: the moves, the calculus, the transport (`advect`, `reconstruct`, `diffuse`, `biharmonic`), the rotation (`coriolis`, `arakawa_jacobian`), the diagnostics with a stencil and the reductions are canonical functions, and their classes are bindings. Momentum advection and the vorticity fluxes are implemented in their Layer 3 classes. `gridax.analysis` is the collocated calculus on bare arrays.
+The definitions of Layers 2 and 3 are those of [ADR 1](design/adr/0001-canonical-functions.md): every operation that needs a grid is a canonical function, and `GridOps` is the one binding. `gridax.analysis` is the collocated difference on bare arrays.
 
 ### Layer 0: one solver for every stencil
 
@@ -265,7 +265,7 @@ dh_dx_collocated = ga.difference(h, axis=-1, step=grid.spacing("x"))
 # Layer 2, advection: the WENO-5 flux on the east faces → (42, 62)
 flux = gridax.reconstruct(h, u, grid, axis="x", scheme=WENO(5))
 # Layer 3: dh/dx at U points, zeroed at dry faces → (42, 62)
-dh_dx = gridax.Difference2D(grid=grid, mask=mask).diff_x_T_to_U(h)
+dh_dx = gridax.GridOps(grid, mask).difference(h, axis="x", src="T", dst="U")
 ```
 
 The rest of this page documents **Layer 1**, the raw stencils. They perform no metric scaling (no division by $\Delta x$, $R\cos\varphi\,\Delta\lambda$, etc.) and no ghost-ring padding, and return interior-sized arrays that the caller can scale by any coordinate metric, so they are reused across Cartesian, spherical and curvilinear coordinates.
@@ -343,7 +343,7 @@ d2h_dy2 = (diff_y_fwd_2d(h) - diff_y_bwd_2d(h)) / dy**2
 laplacian = d2h_dx2 + d2h_dy2
 ```
 
-This is exactly how `Difference2D.laplacian` is implemented internally.
+`gridax.laplacian` computes the same thing in one fused pass.
 
 ---
 
@@ -452,9 +452,8 @@ $$
 ## 8. Usage: Building Custom Operators
 
 The raw stencils are designed as building blocks for custom operators,
-especially when working with non-Cartesian coordinate systems where the
-standard `Difference2D` / `Interpolation2D` classes (which divide by
-scalar `dx`, `dy`) are not appropriate.
+especially in a coordinate system whose metric the functions of gridax do
+not know.
 
 ### Example: Custom spherical gradient
 

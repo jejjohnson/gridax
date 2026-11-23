@@ -64,7 +64,7 @@ In any MyST page, link to an API object with the `xref:` protocol and the name a
 
 ```markdown
 [`Mask2D`](xref:api#gridax.Mask2D)
-[`Advection2D`](xref:api#gridax.Advection2D)
+[`advect`](xref:api#gridax.advect)
 ```
 
 A target that does not exist in the inventory fails `myst build --strict`, so broken API links are caught on the pull request rather than in production.

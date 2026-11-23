@@ -138,7 +138,7 @@ row Ny-1:[g] [g] [g] ...  [g]  [g]   ← ghost (north)
 | Index | Physical meaning | Who sets it? |
 |-------|-----------------|--------------|
 | `U[j, 0]` | West **boundary face** `(j, ½)` | BC layer (e.g. periodic copy) |
-| `U[j, 1..Nx-2]` | Interior east faces | Forward operators (`diff_x_T_to_U`, `T_to_U`) |
+| `U[j, 1..Nx-2]` | Interior east faces | Forward moves (∂/∂x and the average, T to U) |
 | `U[j, Nx-1]` | Outside domain | Unused / left zero |
 | `U[0, i]`, `U[Ny-1, i]` | South/north ghost rows | BC layer |
 
@@ -152,7 +152,7 @@ and is computed by forward operators using the east ghost T-cell `T[j, Nx-1]`.
 | Index | Physical meaning | Who sets it? |
 |-------|-----------------|--------------|
 | `V[0, i]` | South **boundary face** `(½, i)` | BC layer |
-| `V[1..Ny-2, i]` | Interior north faces | Forward operators (`diff_y_T_to_V`, `T_to_V`) |
+| `V[1..Ny-2, i]` | Interior north faces | Forward moves (∂/∂y and the average, T to V) |
 | `V[Ny-1, i]` | Outside domain | Unused / left zero |
 | `V[j, 0]`, `V[j, Nx-1]` | West/east ghost cols | BC layer |
 
@@ -166,7 +166,7 @@ and is computed by forward operators using the east ghost T-cell `T[j, Nx-1]`.
 |-------|-----------------|--------------|
 | `X[0, i]` | South ghost X-row | BC layer |
 | `X[j, 0]` | West ghost X-col | BC layer |
-| `X[1..Ny-2, 1..Nx-2]` | Interior corners | Forward operators (`T_to_X`, `diff_y_U_to_X`, etc.) |
+| `X[1..Ny-2, 1..Nx-2]` | Interior corners | Forward moves (the average T to X, ∂/∂y U to X, …) |
 | `X[Ny-1, i]`, `X[j, Nx-1]` | Outside domain | Unused / left zero |
 
 ### Ghost asymmetry: forward vs backward
@@ -206,7 +206,7 @@ X[k, j, i]  NE corner    at ( k,    j+½,  i+½  )
 ```
 
 All of these are `[Nz, Ny, Nx]`, still same-shape, and the horizontal
-operators in `Difference3D` / `Interpolation3D` / `Vorticity3D` simply
+functions (`difference`, `interpolate`, `curl`) simply
 apply the corresponding 2D stencil at each fixed `k`.  The vertical
 ghost convention mirrors the horizontal: `k = 0` and `k = Nz - 1` are
 top/bottom ghost shells, and the physical interior is
@@ -275,14 +275,14 @@ by which point type the output lives at.
 
 ### Forward differences (T → face / corner)
 
-| Method              | Stencil formula                                         | Writes to         |
+| `difference(…)`     | Stencil formula                                         | Writes to         |
 |---------------------|---------------------------------------------------------|-------------------|
-| `diff_x_T_to_U`     | `dh/dx[j, i+½] = (h[j, i+1] - h[j, i]) / dx`          | U-points          |
-| `diff_y_T_to_V`     | `dh/dy[j+½, i] = (h[j+1, i] - h[j, i]) / dy`          | V-points          |
-| `diff_y_U_to_X`     | `du/dy[j+½, i+½] = (u[j+1, i] - u[j, i]) / dy`        | X-points          |
-| `diff_x_V_to_X`     | `dv/dx[j+½, i+½] = (v[j, i+1] - v[j, i]) / dx`        | X-points          |
+| ∂/∂x, T to U       | `dh/dx[j, i+½] = (h[j, i+1] - h[j, i]) / dx`          | U-points          |
+| ∂/∂y, T to V       | `dh/dy[j+½, i] = (h[j+1, i] - h[j, i]) / dy`          | V-points          |
+| ∂/∂y, U to X       | `du/dy[j+½, i+½] = (u[j+1, i] - u[j, i]) / dy`        | X-points          |
+| ∂/∂x, V to X       | `dv/dx[j+½, i+½] = (v[j, i+1] - v[j, i]) / dx`        | X-points          |
 
-**Example slice** for `diff_x_T_to_U` (writes to `[1:-1, 1:-1]`):
+**Example slice** for ∂/∂x from T to U (writes to `[1:-1, 1:-1]`):
 
 ```python
 # dh_dx[j, i+1/2] = (h[j, i+1] - h[j, i]) / dx
@@ -294,14 +294,14 @@ columns; `h[1:-1, 1:-1]` gives `h[j, i]`.
 
 ### Backward differences (face / corner → T)
 
-| Method              | Stencil formula                                         | Writes to         |
+| `difference(…)`     | Stencil formula                                         | Writes to         |
 |---------------------|---------------------------------------------------------|-------------------|
-| `diff_x_U_to_T`     | `du/dx[j, i] = (u[j, i] - u[j, i-1]) / dx`             | T-points          |
-| `diff_y_V_to_T`     | `dv/dy[j, i] = (v[j, i] - v[j-1, i]) / dy`             | T-points          |
-| `diff_y_X_to_U`     | `dq/dy[j, i+½] = (q[j, i] - q[j-1, i]) / dy`           | U-points          |
-| `diff_x_X_to_V`     | `dq/dx[j+½, i] = (q[j, i] - q[j, i-1]) / dx`           | V-points          |
+| ∂/∂x, U to T       | `du/dx[j, i] = (u[j, i] - u[j, i-1]) / dx`             | T-points          |
+| ∂/∂y, V to T       | `dv/dy[j, i] = (v[j, i] - v[j-1, i]) / dy`             | T-points          |
+| ∂/∂y, X to U       | `dq/dy[j, i+½] = (q[j, i] - q[j-1, i]) / dy`           | U-points          |
+| ∂/∂x, X to V       | `dq/dx[j+½, i] = (q[j, i] - q[j, i-1]) / dx`           | V-points          |
 
-**Example slice** for `diff_x_U_to_T`:
+**Example slice** for ∂/∂x from U to T:
 
 ```python
 # du_dx[j, i] = (u[j, i+1/2] - u[j, i-1/2]) / dx
@@ -312,16 +312,14 @@ out = out.at[1:-1, 1:-1].set((u[1:-1, 1:-1] - u[1:-1, :-2]) / dx)
 ### Divergence, Curl, and Laplacian
 
 ```python
-diff = Difference2D(grid=grid)
-
-divergence = diff.divergence(u, v)   # du/dx + dv/dy at T-points
-curl       = diff.curl(u, v)         # dv/dx - du/dy at X-points
-laplacian  = diff.laplacian(h)       # d²h/dx² + d²h/dy² at T-points
+div  = gridax.divergence(u, v, grid)  # du/dx + dv/dy at T-points
+zeta = gridax.curl(u, v, grid)        # dv/dx - du/dy at X-points
+lap  = gridax.laplacian(h, grid)      # d²h/dx² + d²h/dy² at T-points
 ```
 
 **Discrete-non-divergence property**: A velocity derived from a
 corner-streamfunction `ψ` via
-`u = -diff_y_X_to_U(ψ)`, `v = diff_x_X_to_V(ψ)`
+$u = -\partial_y\psi$ (X to U), $v = \partial_x\psi$ (X to V)
 is **exactly** non-divergent at interior T-points.
 
 ---
@@ -333,22 +331,22 @@ the two nearest neighbours** along the relevant axis.
 
 ### Averaging table
 
-| Method      | Formula                                                  | Source → Target |
+| `interpolate(…)` | Formula                                                  | Source → Target |
 |-------------|----------------------------------------------------------|-----------------|
-| `T_to_U`    | `h[j, i+½] = ½(h[j,i] + h[j,i+1])`                     | T → U           |
-| `T_to_V`    | `h[j+½, i] = ½(h[j,i] + h[j+1,i])`                     | T → V           |
-| `T_to_X`    | `h[j+½, i+½] = ¼(h[j,i]+h[j,i+1]+h[j+1,i]+h[j+1,i+1])`| T → X           |
-| `U_to_T`    | `u[j, i] = ½(u[j,i+½] + u[j,i-½]) = ½(u[j,i]+u[j,i-1])`| U → T           |
-| `V_to_T`    | `v[j, i] = ½(v[j+½,i] + v[j-½,i]) = ½(v[j,i]+v[j-1,i])`| V → T           |
-| `X_to_T`    | 4-point average over `q[j,i], q[j-1,i], q[j,i-1], q[j-1,i-1]` | X → T   |
-| `U_to_X`    | `u[j+½,i+½] = ½(u[j,i] + u[j+1,i])`                    | U → X           |
-| `V_to_X`    | `v[j+½,i+½] = ½(v[j,i] + v[j,i+1])`                    | V → X           |
-| `X_to_U`    | `q[j,i+½] = ½(q[j,i] + q[j-1,i])`                      | X → U           |
-| `X_to_V`    | `q[j+½,i] = ½(q[j,i] + q[j,i-1])`                      | X → V           |
-| `U_to_V`    | 4-point average over `u[j,i], u[j+1,i], u[j,i-1], u[j+1,i-1]` | U → V   |
-| `V_to_U`    | 4-point average over `v[j,i], v[j-1,i], v[j,i+1], v[j-1,i+1]` | V → U   |
+| T to U      | `h[j, i+½] = ½(h[j,i] + h[j,i+1])`                     | T → U           |
+| T to V      | `h[j+½, i] = ½(h[j,i] + h[j+1,i])`                     | T → V           |
+| T to X      | `h[j+½, i+½] = ¼(h[j,i]+h[j,i+1]+h[j+1,i]+h[j+1,i+1])`| T → X           |
+| U to T      | `u[j, i] = ½(u[j,i+½] + u[j,i-½]) = ½(u[j,i]+u[j,i-1])`| U → T           |
+| V to T      | `v[j, i] = ½(v[j+½,i] + v[j-½,i]) = ½(v[j,i]+v[j-1,i])`| V → T           |
+| X to T      | 4-point average over `q[j,i], q[j-1,i], q[j,i-1], q[j-1,i-1]` | X → T   |
+| U to X      | `u[j+½,i+½] = ½(u[j,i] + u[j+1,i])`                    | U → X           |
+| V to X      | `v[j+½,i+½] = ½(v[j,i] + v[j,i+1])`                    | V → X           |
+| X to U      | `q[j,i+½] = ½(q[j,i] + q[j-1,i])`                      | X → U           |
+| X to V      | `q[j+½,i] = ½(q[j,i] + q[j,i-1])`                      | X → V           |
+| U to V      | 4-point average over `u[j,i], u[j+1,i], u[j,i-1], u[j+1,i-1]` | U → V   |
+| V to U      | 4-point average over `v[j,i], v[j-1,i], v[j,i+1], v[j-1,i+1]` | V → U   |
 
-**Example slice** for `T_to_U`:
+**Example slice** for T to U:
 
 ```python
 # h_on_u[j, i+1/2] = 0.5 * (h[j, i] + h[j, i+1])
@@ -428,18 +426,18 @@ on each side, so a single-step shift never reads outside the array bounds.
 ## Ghost-Cell Interaction at Stencil Boundaries
 
 The first and last interior points see one ghost neighbour.  For example,
-`diff_x_T_to_U` at the first interior U-column (`i=1`, output `out[j, 1]`)
+∂/∂x from T to U at the first interior U-column (`i=1`, output `out[j, 1]`)
 uses `h[j, 1]` (interior T-point) and `h[j, 2]` (second interior
 T-point) — no ghosts involved.
 
-However, `diff_x_U_to_T` at `i=1` uses `u[j, 1]` and `u[j, 0]`.  If
+However, ∂/∂x from U to T at `i=1` uses `u[j, 1]` and `u[j, 0]`.  If
 `u[j, 0]` is a ghost (zero by default), the result at `i=1` reflects that
 zero ghost rather than a physical extrapolation.  This is intentional: the
 **caller** sets ghost values via the boundary-condition layer before calling
 operators.
 
 A consequence: the composition
-`diff_x_U_to_T(diff_x_T_to_U(h))` equals `d²h/dx²` only at columns
+of ∂/∂x from T to U with ∂/∂x from U to T equals `d²h/dx²` only at columns
 `i = 2 … Nx-3` (deep interior), because the intermediate `dh_u` field has
 a zero ghost at `i = 0` that pollutes column `i = 1`.
 
@@ -448,12 +446,12 @@ a zero ghost at `i = 0` that pollutes column `i = 1`.
 For `h[j, i] = c·i·dx` and no boundary conditions applied:
 
 ```
-dh_u = diff_x_T_to_U(h)
+dh_u = difference(h, grid, axis="x", src="T", dst="U")
 # dh_u[j, 0] = 0      ← ghost U-face, NOT written by the operator
 # dh_u[j, 1] = c      ← first interior U-face
 # dh_u[j, 2..Nx-2] = c ← rest of interior
 
-result = diff_x_U_to_T(dh_u)
+result = difference(dh_u, grid, axis="x", src="U", dst="T")
 # result[j, 1] = (c - 0) / dx = c/dx   ← non-zero, ghost pollutes i=1
 # result[j, 2..Nx-3] = (c - c) / dx = 0 ← correct 2nd derivative
 ```
@@ -470,33 +468,28 @@ apply boundary conditions to intermediate fields before chaining operators.
 A typical shallow-water advection step uses all four co-location points:
 
 ```python
-from gridax import (
-    CartesianCGrid2D, Difference2D, Interpolation2D, Vorticity2D,
-)
+from gridax import CartesianCGrid2D, GridOps
 import jax.numpy as jnp
 
-grid  = CartesianCGrid2D.from_interior(64, 64, 1.0, 1.0)
-diff  = Difference2D(grid=grid)
-interp = Interpolation2D(grid=grid)
-vort  = Vorticity2D(grid=grid)
+grid = CartesianCGrid2D.from_interior(64, 64, 1.0, 1.0)
+ops = GridOps(grid)
 
 # ---- assume u, v, h are shape (66, 66) with updated ghosts ----
 
 # 1. Potential vorticity at X-points
-f     = jnp.zeros((grid.Ny, grid.Nx))           # Coriolis (T-points)
-q     = vort.potential_vorticity(u, v, h, f)   # X-points
+f = jnp.zeros((grid.Ny, grid.Nx))                  # Coriolis (T-points)
+q = ops.sw_potential_vorticity(u, v, h, f)         # X-points
 
 # 2. PV flux (energy-conserving corner-product form)
-qu, qv = vort.pv_flux_energy_conserving(q, u, v)   # U- and V-points
+qu, qv = ops.pv_flux(q, u, v, form="energy")       # U- and V-points
 
 # 3. Kinetic energy and Bernoulli potential
-from gridax._src.operators.diagnostics import bernoulli_potential
-p = bernoulli_potential(h=h, u=u, v=v)         # T-points
+p = ops.bernoulli_potential(h, u, v)               # T-points
 
 # 4. Tendencies
-du_dt = -diff.diff_x_T_to_U(p) + qv           # U-points
-dv_dt = -diff.diff_y_T_to_V(p) - qu           # V-points
-dh_dt = -diff.divergence(h_u, h_v)            # T-points (h*u fluxes)
+du_dt = -ops.difference(p, axis="x", src="T", dst="U") + qv  # U-points
+dv_dt = -ops.difference(p, axis="y", src="T", dst="V") - qu  # V-points
+dh_dt = -ops.divergence(h_u, h_v)                  # T-points (h*u fluxes)
 ```
 
 Every intermediate array has the same shape `(66, 66)`.  The ghost ring

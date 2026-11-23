@@ -14,21 +14,24 @@ The spatial operators build on the primitive [difference](difference.md) and
 quantities on the Arakawa C-grid.  The table below lists the main operators
 and what they compute:
 
-| Operator | Module | Output location | Physical quantity |
-|----------|--------|-----------------|-------------------|
-| `Divergence2D` | divergence | T-points | $\nabla \cdot (u, v)$ |
-| `Vorticity2D.relative_vorticity` | vorticity | X-points | $\zeta = \partial v/\partial x - \partial u/\partial y$ |
-| `Vorticity2D.potential_vorticity` | vorticity | X-points | $q = (\zeta + f)/h$ |
-| `Vorticity2D.pv_flux_energy_conserving` | vorticity | U/V-points | $(q\,Uh, q\,Vh)$ |
-| `Diffusion2D` / `diffuse` | diffusion | T-points | $\nabla \cdot (\kappa\,\nabla h)$ |
-| `BiharmonicDiffusion2D` / `biharmonic` | diffusion | T-points | $-\kappa\,\nabla^4 h$ |
-| `Coriolis2D` / `coriolis` | coriolis | U/V-points | $(+\overline{f_X\bar{v}}, -\overline{f_X\bar{u}})$, energy-conserving |
-| `MomentumAdvection2D` | momentum | U/V-points | Vortex-force form |
-| `Vorticity2D.enstrophy` / `.potential_enstrophy` | vorticity | X-points | $\tfrac12\zeta^2$, $\tfrac12 q^2 h$ |
-| `Energetics2D` / `kinetic_energy` | diagnostics | T-points | KE, Bernoulli potential, APE |
-| `Strain2D` / `shear_strain`, `tensor_strain` | diagnostics | T/X-points | shear & tensor strain, $\sigma^2$, Okubo–Weiss |
-| `QGPotentialVorticity2D` | diagnostics | T-points | $q = \nabla^2\psi/f_0 + \beta(y - y_0)/f_0$ (− stretching) |
-| `ArakawaJacobian2D` / `arakawa_jacobian` | jacobian | T-points | $J(f, g)$ |
+| Function | Output location | Physical quantity |
+|----------|-----------------|-------------------|
+| `divergence` | T-points | $\nabla \cdot (u, v)$ |
+| `curl` | X-points | $\zeta = \partial v/\partial x - \partial u/\partial y$ |
+| `sw_potential_vorticity` | X-points | $q = (\zeta + f)/h$ |
+| `pv_flux` | U/V-points | $(q\,Uh, q\,Vh)$ |
+| `diffuse`, `diffusive_fluxes` | T-points, U/V-points | $\nabla \cdot (\kappa\,\nabla h)$ and the face fluxes |
+| `biharmonic` | T-points | $-\kappa\,\nabla^4 h$ |
+| `coriolis` | U/V-points | $(+\overline{f_X\bar{v}}, -\overline{f_X\bar{u}})$, energy-conserving |
+| `advect_momentum` | U/V-points | Vortex-force form |
+| `kinetic_energy`, `bernoulli_potential` | T-points | $K$, $g\,h + K$ |
+| `shear_strain`, `tensor_strain` | X-points, T-points | the two strains |
+| `strain_rate_squared`, `okubo_weiss_parameter` | T-points | $\sigma^2$, Okubo–Weiss |
+| `qg_potential_vorticity` | T-points | $q = \nabla^2\psi/f_0 + \beta(y - y_0)/f_0$ (− stretching) |
+| `geostrophic_velocity`, `vertical_velocity` | U/V-points, W-points | $(u_g, v_g)$ on a sphere, $w$ from continuity |
+| `arakawa_jacobian` | T-points | $J(f, g)$ |
+
+Every one is `op(fields…, grid, *, mask=None, …)`: the type of the grid gives the rank and the geometry (Cartesian, spherical, stretched), so there is one name per operation. `GridOps(grid, mask)` has them all as methods with the grid and the mask filled in.
 
 ---
 
@@ -57,13 +60,11 @@ exactly zero for any velocity field derived from a streamfunction via
 ### Usage
 
 ```python
-from gridax import CartesianCGrid2D, Divergence2D, diff_x_bwd_2d, diff_y_bwd_2d, interior
+from gridax import CartesianCGrid2D, diff_x_bwd_2d, diff_y_bwd_2d, divergence, interior
 
 grid = CartesianCGrid2D.from_interior(64, 64, 1e6, 1e6)
 
-# Class-based
-div_op = Divergence2D(grid=grid)
-delta = div_op(u, v)              # T-points
+delta = divergence(u, v, grid)    # T-points
 
 # Without a grid object: the raw stencils and your own steps
 delta = interior(diff_x_bwd_2d(u) / grid.spacing("x") + diff_y_bwd_2d(v) / grid.spacing("y"), u)
@@ -84,8 +85,8 @@ $$
 $$
 
 This is the discrete **curl** of the 2-D velocity field.  It is placed at
-X-points because this is the natural location for `diff_x_V_to_X` and
-`diff_y_U_to_X`.
+X-points because both of its differences land there: ∂/∂x from V and ∂/∂y
+from U.
 
 ### Potential Vorticity (Shallow Water)
 
@@ -96,7 +97,7 @@ q_{j+\frac{1}{2}, i+\frac{1}{2}}
 = \frac{\zeta_{j+\frac{1}{2}, i+\frac{1}{2}} + f_{j+\frac{1}{2}, i+\frac{1}{2}}}{h_{j+\frac{1}{2}, i+\frac{1}{2}}}
 $$
 
-where $f$ and $h$ are interpolated from T-points to X-points via `T_to_X`.
+where $f$ and $h$ are interpolated from T-points to X-points.
 
 :::{warning} Thin-layer singularity
 $q$ is set to `NaN` where $h = 0$ to avoid division by zero.  Guard
@@ -105,29 +106,28 @@ against this with a minimum thickness clamp before calling the PV operator.
 
 ### PV Fluxes
 
-`Vorticity2D` offers two ways of combining $q$ (at X-points) with a pair of
-face fields $(F_u, F_v)$ at U/V-points:
+`pv_flux(q, Fu, Fv, grid, form=…)` combines $q$ (at X-points) with a pair of
+face fields $(F_u, F_v)$ at U/V-points in one of three ways:
 
-| Method | Form | U-point value |
+| `form=` | Form | U-point value |
 |---|---|---|
-| `pv_flux_energy_conserving` | multiply at the corners, then average | $\overline{q\,\overline{F_u}^{y}}^{y}$ |
-| `pv_flux_enstrophy_conserving` | average $q$ to the face, then multiply | $\overline{q}^{y}\,F_u$ |
-| `pv_flux_blend` | linear blend $\alpha E + (1-\alpha) Z$ | — |
+| `"energy"` | multiply at the corners, then average | $\overline{q\,\overline{F_u}^{y}}^{y}$ |
+| `"enstrophy"` | average $q$ to the face, then multiply | $\overline{q}^{y}\,F_u$ |
+| `"blend"` | linear blend $\alpha E + (1-\alpha) Z$ | — |
 
 The names refer to the **vortex-force** use (Sadourny 1975): when the
 cross-face transport is used — $+q\,V$ in the $u$-equation, $-q\,U$ in the
-$v$-equation, as `MomentumAdvection2D` forms it — the corner-product form
+$v$-equation, as `advect_momentum` forms it — the corner-product form
 conserves total energy and the average-then-multiply form conserves
 potential enstrophy for non-divergent flow.  Passed the same-component
-fields, e.g. `(q, u*h, v*h)`, the methods return the PV *transport* flux
+fields, e.g. `(q, u*h, v*h)`, the function returns the PV *transport* flux
 $(q\,Uh, q\,Vh)$ and neither label applies.
 
 :::{warning} The blend is not the Arakawa–Lamb (1981) scheme
-`pv_flux_blend` is a linear blend of the two Sadourny forms and, for
+`form="blend"` is a linear blend of the two Sadourny forms and, for
 $0 < \alpha < 1$, conserves neither invariant exactly.  The
 Arakawa–Lamb (1981) scheme is a distinct eight-point stencil and is not
-implemented.  The old name `pv_flux_arakawa_lamb` (and
-`scheme="al"` below) is a deprecated alias that warns (#283).
+implemented (#283).
 :::
 
 The corner products are formed on the full arrays, so the first interior
@@ -137,19 +137,18 @@ ghost-filled $q$, $u$, $v$: fill them (periodic, free-slip, …) before calling.
 ### Usage
 
 ```python
-from gridax import CartesianCGrid2D, Vorticity2D
+from gridax import CartesianCGrid2D, curl, pv_flux, sw_potential_vorticity
 
 grid = CartesianCGrid2D.from_interior(64, 64, 1e6, 1e6)
-vort = Vorticity2D(grid=grid)
 
 # Relative vorticity at X-points
-zeta = vort.relative_vorticity(u, v)
+zeta = curl(u, v, grid)
 
 # Shallow-water PV at X-points
-q = vort.potential_vorticity(u, v, h, f)
+q = sw_potential_vorticity(u, v, h, f, grid)
 
 # PV transport flux (q*Uh, q*Vh) at U/V-points
-qu, qv = vort.pv_flux_energy_conserving(q, u*h, v*h)
+qu, qv = pv_flux(q, u*h, v*h, grid, form="energy")
 ```
 
 ---
@@ -208,19 +207,19 @@ while biharmonic scales as $\kappa k^4$.  This is used to remove
 grid-scale noise without excessively damping the resolved mesoscale.
 
 :::{tip} Which diffusion to use
-- **Harmonic** (`Diffusion2D`): simple, physically motivated, appropriate for
+- **Harmonic** (`diffuse`): simple, physically motivated, appropriate for
   tracer diffusion when scale-selectivity is not critical.
-- **Biharmonic** (`BiharmonicDiffusion2D`): preferred for **velocity**
+- **Biharmonic** (`biharmonic`): preferred for **velocity**
   diffusion in eddy-resolving models because it acts mainly on unresolved
   scales.  Requires a larger $\kappa$ to achieve the same total dissipation.
 :::
 
 ### Mask Support
 
-All diffusion classes take an optional `mask=` (`Mask2D` / `Mask3D`) field.
+`diffuse`, `diffusive_fluxes` and `biharmonic` take an optional `mask=` (`Mask2D` / `Mask3D`).
 Fluxes through faces with a dry side are zeroed and land-cell tendencies are
 zeroed, giving natural no-flux BCs at irregular coastlines without any
-additional code.  The masked biharmonic operators apply this masked no-flux
+additional code.  The masked `biharmonic` applies this masked no-flux
 Laplacian $D_m$ twice, $-\kappa\,D_m(D_m h)$, after zeroing the dry inputs:
 the coast is no-flux for both $h$ and $\nabla^2 h$, land values (even `NaN`)
 never enter the wet tendency, and the operator conserves $\sum_\text{wet} h$.
@@ -228,27 +227,19 @@ never enter the wet tendency, and the operator conserves $\sum_\text{wet} h$.
 ### Usage
 
 ```python
-from gridax import Diffusion2D, BiharmonicDiffusion2D, diffuse
-from gridax import CartesianCGrid2D
+from gridax import CartesianCGrid2D, biharmonic, diffuse
 
 grid = CartesianCGrid2D.from_interior(64, 64, 1e6, 1e6)
 
-# Class-based harmonic diffusion (unmasked)
-diff_op = Diffusion2D(grid=grid)
-dh_dt = diff_op(h, kappa=100.0)
+# Harmonic diffusion (unmasked)
+dh_dt = diffuse(h, grid, kappa=100.0)
 
-# With masking — mask is a class field, not a per-call kwarg.
-# Diffusion applies the intermediate flux-masking pattern internally
-# (flux_x *= mask.wet(at="U"), flux_y *= mask.wet(at="V"), tendency *= mask.wet()).
-diff_op_masked = Diffusion2D(grid=grid, mask=mask)
-dh_dt = diff_op_masked(h, kappa=100.0)
+# With a mask: the fluxes through dry faces are zeroed before the
+# divergence, and the tendency on dry cells after it.
+dh_dt = diffuse(h, grid, kappa=100.0, mask=mask)
 
 # Biharmonic (scale-selective)
-biharm_op = BiharmonicDiffusion2D(grid=grid)
-dh_dt = biharm_op(h, kappa=1e9)
-
-# The function, on any C-grid
-dh_dt = diffuse(h, grid, kappa=100.0, mask=mask)
+dh_dt = biharmonic(h, grid, kappa4=1e9)
 ```
 
 ---
@@ -258,9 +249,9 @@ dh_dt = diffuse(h, grid, kappa=100.0, mask=mask)
 ### Theory
 
 The Coriolis term is the vortex force with the planetary vorticity $f$.
-`Coriolis2D` uses the energy-conserving corner-product form of Sadourny
-(1975), the same construction as the `'energy'` vortex force of
-`MomentumAdvection2D`: $f$ (given at T-points) is averaged to the X-points,
+`coriolis` uses the energy-conserving corner-product form of Sadourny
+(1975), the same construction as the `"energy"` vortex force of
+`advect_momentum`: $f$ (given at T-points) is averaged to the X-points,
 multiplied there by the cross velocity averaged to the corner, and the
 product is averaged back to the faces:
 
@@ -279,22 +270,21 @@ tendency $\sum u\,\dot u + \sum v\,\dot v$ vanishes to round-off for **any**
 $f$, including a $\beta$-plane, on a periodic domain or a closed basin (with
 a `BC` of Dirichlet zero on every wall, filled at `stagger="U"` and `"V"`).  For
 uniform $f$ it reduces to the familiar $+f\,\overline{v}^{xy}$,
-$-f\,\overline{u}^{xy}$ (`Interpolation2D.V_to_U` / `U_to_V`).  The form
+$-f\,\overline{u}^{xy}$ (`interpolate` from V to U and from U to V).  The form
 used before #289, $f_{\text{on-U}}\,\overline{v}_{\text{on-U}}$, conserves
 energy only for uniform $f$.
 
 ### Usage
 
 ```python
-from gridax import CartesianCGrid2D, Coriolis2D
+from gridax import CartesianCGrid2D, coriolis
 
 grid = CartesianCGrid2D.from_interior(64, 64, 1e6, 1e6)
-cor = Coriolis2D(grid=grid)
 
 # f at T-points
 f = jnp.full((grid.Ny, grid.Nx), 1e-4)
 
-du_cor, dv_cor = cor(u, v, f)
+du_cor, dv_cor = coriolis(u, v, grid, f=f)
 ```
 
 ---
@@ -323,40 +313,38 @@ kinetic energy at T-points, and $(\zeta\,v)_{\text{on-U}}$ is the
 vorticity-flux product interpolated to U-points.
 
 This form has important discrete conservation properties depending on how
-the vorticity-flux product is evaluated.  Three schemes are available:
+the vorticity-flux product is evaluated.  Three forms are available:
 
-| Scheme | Discrete form of $(\zeta\,v)_{\text{on-U}}$ | Key property | Reference |
+| `form=` | Discrete form of $(\zeta\,v)_{\text{on-U}}$ | Key property | Reference |
 |--------|------|-------------|-----------|
-| `'energy'` (default) | $\overline{\zeta\,\overline{v}^{xy}}^{y}$: product at the corners, then average | Conserves total KE for non-divergent flow | Sadourny (1975) E-scheme |
-| `'enstrophy'` | $\overline{\zeta}^{y}\,\overline{v}^{xy}$: average to the face, then multiply | Conserves potential enstrophy | Sadourny (1975) Z-scheme |
-| `'blend'` | $\tfrac13 E + \tfrac23 Z$ | Conserves neither exactly | linear blend, **not** Arakawa & Lamb (1981); `'al'` is a deprecated alias |
+| `"energy"` (default) | $\overline{\zeta\,\overline{v}^{xy}}^{y}$: product at the corners, then average | Conserves total KE for non-divergent flow | Sadourny (1975) E-scheme |
+| `"enstrophy"` | $\overline{\zeta}^{y}\,\overline{v}^{xy}$: average to the face, then multiply | Conserves potential enstrophy | Sadourny (1975) Z-scheme |
+| `"blend"` | $\tfrac13 E + \tfrac23 Z$ | Conserves neither exactly | linear blend, **not** Arakawa & Lamb (1981) |
 
-:::{tip} When to use each scheme
-- **`'energy'`**: energy-conserving vortex force, the usual choice for
+:::{tip} When to use each form
+- **`"energy"`**: energy-conserving vortex force, the usual choice for
   long integrations.
-- **`'enstrophy'`**: preferred when enstrophy conservation matters (e.g.
+- **`"enstrophy"`**: preferred when enstrophy conservation matters (e.g.
   turbulence spindown experiments).
-- **`'blend'`**: a ⅓–⅔ blend of the two; it is not the Arakawa–Lamb
+- **`"blend"`**: a ⅓–⅔ blend of the two; it is not the Arakawa–Lamb
   (1981) scheme, which conserves both (not implemented, #283).
 :::
 
 ### Usage
 
 ```python
-from gridax import CartesianCGrid2D, MomentumAdvection2D
+from gridax import CartesianCGrid2D, advect_momentum
 
 grid = CartesianCGrid2D.from_interior(64, 64, 1e6, 1e6)
 
 # Energy-conserving (default)
-madv = MomentumAdvection2D(grid=grid)
-du_adv, dv_adv = madv(u, v)
+du_adv, dv_adv = advect_momentum(u, v, grid)
 
 # Enstrophy-conserving
-madv_z = MomentumAdvection2D(grid=grid)
-du_adv, dv_adv = madv_z(u, v, scheme="enstrophy")
+du_adv, dv_adv = advect_momentum(u, v, grid, form="enstrophy")
 
 # 1/3 energy + 2/3 enstrophy blend
-du_adv, dv_adv = madv(u, v, scheme="blend")
+du_adv, dv_adv = advect_momentum(u, v, grid, form="blend")
 ```
 
 ---
@@ -382,34 +370,22 @@ The three terms are:
 :::{warning} Conservation under a mask
 The discrete identities above hold for the unmasked operator with
 suitable boundary conditions (e.g. $\psi$ constant on the boundary).
-`ArakawaJacobian2D(grid, mask=mask)` zeroes land inputs and dry output
+`arakawa_jacobian(f, g, grid, mask=mask)` zeroes land inputs and dry output
 cells, so sums over a masked domain such as $\sum J$ or
 $\sum q\,J$ are **not** guaranteed to vanish exactly.
-:::
-
-:::{note} Output shape
-The class `ArakawaJacobian2D` returns the full `[..., Ny, Nx]` array with
-a zero ghost ring (and dry cells zeroed when given a mask), ready for a
-time-stepping loop.  The functional `arakawa_jacobian` returns only the
-interior `[..., Ny−2, Nx−2]`; the caller must embed it into the full
-array.
 :::
 
 ### Usage
 
 ```python
-from gridax import ArakawaJacobian2D, CartesianCGrid2D, arakawa_jacobian
+from gridax import CartesianCGrid2D, arakawa_jacobian
 
 grid = CartesianCGrid2D.from_interior(64, 64, 1e6, 1e6)
 
 # QG vorticity advection: J(psi, q)
 # psi, q have shape [Ny, Nx] with one ghost cell on each side
-jac = ArakawaJacobian2D(grid=grid, mask=mask)   # mask optional
-Jpsi_q = jac(psi, q)
+Jpsi_q = arakawa_jacobian(psi, q, grid, mask=mask)  # mask optional
 # Jpsi_q has shape [Ny, Nx]; ghost ring and dry cells are 0
-
-# The function
-Jpsi_q = arakawa_jacobian(psi, q, grid, mask=mask)
 ```
 
 ---
@@ -419,32 +395,25 @@ Jpsi_q = arakawa_jacobian(psi, q, grid, mask=mask)
 ```
 What spatial operator do you need?
 │
-├── Divergence ∇·(u, v)
-│   └── Divergence2D  or  Difference2D.divergence
-│
-├── Relative vorticity ζ = ∂v/∂x − ∂u/∂y
-│   ├── Class-based → Vorticity2D.relative_vorticity
-│   └── Functional  → Difference2D.curl
-│
-├── Shallow-water PV q = (ζ+f)/h
-│   └── Vorticity2D.potential_vorticity
+├── Divergence ∇·(u, v)                      → divergence
+├── Relative vorticity ζ = ∂v/∂x − ∂u/∂y     → curl
+├── Shallow-water PV q = (ζ+f)/h             → sw_potential_vorticity
 │
 ├── Tracer diffusion ∂q/∂t = ∇·(κ∇q)
-│   ├── Harmonic   → Diffusion2D  or  diffuse
-│   └── Biharmonic → BiharmonicDiffusion2D  (scale-selective)
+│   ├── Harmonic   → diffuse
+│   └── Biharmonic → biharmonic  (scale-selective)
 │
-├── Coriolis tendency (f×v, −f×u)
-│   └── Coriolis2D
+├── Coriolis tendency (f×v, −f×u)            → coriolis
 │
 ├── Momentum advection ∂u/∂t|adv
-│   ├── Conservative vortex-force form → MomentumAdvection2D
-│   └── QG vorticity advection         → ArakawaJacobian2D  or  arakawa_jacobian
+│   ├── Conservative vortex-force form → advect_momentum
+│   └── QG vorticity advection         → arakawa_jacobian
 │
 └── Diagnostics (KE, APE, enstrophy, Okubo-Weiss, …)
-    ├── Energy                → Energetics2D
-    ├── Strain / Okubo-Weiss  → Strain2D
-    ├── Enstrophy             → Vorticity2D.enstrophy / .potential_enstrophy
-    ├── QG PV                 → QGPotentialVorticity2D
+    ├── Energy                → kinetic_energy, bernoulli_potential
+    ├── Strain / Okubo-Weiss  → strain_rate_squared, okubo_weiss_parameter
+    ├── Enstrophy             → enstrophy(curl(u, v, grid, mask=mask))
+    ├── QG PV                 → qg_potential_vorticity
     └── See [Diagnostics API reference](api/diagnostics.md)
 ```
 
