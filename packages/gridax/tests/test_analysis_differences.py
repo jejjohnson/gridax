@@ -13,7 +13,9 @@ from __future__ import annotations
 
 import functools
 from pathlib import Path
+from typing import Any
 
+import gridax
 from gridax._src.analysis.differences import adaptive_difference
 from gridax.analysis import difference
 from gridax.stencils import difference_coeffs, difference_offsets, nonuniform_coeffs
@@ -84,7 +86,69 @@ def test_difference_equals_finitediffx(
         np.testing.assert_allclose(got, ref[f"{key}/axis{axis}"], rtol=1e-9, atol=1e-9)
 
 
+def _grid(f: np.ndarray, *steps: float) -> Any:
+    """A collocated grid with the steps of the reference, slowest axis first."""
+    ny, nx = f.shape
+    dy, dx = steps
+    return gridax.CartesianAGrid2D.from_interior(nx, ny, nx * dx, ny * dy)
+
+
+def test_2d_calculus_equals_finitediffx() -> None:
+    # accuracy 1, the central differences of the canonical functions
+    ref = _reference()
+    u, v = ref["calculus2d/1/u"], ref["calculus2d/1/v"]
+    grid = _grid(u, 0.3, -2.0)
+    for got, key in (
+        (gridax.divergence(u, v, grid), "div"),
+        (gridax.curl(u, v, grid), "curl"),
+        (gridax.laplacian(u, grid), "lap"),
+    ):
+        np.testing.assert_allclose(got, ref[f"calculus2d/1/{key}"], atol=1e-9)
+
+
 # dtypes (#421): the caller decides
+
+
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_the_input_dtype_is_kept(dtype: Any) -> None:
+    y, x = np.mgrid[0:6, 0:8].astype(dtype)
+    grid = _grid(x, 1.0, 1.0)
+    wet = np.ones(x.shape, dtype=bool)
+    wet[2, 3] = False
+    for mask in (None, gridax.Mask2D.from_grid(grid, wet)):
+        for out in (
+            *gridax.gradient(x * y, grid, mask=mask),
+            gridax.divergence(x, y, grid, mask=mask),
+            gridax.curl(x, y, grid, mask=mask),
+            gridax.laplacian(x * y, grid, mask=mask),
+        ):
+            assert isinstance(out, np.ndarray) and out.dtype == dtype
+
+
+def test_second_order_inside() -> None:
+    errors = []
+    for n in (32, 64):
+        x = np.linspace(0.0, 1.0, n)
+        field = np.broadcast_to(np.sin(2 * np.pi * x), (4, n))
+        grid = _grid(field, 1.0, x[1] - x[0])
+        slope = gridax.gradient(field, grid)[0]
+        errors.append(np.abs(slope - 2 * np.pi * np.cos(2 * np.pi * x))[:, 1:-1].max())
+    assert np.log2(errors[0] / errors[1]) == pytest.approx(2.0, abs=0.1)
+
+
+def test_a_linear_field_is_exact_up_to_a_mask() -> None:
+    y, x = np.mgrid[0:7, 0:9].astype(float)
+    grid = _grid(x, 1.0, 1.0)
+    wet = np.ones(x.shape, dtype=bool)
+    wet[2:4, 3:5] = False
+    mask = gridax.Mask2D.from_grid(grid, wet)
+    d_x, d_y = gridax.gradient(2.0 * x + 3.0 * y, grid, mask=mask)
+    np.testing.assert_allclose(d_x[wet], 2.0)
+    np.testing.assert_allclose(d_y[wet], 3.0)
+    assert np.isnan(d_x[~wet]).all()
+    # without a mask a NaN spreads to its neighbours
+    field = np.where(wet, x, np.nan)
+    assert np.isnan(gridax.gradient(field, grid)[0][2, 2])
 
 
 # ported from geotoolz-ops tests/test_gradient.py
