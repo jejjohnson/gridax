@@ -74,6 +74,7 @@ import numpy as np
 jax.config.update("jax_enable_x64", True)
 
 import gridax as fvx
+from gridax.schemes import Upwind
 import gridax.solvers as gs
 from integrix.march import heun_step
 
@@ -424,7 +425,7 @@ def tendency(q_field):
     u_field, v_field = geostrophic_velocity(psi_field)
 
     # 3. PV advection: -u . grad(q_a)  (writes to interior [2:-2, 2:-2])
-    q_rhs = adv_op(q_field, u_field, v_field, method="upwind1")
+    q_rhs = adv_op(q_field, u_field, v_field, scheme=Upwind(1))
 
     # 4. Beta term: -beta * v at interior T-points
     #    We interpolate v from V-points to T-points first.
@@ -652,7 +653,7 @@ plt.show()
 # | **Helmholtz inversion** | `solve_helmholtz_dst(rhs, dx, dy, lambda_)` | $(\\nabla^2 - \\lambda)\\psi = q_a$ |
 # | **Differences** | `Difference2D(grid)` | Finite differences, Laplacian |
 # | **Interpolation** | `Interpolation2D(grid)` | T-to-X, V-to-T, U-to-T, X-to-T |
-# | **Advection** | `Advection2D(grid)(q, u, v, method="upwind1")` | PV transport |
+# | **Advection** | `Advection2D(grid)(q, u, v, scheme=Upwind(1))` | PV transport |
 # | **Vorticity** | `Vorticity2D(grid).relative_vorticity(u, v)` | $\\zeta$ at X-points |
 # | **Boundary conditions** | `pad_interior(q, mode="constant")` | Zero ghost ring (solid walls) |
 # | **Time stepping** | `heun_step(q, tendency_fn, dt)` | Heun / RK2 predictor-corrector |

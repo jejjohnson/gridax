@@ -209,13 +209,14 @@ The coefficients and the raw stencils know no mask. A canonical function (Layer 
 |---|---|---|
 | Layer 0 — coefficients | `difference_offsets`, `difference_coeffs`, `weno_stencils`, … in `gridax.stencils` (numbers, no arrays) | **No** |
 | Layer 1 — raw stencils | `diff_x_fwd_2d`, `avg_y_bwd_2d`, `staggered_difference`, … in `gridax.stencils` | **No** |
-| Layer 2 — canonical functions | the collocated `gridax.analysis` calculus, `diffusion_2d`, `kinetic_energy`, `enstrophy`, `_geostrophic_velocity_sphere` (private), `arakawa_jacobian`, … | **Not yet**, except the reductions and `gridax.advection.reconstruct` (`mask=`) |
+| Layer 2 — canonical functions | `difference`, `interpolate`, `divergence`, `curl`, `advect`, `reconstruct`, `diffuse`, `biharmonic`, `coriolis`, `arakawa_jacobian`, `kinetic_energy`, `shear_strain`, `tensor_strain`, `area_sum`, … | **Yes**, `mask=` |
+| Pointwise and array helpers | `enstrophy`, `okubo_weiss`, `potential_vorticity`, the collocated `gridax.analysis` calculus, … | **No** (`gridax.analysis.adaptive_*` take one) |
 | Layer 3 — bindings | `Difference2D`, `Interpolation2D`, `Divergence2D`, `Vorticity2D`, `Coriolis2D`, `Advection2D`, `Diffusion2D`, `MomentumAdvection2D`, `Energetics2D`, `Strain2D`, `QGPotentialVorticity2D`, `ArakawaJacobian2D`, and their `1D` / `3D` / `Spherical*` siblings | **Yes**, via `self.mask` |
 
 The pointwise and stencil diagnostics below have Layer-3 class forms, so
 in a masked domain you don't need to mask them by hand:
 
-| Layer-2 helper | Layer-3 class form |
+| Helper | Layer-3 class form |
 |---|---|
 | `kinetic_energy`, `bernoulli_potential`, `available_potential_energy` | `Energetics2D(grid, mask)` methods of the same name |
 | `shear_strain`, `tensor_strain` | `Strain2D.shear`, `Strain2D.tensor` |
@@ -250,16 +251,14 @@ but do not sanitize inputs.
 
 Diagnostics **without** a class form:
 
-- `total_energy`, `total_enstrophy` are domain reductions, not stencils.
-  Pass them fields that are already masked (e.g. from the class forms
-  above) so dry cells contribute zero.
+- The domain integrals are `area_sum(field, grid, mask=mask)`.
 - `vertical_velocity` takes a per-call `mask=Mask3D`: it zeroes the
   divergence on dry T-points (`mask.wet()`) and its output on dry W-faces
   (`mask.wet(at="W")`); the output has the same `[Nz, Ny, Nx]` shape as `mask.wet(at="W")`.
 
-If you do call a Layer-2 helper directly and want masked output, apply
-the mask at the call site: `ke = jnp.where(mask.wet(), kinetic_energy(u, v), 0.0)`
-(a plain `* mask.wet()` also works when the inputs are finite on land).  For
+The canonical functions take the mask: `kinetic_energy(u, v, grid, mask=mask)`.
+For a helper that does not, apply it at the call site:
+`jnp.where(mask.wet(at="X", kind="strict"), enstrophy(omega), 0.0)`.  For
 pointwise helpers whose inputs live on different staggers (e.g.
 `okubo_weiss(sn, ss, omega)` with `sn` at T-points and `ss`, `omega` at
 X-points), the class form also does the X → T averaging for you.
@@ -352,15 +351,13 @@ flux_y *= mask.wet(at="V")        # V-face stage
 tendency *= mask.wet()      # final output
 ```
 
-The shared kernel is `_diffusion_2d_impl(h, kappa, dx, dy, mh, mu, mv)`
-in `gridax._src.diffusion.diffusion`; `Diffusion3D` vmaps it
-per-z-slice with sliced masks (**Pattern B** in #209's terminology).
+The canonical function `diffuse` does it, on the levels of a 3-D grid at once;
+the classes call it.
 
 **Pattern 4 — The masked harmonic operator applied twice.**
 Used by `BiharmonicDiffusion2D` / `3D` and `SphericalBiharmonicDiffusion2D`
 / `3D`.  The tendency is `−κ · Dm(Dm(h))`, where `Dm` is the masked
-no-flux harmonic operator of Pattern 3 (the inner `Diffusion*` /
-`SphericalDiffusion*` is built with the outer mask).  Dry inputs are
+no-flux harmonic operator of Pattern 3 (`biharmonic` applies `diffuse` twice with the same mask).  Dry inputs are
 zeroed with `jnp.where` first, so land may hold `NaN` or a fill value.
 Because the second pass also zeroes the wet→dry fluxes, the dry zeros of
 the intermediate `Dm(h)` are never read: the coast is a no-flux wall for
@@ -373,16 +370,15 @@ not conservative.)
 ### Pattern A vs Pattern B for 3-D operators
 
 The 3-D wrappers that vmap an inner 2-D operator over z-levels
-(`Vorticity3D`, `Coriolis3D`, `Spherical*3D`, `MomentumAdvection3D`)
+(`Vorticity3D`, `Spherical*3D`, `MomentumAdvection3D`)
 use **Pattern A (post-compute)**: the inner 2-D op is always
 constructed `mask=None` and the 3-D wrapper owns the mask, applying `* self.mask.<stagger>` after the vmap and
 `zero_z_ghosts`.  This is cleaner than trying to thread per-z mask
 slices into the vmap'd 2-D op.
 
-`Diffusion3D` (and `BiharmonicDiffusion3D`, built on it) is the
-exception and uses **Pattern B** (vmap with per-z sliced masks) because
-its intermediate flux masking makes Pattern A incorrect.  See the Diffusion module docstring for the
-implementation.
+The canonical functions need no such pattern: `advect`, `diffuse`, `coriolis`
+and the others act on the last two axes of the interior levels, with the 3-D
+masks, and pad a zero ghost slab.
 
 ### Advection hierarchy pre-build
 
@@ -393,22 +389,22 @@ adaptive stencil hierarchy via `mask.get_adaptive_masks(...)` — once,
 up-front — and stores the result on the operator.  Every subsequent
 call then uses the cached hierarchy, narrowed at dispatch time (by the
 `narrow_mask_hierarchy` helper) to the subset of tiers the chosen
-reconstruction method needs:
+scheme needs:
 
 ```python
 adv = fvx.Advection2D(grid=grid, mask=mask)  # builds (2,4,6,8,10) hierarchies
 
 # First call uses the cached hierarchies; no get_adaptive_masks recomputation.
-dh_dt = adv(h, u, v, method="weno5")
+dh_dt = adv(h, u, v, scheme=WENO(5))
 
-# A second method call on the same instance reuses the cache and
+# A call with another scheme on the same instance reuses the cache and
 # narrows to (2, 4) on the fly for WENO3.
-dh_dt = adv(h, u, v, method="weno3")
+dh_dt = adv(h, u, v, scheme=WENO(3))
 ```
 
 This is the main reason the Advection API moved from a per-call
 `mask=` kwarg to a class field: masks under JIT now compile once per
-`Advection*` instance instead of once per (instance, method) pair.
+`Advection*` instance instead of once per (instance, scheme) pair.
 
 ### Changing the mask on an operator
 
@@ -448,35 +444,34 @@ In the current API, the mask is always a class field.  Translation:
 ```python
 # Old (removed)
 adv = fvx.Advection2D(grid=grid)
-adv(h, u, v, method="weno5", mask=mask)
+adv(h, u, v, scheme=WENO(5), mask=mask)
 
 cor = fvx.Coriolis2D(grid=grid)
 cor(u, v, f, mask=mask)
 
 # New
 adv = fvx.Advection2D(grid=grid, mask=mask)
-adv(h, u, v, method="weno5")
+adv(h, u, v, scheme=WENO(5))
 
 cor = fvx.Coriolis2D(grid=grid, mask=mask)
 cor(u, v, f)
 ```
 
-`Diffusion2D`, `Diffusion3D`, `diffusion_2d`, `Difference2D.grad_perp`,
+`Diffusion2D`, `Diffusion3D`, `Difference2D.grad_perp`,
 `kinetic_energy`, `enstrophy`, and `potential_enstrophy` used to take
 raw-array `mask_h` / `mask_u` / `mask_v` keyword arguments.  Those are
 **all removed**:
 
 * `Diffusion2D` / `Diffusion3D` take a `Mask2D` / `Mask3D` class field
   instead.
-* `diffusion_2d` (the Layer-2 free function) is mask-free.  If you
-  want masked diffusion, use the class operator.
 * `Difference2D.grad_perp` uses the `self.mask` class field (set on
   `Difference2D` at construction).
-* `kinetic_energy` / `enstrophy` / `potential_enstrophy` are Layer-2
-  mask-free.  Apply masks at the call site:
+* `kinetic_energy` takes the grid and the mask. `enstrophy` and
+  `potential_enstrophy` are pointwise and mask-free; apply masks at the call
+  site:
 
   ```python
-  ke = fvx.kinetic_energy(u, v) * mask.wet()
+  ke = fvx.kinetic_energy(u, v, grid, mask=mask)
   z  = fvx.enstrophy(omega)     * mask.wet(at="X", kind="strict")
   pe = fvx.potential_enstrophy(q, h) * mask.wet(at="X", kind="strict")
   ```

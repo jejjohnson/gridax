@@ -1,6 +1,6 @@
 ---
 name: add-advection-scheme
-description: Add an advection scheme to finitevolX — a face-value reconstruction (upwind, linear, WENO / WENO-Z variant), a TVD flux limiter, or a face-flux function (Rusanov-style) — wired through Reconstruction1D/2D/3D, the Advection1D/2D/3D and SphericalAdvection method dispatch, the coastal stencil fallback, the scale-covariance method lists and the golden fixtures. Use when asked to add, port or implement a reconstruction, WENO stencil, limiter or numerical flux in gridax/_src/advection.
+description: Add an advection scheme to finitevolX — a face-value reconstruction (upwind, linear, WENO / WENO-Z variant), a TVD flux limiter, or a face-flux function (Rusanov-style) — wired through gridax.schemes, the coastal stencil fallback, the scale-covariance lists and the golden fixtures. Use when asked to add, port or implement a reconstruction, WENO stencil, limiter or numerical flux in gridax/_src/advection.
 ---
 
 # Add an advection scheme
@@ -26,10 +26,9 @@ Everything here runs on any array backend: `xp = array_namespace(...)` and the h
 | Piece | File | Wire it into |
 |---|---|---|
 | Point stencil (`qm, q0, qp, … → q at the face`) | `weno.py` (nonlinear, left and `_right` variants), `linear.py` (polynomial) | `__init__.py` exports |
-| Limiter `φ(r)` | `limiters.py` | `_LIMITERS` in `_src/schemes/nonlinear.py` and `_TVD_LIMITERS` in `advection.py` (then every advection operator accepts it as `method=`) |
-| Face-value method on a grid | `reconstruction.py`: `<name>_x` on `Reconstruction1D`, `<name>_x` / `<name>_y` on `Reconstruction2D/3D` (there is no `_z`: z-levels are independent) | the `elif method == ...` chain in `Advection1D/2D/3D.__call__` (`advection.py`) and `_reconstruct_faces_2d` / `_reconstruct_faces_3d` (`spherical_advection.py`); the error for an unknown method must keep the words "Unknown method" (the scale-covariance probe relies on them) |
-| Coastal fallback (wide stencils) | `_rec_funcs_for_method_1d/2d/3d` in `advection.py`: `{stencil_size: fn}` down to `upwind1` at size 2 | `_MASK_DISPATCHABLE` and the ladder in `_tier_funcs`; sizes must be a subset of `_HIERARCHY_SIZES = (2, 4, 6, 8, 10)` |
-| Functional dispatcher | `reconstruct_fn.py` (`reconstruct(q, u, dim, method, num_pts)`) | only if the scheme fits its `method` × `num_pts` grid |
+| Limiter `φ(r)` | `limiters.py` | `_LIMITERS` in `_src/schemes/nonlinear.py` (then `TVD(limiter)` takes it, on every operator) |
+| Scheme (a ladder of tiers) | `gridax/_src/schemes/linear.py` or `nonlinear.py`: a frozen dataclass with `order` and `tiers()`, widest first, the last one always fitting; `upwinded` and `linear` as they are | `gridax/schemes.py` exports; every operator then takes it as `scheme=`, masked or not |
+| Coastal fallback | nothing: `face_flux` (`reconstruct.py`) picks the widest tier on wet cells, from `Tier.size` | a size above 10 is computed per call instead of being cached by the classes |
 
 Rules:
 
@@ -53,7 +52,7 @@ Rules:
 `packages/gridax/src/gridax/__init__.py` (import + `__all__` group, e.g. `# WENO stencil
 functions`, `# Flux limiters`), the `docs/api/advection.md` /
 `docs/api/reconstruction.md` page, the method list in the `Advection*`
-docstrings and in `docs/advection.md`, then `make capabilities`.
+docstrings and in `docs/advection.md` and `docs/schemes.md`, then `make capabilities`.
 
 ## 4. Tests
 
@@ -62,7 +61,7 @@ docstrings and in `docs/advection.md`, then `make capabilities`.
   (TVD region, φ(1) = 1).
 - Grid methods: `tests/test_reconstruction.py` (`TestReconstruction1D/2D/3D`
   and the `*Masked` classes); the method in the `test_all_methods_run`
-  lists of `tests/test_advection.py`; conservation
+  lists of `tests/test_advection.py` and its name in `tests/_schemes.py`; conservation
   (`test_1d_conservation`).
 - Units: add the method to `LINEAR_METHODS`, `WENO_METHODS` or `TVD_METHODS`
   in `tests/test_scale_covariance.py` (the probe adds a case per operator

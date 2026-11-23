@@ -45,6 +45,7 @@ PACKAGES: dict[str, list[str]] = {
         "gridax.stencils",
         "gridax.schemes",
         "gridax.advection",
+        "gridax.advection.kernels",
         "gridax.analysis",
         "gridax.fields",
         "gridax.solvers",

@@ -66,6 +66,7 @@ import numpy as np
 jax.config.update("jax_enable_x64", True)
 
 import gridax as fvx
+from gridax.schemes import WENO, Upwind
 from integrix.march import rk3_ssp_step
 
 IMG_DIR = Path(__file__).resolve().parent.parent / "images" / "advection_2d_masked"
@@ -331,23 +332,23 @@ dt = T_final / nsteps
 print(f"dt = {dt:.4e}, nsteps = {nsteps}, T = {T_final}")
 
 experiments = {
-    "WENO5 + mask": {"method": "weno5", "op": advect_masked},
-    "WENO5 (no mask)": {"method": "weno5", "op": advect_unmasked},
-    "upwind1": {"method": "upwind1", "op": advect_unmasked},
+    "WENO5 + mask": {"scheme": WENO(5), "op": advect_masked},
+    "WENO5 (no mask)": {"scheme": WENO(5), "op": advect_unmasked},
+    "upwind1": {"scheme": Upwind(1), "op": advect_unmasked},
 }
 
 results = {}
 for name, cfg in experiments.items():
 
-    def make_rhs(method, op):
+    def make_rhs(scheme, op):
         def rhs(q):
             # Zero out land cells each stage — keeps the solution clean.
             q = q * ocean_jnp
-            return op(q, u_field, v_field, method=method)
+            return op(q, u_field, v_field, scheme=scheme)
 
         return rhs
 
-    rhs_fn = jax.jit(make_rhs(cfg["method"], cfg["op"]))
+    rhs_fn = jax.jit(make_rhs(cfg["scheme"], cfg["op"]))
     q = q0.copy()
 
     for _step in range(nsteps):
@@ -413,7 +414,7 @@ fig.savefig(IMG_DIR / "comparison.png", dpi=150, bbox_inches="tight")
 #
 # def rhs(q):
 #     q = q * ocean_jnp       # ← clean up land before reconstruction
-#     return advect_masked(q, u, v, method='weno5')
+#     return advect_masked(q, u, v, scheme=WENO(5))
 #
 # for _ in range(nsteps):
 #     q = rk3_ssp_step(q, rhs, dt)
@@ -443,7 +444,7 @@ fig.savefig(IMG_DIR / "comparison.png", dpi=150, bbox_inches="tight")
 #
 # When you construct `Advection2D(grid, mask=mask)`, this is handled
 # automatically — the operator pre-builds `(2, 4, 6)` at `__init__`
-# time and narrows it at dispatch for whichever method you request.
+# time and narrows it at dispatch for whichever scheme you request.
 #
 # ### Tip 4: Inspect stencil assignment before running
 #

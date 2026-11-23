@@ -208,11 +208,11 @@ gridax has one derivative stack for collocated and staggered fields, in four lay
 | Layer | Holds | Collocated | Staggered (C-grid) |
 |---|---|---|---|
 | **0 — coefficients** | offsets and exact coefficients | `gridax.stencils.difference_offsets`, `difference_coeffs`, `nonuniform_coeffs` | the same with `method="staggered"`, `bias=` and `data="cell"`; `weno_stencils`, `optimal_weights`, `smoothness_matrix` |
-| **1 — raw stencils** | index arithmetic, no metric, no mask | applied inside Layer 2 | the 32 named stencils on this page; `staggered_difference`, `staggered_average`; the `linear_*` and `weno_*` reconstructions |
-| **2 — canonical functions** | one per operation: the grid positional, the mask a keyword | `gridax.analysis`: `difference`, `gradient_2d`, `divergence_2d`, `curl_2d`, `laplacian_2d`, … | `diffusion_2d`, `arakawa_jacobian`, `kinetic_energy`, `shear_strain`, …; `gridax.advection.reconstruct` (with an optional mask) |
+| **1 — raw stencils** | index arithmetic, no metric, no mask | applied inside Layer 2 | the 32 named stencils on this page; `staggered_difference`, `staggered_average`; the `linear_*` and `weno_*` reconstructions of `gridax.advection.kernels` |
+| **2 — canonical functions** | one per operation: the grid positional, the mask a keyword | `difference`, `gradient`, `divergence`, `curl`, `laplacian`, `kinetic_energy`, `area_sum`, …; on bare arrays `gridax.analysis` | the same, and `interpolate`, `grad_perp`, `advect`, `reconstruct`, `diffuse`, `biharmonic`, `coriolis`, `arakawa_jacobian`, `shear_strain`, `tensor_strain` |
 | **3 — bindings** | hold a grid, a mask and caches derived from them; each method is one call of a Layer 2 function | none | `Difference2D`, `Divergence2D`, `Vorticity2D`, `Reconstruction2D`, `Advection2D`, `SphericalDifference2D`, … |
 
-The definitions of Layers 2 and 3 are those of [ADR 1](design/adr/0001-canonical-functions.md), and the code is moving to them family by family: the moves (`difference`, `interpolate`), the calculus (`divergence`, `curl`, `laplacian`, `gradient`, `grad_perp`) and the reductions are canonical functions, and their classes are bindings; advection, diffusion, rotation and the diagnostics still take spacings instead of a grid at Layer 2, or are implemented in their Layer 3 classes. `gridax.analysis` is the collocated calculus on bare arrays.
+The definitions of Layers 2 and 3 are those of [ADR 1](design/adr/0001-canonical-functions.md), and the code has moved to them family by family: the moves, the calculus, the transport (`advect`, `reconstruct`, `diffuse`, `biharmonic`), the rotation (`coriolis`, `arakawa_jacobian`), the diagnostics with a stencil and the reductions are canonical functions, and their classes are bindings. Momentum advection and the vorticity fluxes are implemented in their Layer 3 classes. `gridax.analysis` is the collocated calculus on bare arrays.
 
 ### Layer 0: one solver for every stencil
 
@@ -242,13 +242,12 @@ Point values and cell averages give the same two-point stencils, which is why th
 A stencil wider than two points reads past the one-cell ghost ring on the faces next to a wall, and the two families treat those faces differently.
 
 - **Centred operators shift inwards.** `staggered_difference` and `staggered_average` keep their width and move the stencil into the domain, so a fourth-order stencil has order 3 on that face instead of dropping to 2.
-- **Upwind reconstructions narrow.** `gridax.advection.reconstruct` gives each face the widest tier of its scheme that fits (WENO-5, then WENO-3, then first-order upwind), so it never reads a cell downwind of the face. With a mask, the coast ends the tiers in the same way.
+- **Upwind reconstructions narrow.** `gridax.reconstruct` gives each face the widest tier of its scheme that fits (WENO-5, then WENO-3, then first-order upwind), so it never reads a cell downwind of the face. With a mask, the coast ends the tiers in the same way.
 
 ### Example
 
 ```python
 import gridax
-import gridax.advection as gadv
 import gridax.analysis as ga
 from gridax.schemes import WENO, Centred
 import gridax.stencils as gs
@@ -264,7 +263,7 @@ raw4 = gs.staggered_difference(h, axis="x", side="fwd", ndim=2, scheme=Centred(4
 # Layer 2, collocated: dh/dx on the same points → (42, 62)
 dh_dx_collocated = ga.difference(h, axis=-1, step=grid.spacing("x"))
 # Layer 2, advection: the WENO-5 flux on the east faces → (42, 62)
-flux = gadv.reconstruct(h, u, axis=-1, scheme=WENO(5))
+flux = gridax.reconstruct(h, u, grid, axis="x", scheme=WENO(5))
 # Layer 3: dh/dx at U points, zeroed at dry faces → (42, 62)
 dh_dx = gridax.Difference2D(grid=grid, mask=mask).diff_x_T_to_U(h)
 ```

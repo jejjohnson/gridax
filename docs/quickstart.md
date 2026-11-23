@@ -35,6 +35,7 @@ where $F^x = u \hat{q}$ and $F^y = v \hat{q}$ are the fluxes through the east an
 
 ```python
 import gridax
+from gridax.schemes import WENO
 import numpy as np
 
 # Shapes: N_y = N_x = 34, a 32 × 32 interior and one ghost ring
@@ -83,8 +84,8 @@ total = gridax.area_sum(q, grid, mask=mask)  # → ()
 dt = 0.2 * grid.spacing("x")
 for _ in range(200):
     # Heun's method on dq̄/dt, with WENO-5 face values
-    q1 = q + dt * advection(q, u, v, method="weno5")  # (N_y, N_x) → (N_y, N_x)
-    q = 0.5 * (q + q1 + dt * advection(q1, u, v, method="weno5"))
+    q1 = q + dt * advection(q, u, v, scheme=WENO(5))  # (N_y, N_x) → (N_y, N_x)
+    q = 0.5 * (q + q1 + dt * advection(q1, u, v, scheme=WENO(5)))
 # today (gridax)
 change = gridax.area_sum(q, grid, mask=mask) / total - 1.0  # → ()
 print(f"{float(change):.1e} {float(q.max()):.3f} {float(q.min()):.1e}")
@@ -103,7 +104,7 @@ There are two ways to close a basin that keep the budget:
 - **Make the first interior ring dry**, as above. The mask then zeroes every flux through the faces next to it, and those cells hold no tracer.
 - **Open the walls** with `wall="open"`, after filling the ghost ring with boundary conditions (`fill_ghosts` with a `BC`). The wall faces are then computed with first-order upwind from the ghost cells, the tendency is written on the full interior, and the flux stays single-valued, so mass is conserved exactly. `wall="open"` does not combine with a mask.
 
-The [advection page](advection.md) has the stencil cascade near the coast and the full list of methods, and the [boundary conditions page](boundary_conditions.md) has the atoms that fill the ghost ring.
+The [advection page](advection.md) has the stencil cascade near the coast and the full list of schemes, and the [boundary conditions page](boundary_conditions.md) has the atoms that fill the ghost ring.
 
 ## The same tendency under `jit` and `grad`
 
@@ -125,7 +126,7 @@ q_j, u_j, v_j = jnp.asarray(q), jnp.asarray(u), jnp.asarray(v)  # → (N_y, N_x)
 @jax.jit
 def tendency(q, u, v):
     # dq̄/dt, with WENO-5 face values
-    return advection(q, u, v, method="weno5")  # (N_y, N_x) → (N_y, N_x)
+    return advection(q, u, v, scheme=WENO(5))  # (N_y, N_x) → (N_y, N_x)
 
 
 # today (gridax)
@@ -136,7 +137,7 @@ def cost(q):
 
 # ∂J/∂q̄, by reverse-mode autodiff through the WENO weights
 grad_q = jax.grad(cost)(q_j)  # (N_y, N_x) → (N_y, N_x)
-gap = jnp.abs(tendency(q_j, u_j, v_j) - advection(q, u, v, method="weno5")).max()
+gap = jnp.abs(tendency(q_j, u_j, v_j) - advection(q, u, v, scheme=WENO(5))).max()
 print(f"{float(gap):.1e} {grad_q.shape} {float(jnp.abs(grad_q).max()):.3f}")
 ```
 

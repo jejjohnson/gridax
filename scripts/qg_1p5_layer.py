@@ -84,6 +84,7 @@ from gridax import (
     Vorticity2D,
     pad_interior,
 )
+from gridax.schemes import Upwind
 from gridax.solvers import solve_helmholtz_dst
 from integrix.march import heun_step
 import matplotlib.pyplot as plt
@@ -465,7 +466,7 @@ def run_simulation(config: QuasiGeostrophicConfig | None = None) -> xr.Dataset:
             psi_field, diff, interp
         )
         # -div(u*q_a): advective tendency (writes to [2:-2, 2:-2])
-        q_rhs = adv(q_field, u_field, v_field, method="upwind1")
+        q_rhs = adv(q_field, u_field, v_field, scheme=Upwind(1))
         # -v*beta: planetary-vorticity advection at T-points.
         # Add directly to q_rhs at the interior to avoid an extra allocation.
         v_center = interp.V_to_T(v_field)
