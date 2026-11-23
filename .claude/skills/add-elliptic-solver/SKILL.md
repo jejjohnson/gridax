@@ -15,7 +15,7 @@ Read contract 5 (solvers) in `AGENTS.md`, then `docs/elliptic_solvers.md`,
 | A rectangular spectral solve, a new transform type, new eigenvalues, a capacitance-method change | **spectraldiffx** (finitevolX re-exports it from `solvers/spectral.py` / `spectral_transforms.py`): propose it upstream, then bump the pin (`bump-upstream-pins` skill) |
 | A tridiagonal / Kronecker / low-rank solve, a Nyström-style preconditioner | **gaussx** (finitevolX re-exports `solvers/tridiagonal.py`; CG is `gaussx.linear_solve_with_info` with `gaussx.CGSolver`, and the Nyström preconditioner is `gaussx.NystromPreconditioner`) |
 | A masked-domain solve on the C-grid, a preconditioner adapted to the finitevolX sign convention, multigrid | here, in `gridax/_src/solvers/` (public: `gridax.solvers`) |
-| A one-call inversion (`streamfunction_from_vorticity`, `pressure_from_divergence`, `pv_inversion`), a new `method=` option on them, known-value or `BoundaryConditionSet` handling for them | **sesmax-core** (`sesmax_core.gfd`, #475; gridax keeps no alias): propose it there, built from the public pieces here |
+| A one-call inversion (`streamfunction_from_vorticity`, `pressure_from_divergence`, `pv_inversion`), a new `method=` option on them, known-value or `gridax.BC` handling for them | **sesmax-core** (`sesmax_core.gfd`, #475; gridax keeps no alias): propose it there, built from the public pieces here |
 
 Search `docs/capabilities.md` first: `masked_laplacian` (and the
 T-point `masked_neumann_laplacian`, `masked_face_dirichlet_laplacian`,

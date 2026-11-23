@@ -89,22 +89,16 @@ from gridax._src.advection.weno import (
     weno_9pts,
     weno_9pts_right,
 )
-from gridax._src.boundary.bc_1d import (
-    Dirichlet1D,
-    Extrapolation1D,
-    Neumann1D,
-    Outflow1D,
-    Periodic1D,
-    Reflective1D,
-    Robin1D,
-    Slip1D,
-    Sponge1D,
-)
-from gridax._src.boundary.bc_field import (
-    FieldBCSet,
-)
-from gridax._src.boundary.bc_set import (
-    BoundaryConditionSet,
+from gridax._src.boundary.atoms import (
+    Dirichlet,
+    Extrapolation,
+    Neumann,
+    Outflow,
+    Periodic,
+    Reflective,
+    Robin,
+    Slip,
+    Sponge,
 )
 from gridax._src.boundary.boundary import (
     enforce_periodic,
@@ -117,6 +111,7 @@ from gridax._src.boundary.boundary import (
     zero_boundaries,
     zero_gradient_boundaries,
 )
+from gridax._src.boundary.fill import BC, fill_ghosts
 from gridax._src.diffusion.diffusion import (
     BiharmonicDiffusion2D,
     BiharmonicDiffusion3D,
@@ -512,20 +507,18 @@ __all__ = [
     # Spherical momentum advection
     "SphericalMomentumAdvection2D",
     "SphericalMomentumAdvection3D",
-    # Boundary-condition atoms
-    "Dirichlet1D",
-    "Extrapolation1D",
-    "Neumann1D",
-    "Outflow1D",
-    "Periodic1D",
-    "Reflective1D",
-    "Robin1D",
-    "Slip1D",
-    "Sponge1D",
-    # Boundary-condition sets
-    "BoundaryConditionSet",
-    # Per-field boundary conditions
-    "FieldBCSet",
+    # Boundary conditions
+    "BC",
+    "fill_ghosts",
+    "Dirichlet",
+    "Neumann",
+    "Robin",
+    "Periodic",
+    "Outflow",
+    "Extrapolation",
+    "Reflective",
+    "Sponge",
+    "Slip",
     # Ghost-ring fillers
     "enforce_periodic",
     "fix_boundary_corners",

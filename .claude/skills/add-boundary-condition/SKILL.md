@@ -1,6 +1,6 @@
 ---
 name: add-boundary-condition
-description: Add a boundary condition to finitevolX — a per-face ghost-ring atom (like Dirichlet1D, Neumann1D, Robin1D, Slip1D, Sponge1D), a BoundaryConditionSet factory, or a functional ghost-ring filler (like wall_boundaries) — with its half-cell placement, the BoundaryCondition1D union, elliptic-solver compatibility, tests and docs. Use when asked to add, port or fix a boundary condition, ghost-cell fill, wall or open-boundary treatment in gridax/_src/boundary.
+description: Add a boundary condition to finitevolX — an atom for gridax.BC (like Dirichlet, Neumann, Robin, Slip, Sponge) with its half-cell placement and its wall node, or a functional ghost-ring filler (like wall_boundaries) — with the Atom union, tests and docs. Use when asked to add, port or fix a boundary condition, ghost-cell fill, wall or open-boundary treatment in gridax/_src/boundary.
 ---
 
 # Add a boundary condition
@@ -11,72 +11,31 @@ contract 4 (boundary conditions) in `AGENTS.md`, then
 
 ## 1. Make sure it does not exist yet
 
-Search `docs/capabilities.md` (the `bc_1d`, `bc_set`, `bc_field` and
-`boundary` groups): `Dirichlet1D`, `Neumann1D`, `Robin1D` (α·u + β·∂u/∂n =
-γ), `Periodic1D`, `Outflow1D`, `Extrapolation1D`, `Reflective1D`,
-`Sponge1D`, `Slip1D`; the sets `BoundaryConditionSet.periodic()` /
-`.closed()` / `.open()`; the fillers `enforce_periodic`, `pad_interior`,
-`zero_boundaries`, `zero_gradient_boundaries`, `no_slip_boundaries`,
-`free_slip_boundaries`, `no_flux_boundaries`, `wall_boundaries`,
-`fix_boundary_corners`. Many "new" conditions are a `Robin1D` with
-particular coefficients, or a set of existing atoms.
+Search `docs/capabilities.md` (the `boundary` groups): `Dirichlet`, `Neumann`, `Robin` (a·u + b·∂u/∂n = c), `Periodic`, `Outflow`, `Extrapolation` (`order=`), `Reflective`, `Sponge`, `Slip`; `BC` and `fill_ghosts`; the fillers `enforce_periodic`, `pad_interior`, `zero_boundaries`, `zero_gradient_boundaries`, `no_slip_boundaries`, `free_slip_boundaries`, `no_flux_boundaries`, `wall_boundaries`, `fix_boundary_corners`. Many "new" conditions are a `Robin` with particular coefficients, or a `BC` of existing atoms.
 
 ## 2. Write it (`packages/gridax/src/gridax/_src/boundary/`)
 
-- **An atom** goes in `bc_1d.py`: a `@pytree_dataclass` with
-  `face: Face = static_field()` and its parameters as fields;
-  validation in `__check_init__` (as `Sponge1D` checks `weight`);
-  `__call__(self, field, dx, dy)` returns `field` with **one** ghost row /
-  column replaced, using the private helpers there (`_adjacent_interior`,
-  `_opposite_interior`, `_normal_spacing`, `_set_face`). It runs on any
-  array backend: use `xp = array_namespace(field)` and `set_at`, never
-  `jnp` or `.at[]` (the AGENTS.md "Backends" rule).
-- Place the condition **at the face**, half a cell from the first interior
-  value: Dirichlet sets `ghost = 2 * value - interior`, Neumann
-  `ghost = interior + value * spacing` on every face (the ghost cell lies
-  outward of the interior, so `(ghost - interior) / spacing` is already the
-  outward-normal gradient). Write that formula in the docstring and in a
-  comment.
-- Give the atom `point: Point = static_field(default="T")` and
-  pass it to `_adjacent_interior` / `_set_face`: when `_on_wall(face,
-  point)` is true (`U` / `X` on west / east, `V` / `X` on south / north)
-  the field's node is on the wall itself, so impose the condition on that
-  node (Dirichlet writes `value`, a gradient is one-sided) and let
-  `_set_face` write the east / north mirror slot.
-- Add the class to the `BoundaryCondition1D` union at the bottom of
-  `bc_1d.py` (it types `BoundaryConditionSet`'s fields).
-- **A set factory** is a `@classmethod` on `BoundaryConditionSet`
-  (`bc_set.py`); remember the south, north, west, east application order
-  (west / east overwrite the corners).
-- **A functional filler** goes in `boundary.py` and should be a thin
-  wrapper over a `BoundaryConditionSet` where possible (as
-  `enforce_periodic` and `pad_interior` are).
-- Elliptic solvers accept a `BoundaryConditionSet` only when all four faces
-  are `Dirichlet1D`, zero `Neumann1D` or `Periodic1D` (`_resolve_bc` in
-  `solvers/elliptic.py`); a new atom raises there with a clear message.
-  Don't extend that mapping unless the spectral solver has a matching
-  transform.
+- **An atom** goes in `atoms.py`: a `@pytree_dataclass` that subclasses `_Atom`, with its parameters as fields (a number or an array `[*batch, N_face]`, a pytree leaf; a setting that picks a code path is a `static_field()`), and validation in `__check_init__` (as `Sponge` checks `weight`). It knows neither its face nor its point: `BC` gives the face and `fill_ghosts` the point, and `_Atom.fill` handles both.
+- Implement `_ghost(self, phi, k, step)`: layer `k` outside a wall half a cell from the first node, where `phi(m)` is the m-th interior node from the wall and `step` the normal spacing on the face. Place the condition **at the wall**: Dirichlet is `2 v - phi(k)`, Neumann `phi(k) + (2k - 1) step g`. Write that formula in the docstring and in a comment.
+- Implement `_wall(self, phi, step)`: the value of the node that sits on the wall (`U` / `X` on the x faces, `V` / `X` on the y faces, `W` on the z faces), where the condition is imposed on that node and the gradient is one-sided.
+- Implement `_outside(self, wall, phi, k, step)` only when the layers outside a node on the wall are not the odd mirror `2 wall - phi(k)` (as `Neumann`, `Outflow` and `Reflective` do). A condition that needs more than this (as `Periodic`, which copies from the far side) overrides `fill`.
+- The atom runs on any array backend: use `xp = array_namespace(...)` and `set_at`, never `jnp` or `.at[]` (the AGENTS.md "Backends" rule).
+- Add the class to the `Atom` union at the bottom of `atoms.py` (it types `BC`'s faces).
+- **A functional filler** goes in `boundary.py` and should be a thin wrapper over `fill_ghosts` where possible (as `enforce_periodic` and `pad_interior` are).
+- The elliptic inversions in sesmax-core (`sesmax_core.gfd`) take a `gridax.BC` as `bc=`: all faces Dirichlet select the DST, zero Neumann the DCT and Periodic the FFT. A new atom is rejected there with a clear message; don't extend that mapping unless the spectral solver has a matching transform.
 
 ## 3. Export and document
 
-`packages/gridax/src/gridax/__init__.py` (import + `__all__` under `# Boundary condition
-sets and 1D BCs` or `# Boundary helpers`), `::: gridax.NewBC` on
-`docs/api/boundary_conditions.md`, the formula on
-`docs/boundary_conditions.md`, `make capabilities`.
+`packages/gridax/src/gridax/__init__.py` (import + `__all__`, next to `Dirichlet`), `::: gridax.NewBC` on `docs/api/boundary_conditions.md`, the formula on `docs/boundary_conditions.md`, `make capabilities`.
 
 ## 4. Tests
 
-In `tests/test_boundary.py` (atoms: `TestBoundaryConditionAtoms` or a
-class of its own, as `TestRobin1D` / `TestSlip1D`): the ghost value on each
-of the four faces against a hand computation with `dx != dy`, that the
-interior and the other faces are untouched, the validation error, and that
-the face-centred condition holds (e.g. `0.5 * (ghost + interior) == value`).
-`tests/test_boundary_helpers.py` for functional fillers. The elliptic wrappers that read a `BoundaryConditionSet` moved to `sesmax_core.gfd` with their tests (#475).
+In `tests/test_fill_ghosts.py`: the ghost value on each face against a hand computation with `dx != dy`, for a cell-centred point and a point with the node on the wall, with `width` 1 and more, that the interior and the other faces are untouched, the validation error, and that the condition holds at the wall (e.g. `0.5 * (ghost + interior) == value`). `tests/test_boundary_helpers.py` for functional fillers. The elliptic wrappers that read a `BC` moved to `sesmax_core.gfd` with their tests (#475).
 
 ## 5. Verify
 
 ```bash
-uv run pytest -n 2 tests/test_boundary.py tests/test_boundary_helpers.py \
+uv run pytest -n 2 tests/test_fill_ghosts.py tests/test_boundary_helpers.py \
   tests/test_open_walls.py tests/test_capabilities.py
 ```
 

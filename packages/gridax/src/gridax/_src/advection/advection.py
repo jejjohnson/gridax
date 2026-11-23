@@ -110,7 +110,7 @@ def _wall_upwind_flux(
 
     For a **Dirichlet inflow** wall the ghost must therefore hold the boundary
     concentration *as a cell value* (``ghost = value``).  Note that
-    :class:`~gridax.Dirichlet1D` instead writes the *face* reflection
+    :class:`~gridax.Dirichlet` instead writes the *face* reflection
     ``2*value - interior`` (chosen so a centred stencil sees ``value`` at the
     face — the right convention for :class:`~gridax.Diffusion2D`).  Pairing
     that atom with open-mode advection makes the inflow carry

@@ -42,7 +42,7 @@ Poisson solver or an RK loop, look it up:
 | Tracer advection | `fvx.Advection1D/2D/3D(grid, mask)(q, u, v, method="weno5")` (`upwind1/2/3`, `weno3/5/7/9`, `wenoz5`, `minmod`, `van_leer`, `superbee`, `mc`); `fvx.SphericalAdvection2D` |
 | Diffusion, momentum advection, Coriolis | `fvx.Diffusion2D/3D`, `fvx.BiharmonicDiffusion2D/3D`, `fvx.MomentumAdvection2D/3D`, `fvx.Coriolis2D/3D` |
 | Land and coasts | `fvx.Mask2D.from_mask(wet)` → staggered masks `h` / `u` / `v` / `xy_corner_strict`; pass `mask=` to an operator |
-| Ghost cells | `fvx.BoundaryConditionSet(south=fvx.Dirichlet1D("south", 0.0), ...)`, `fvx.enforce_periodic`, `fvx.zero_gradient_boundaries`, `fvx.no_slip_boundaries`, `fvx.wall_boundaries` |
+| Ghost cells | `fvx.fill_ghosts(u, grid, fvx.BC(x=fvx.Dirichlet(0.0), y=fvx.Neumann()), stagger="U")`, `fvx.enforce_periodic`, `fvx.zero_gradient_boundaries`, `fvx.no_slip_boundaries`, `fvx.wall_boundaries` |
 | Diagnostics | `fvx.Energetics2D`, `fvx.Strain2D`, `fvx.QGPotentialVorticity2D`, `fvx.ArakawaJacobian2D`; `fvx.kinetic_energy`, `fvx.okubo_weiss`, `fvx.arakawa_jacobian`, … |
 | Integrals and means | `fvx.area_sum`, `fvx.area_mean`, `fvx.volume_mean`, `fvx.masked_mean` |
 | Poisson / Helmholtz | `gs.solve_helmholtz_dst` / `_dct` / `_fft` on a rectangle (slice the unknowns, embed the result in zeros); the one-call wrappers `streamfunction_from_vorticity`, `pressure_from_divergence` and `pv_inversion` moved to `sesmax_core.gfd`; `gaussx.linear_solve_with_info` with `gaussx.CGSolver` (CG is gaussx's, with `gaussx.NystromPreconditioner` for a low-rank preconditioner and `gs.make_spectral_preconditioner` for a spectral one), `gs.build_capacitance_solver`, `gs.build_multigrid_solver(...).as_preconditioner()` or `gs.multigrid_levels` for gaussx's multigrid |
@@ -64,8 +64,8 @@ as a structured operator (never a dense matrix).
   operator whose name says the mapping (`diff_x_T_to_U`, `U_to_T`) instead
   of writing the slice.
 - **The caller owns the ghost ring.** Operators write only the interior
-  and leave the ghost ring zero; fill ghosts (`enforce_periodic`, a
-  `BoundaryConditionSet`, …) on every field before the next operator reads
+  and leave the ghost ring zero; fill ghosts (`enforce_periodic`,
+  `fill_ghosts` with a `BC`, …) on every field before the next operator reads
   it, including inside the RHS of a time stepper. Backward operators (U→T,
   V→T) read the west / south ghost that nothing else fills.
 - **Masks are built once and passed to the operator.** `Mask2D.from_mask`
@@ -158,7 +158,7 @@ tendency is exactly zero on every land cell.
 | `(h[1:-1, 2:] - h[1:-1, 1:-1]) / dx` into a zeroed array | `fvx.Difference2D(grid=grid).diff_x_T_to_U(h)` or `fvx.interior(fvx.diff_x_fwd_2d(h) / dx, h)` |
 | `0.5 * (u[:, 1:] + u[:, :-1])` to move u to cell centres | `fvx.Interpolation2D(grid=grid).U_to_T(u)` |
 | An upwind / WENO face reconstruction and flux divergence | `fvx.Advection2D(grid=grid)(q, u, v, method="weno5")` |
-| `q[:, 0] = q[:, -2]` (periodic ghosts) and friends | `fvx.enforce_periodic(q)`, `fvx.BoundaryConditionSet.periodic()` |
+| `q[:, 0] = q[:, -2]` (periodic ghosts) and friends | `fvx.enforce_periodic(q)`, `fvx.fill_ghosts(q, grid, fvx.BC(x=fvx.Periodic(), y=fvx.Periodic()))` |
 | A wet-face mask `wet[:, :-1] & wet[:, 1:]` | `fvx.Mask2D.from_mask(wet).u` |
 | `scipy.fft.dstn` Poisson solver | `gs.solve_helmholtz_dst` (or `sesmax_core.gfd.streamfunction_from_vorticity` for the full-array one-call form) |
 | A conjugate-gradient loop on a masked basin | `gaussx.linear_solve_with_info(gaussx.as_linear_operator(matvec, shape=(n, n), negative_definite=True), rhs.ravel(), solver=gaussx.CGSolver(), preconditioner=gs.build_multigrid_solver(...).as_preconditioner())` |

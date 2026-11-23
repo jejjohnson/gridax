@@ -101,7 +101,7 @@ The time loop is written out to keep the example in one library. In a model, the
 There are two ways to close a basin that keep the budget:
 
 - **Make the first interior ring dry**, as above. The mask then zeroes every flux through the faces next to it, and those cells hold no tracer.
-- **Open the walls** with `wall="open"`, after filling the ghost ring with boundary conditions (a `BoundaryConditionSet`). The wall faces are then computed with first-order upwind from the ghost cells, the tendency is written on the full interior, and the flux stays single-valued, so mass is conserved exactly. `wall="open"` does not combine with a mask.
+- **Open the walls** with `wall="open"`, after filling the ghost ring with boundary conditions (`fill_ghosts` with a `BC`). The wall faces are then computed with first-order upwind from the ghost cells, the tendency is written on the full interior, and the flux stays single-valued, so mass is conserved exactly. `wall="open"` does not combine with a mask.
 
 The [advection page](advection.md) has the stencil cascade near the coast and the full list of methods, and the [boundary conditions page](boundary_conditions.md) has the atoms that fill the ghost ring.
 

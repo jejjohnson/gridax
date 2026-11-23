@@ -8,20 +8,28 @@ The physical interior lives at [1:-1, 1:-1].
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from jaxtyping import Float
 import numpy as np
 
 from gridax._src.backend import set_at
-from gridax._src.boundary.bc_1d import Dirichlet1D, Outflow1D
-from gridax._src.boundary.bc_set import BoundaryConditionSet
+from gridax._src.boundary.atoms import Dirichlet, Outflow, Periodic
+from gridax._src.boundary.fill import BC, fill_ghosts
+from gridax._src.grid import CartesianCGrid2D
 from gridax._src.pytree import array_namespace
 
 if TYPE_CHECKING:
     from jaxtyping import Array
 else:
     Array = np.ndarray
+
+
+def _fill(field: Float[Array, "*batch Ny Nx"], bc: BC, point: str = "T") -> Any:
+    """``fill_ghosts`` for the conditions that use no spacing (a unit grid)."""
+    ny, nx = field.shape[-2:]
+    grid = CartesianCGrid2D.from_interior(nx - 2, ny - 2, nx - 2, ny - 2)
+    return fill_ghosts(field, grid, bc, stagger=point)
 
 
 def pad_interior(
@@ -54,8 +62,7 @@ def pad_interior(
     """
     xp = array_namespace(field)
     if mode == "edge":
-        # BoundaryConditionSet.open() is zero-gradient and does not use dx/dy.
-        return BoundaryConditionSet.open()(field, dx=1.0, dy=1.0)
+        return _fill(field, BC(x=Outflow(), y=Outflow(), corners="priority"))
     interior = field[..., 1:-1, 1:-1]  # shape [Ny-2, Nx-2]
     return xp.pad(interior, _pad_last2(field.ndim, 1), mode=mode)  # [..., Ny, Nx]
 
@@ -82,8 +89,7 @@ def enforce_periodic(
     Float[Array, "*batch Ny Nx"]
         Array with periodic ghost cells.
     """
-    # Periodic1D wraps opposite interior values and does not use dx/dy.
-    return BoundaryConditionSet.periodic()(field, dx=1.0, dy=1.0)
+    return _fill(field, BC(x=Periodic(), y=Periodic(), corners="priority"))
 
 
 # ── Functional padding wrappers ──────────────────────────────────────────────
@@ -350,23 +356,15 @@ def wall_boundaries(
         out = free_slip_boundaries(field)
     elif staggering == "u":
         # u-velocity: free-slip (zero gradient) at N/S, no normal flow on the
-        # W/E wall faces U[:, 0] and U[:, Nx-2] (the atoms' point="U" fill,
+        # W/E wall faces U[:, 0] and U[:, Nx-2] (at point U,
         # which mirrors U[:, Nx-1] = -U[:, Nx-3] outside the domain)
-        out = BoundaryConditionSet(
-            south=Outflow1D("south"),
-            north=Outflow1D("north"),
-            west=Dirichlet1D("west", 0.0, point="U"),
-            east=Dirichlet1D("east", 0.0, point="U"),
-        )(field, 1.0, 1.0)
+        bc = BC(x=Dirichlet(0.0), y=Outflow(), corners="priority")
+        out = _fill(field, bc, "U")
     elif staggering == "v":
         # v-velocity: no normal flow on the S/N wall faces V[0, :] and
         # V[Ny-2, :] (V[Ny-1, :] = -V[Ny-3, :]), free-slip at W/E
-        out = BoundaryConditionSet(
-            south=Dirichlet1D("south", 0.0, point="V"),
-            north=Dirichlet1D("north", 0.0, point="V"),
-            west=Outflow1D("west"),
-            east=Outflow1D("east"),
-        )(field, 1.0, 1.0)
+        bc = BC(x=Outflow(), y=Dirichlet(0.0), corners="priority")
+        out = _fill(field, bc, "V")
     elif staggering == "q":
         # Vorticity: no-slip at all walls
         out = no_slip_boundaries(field)

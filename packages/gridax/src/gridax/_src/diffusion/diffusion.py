@@ -47,7 +47,7 @@ The class operators :class:`Diffusion2D` / :class:`Diffusion3D` also accept
 ``wall="open"``, which additionally assembles the wall-face fluxes
 ``κ·(h_edge − h_ghost)/dx`` from the caller-filled ghost ring.  A lateral
 Dirichlet / periodic boundary applied to the ghost cells (e.g. via
-:class:`~gridax.BoundaryConditionSet`) then produces a diffusive flux
+:func:`~gridax.fill_ghosts`) then produces a diffusive flux
 through the wall.  The flux field stays single-valued, so the tendency is
 exactly flux-conservative for a **scalar** ``kappa``.  For a
 **spatially-varying** ``kappa`` the wall-face coefficient is the mean of the

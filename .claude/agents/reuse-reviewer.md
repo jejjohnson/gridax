@@ -23,9 +23,8 @@ in `AGENTS.md`.
    - `docs/capabilities.md` — every name in `gridax.__all__` grouped by
      defining module, then the spectraldiffx and gaussx sections;
    - the shared private helpers: `operators/_ghost.py` (`interior`,
-     `zero_z_ghosts`); `operators/_utils._safe_div_cos`; `boundary/bc_1d.py`
-     (`_adjacent_interior`, `_opposite_interior`, `_normal_spacing`,
-     `_set_face`); `advection/flux.narrow_mask_hierarchy`;
+     `zero_z_ghosts`); `operators/_utils._safe_div_cos`; `boundary/atoms.py`
+     (`_Atom`, `_face_spacing`, `_value_like`); `advection/flux.narrow_mask_hierarchy`;
      `advection/reconstruction._get_limiter`; `mask/utils.py` (`pool_bool`,
      `h_from_pooled`, `dilate_mask`, `count_contiguous`, `make_sponge`);
      `operators/difference.py` (`_curl_2d`, `_divergence_2d`);
@@ -41,7 +40,7 @@ in `AGENTS.md`.
      method;
    - `jnp.zeros_like(x).at[1:-1, 1:-1].set(...)` → `interior(values, x)`;
    - a hand-filled ghost ring (`.at[0, :].set(...)` on a field) →
-     a `BoundaryConditionSet` of the `*1D` atoms, or `enforce_periodic`,
+     `gridax.fill_ghosts` with a `gridax.BC`, or `enforce_periodic`,
      `zero_gradient_boundaries`, `wall_boundaries`, …;
    - a wet-face mask computed by hand (`h[:, :-1] & h[:, 1:]`) →
      `Mask2D.from_mask(...).u` / `.v` / `.xy_corner_strict`;
