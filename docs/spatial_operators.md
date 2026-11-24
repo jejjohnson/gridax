@@ -29,7 +29,7 @@ and what they compute:
 | `shear_strain`, `tensor_strain` | X-points, T-points | the two strains |
 | `strain_rate_squared`, `okubo_weiss_parameter` | T-points | $\sigma^2$, Okubo–Weiss |
 | `qg_potential_vorticity` | T-points | $q = \nabla^2\psi/f_0 + \beta(y - y_0)/f_0$ (− stretching) |
-| `geostrophic_velocity`, `vertical_velocity` | U/V-points, W-points | $(u_g, v_g)$ on a sphere, $w$ from continuity |
+| `geostrophic_velocity`, `vertical_velocity` | U/V-points, W-points | $(u_g, v_g)$ (C-grid: on a sphere), $w$ from continuity |
 | `arakawa_jacobian` | T-points | $J(f, g)$ |
 
 Every one is `op(fields…, grid, *, mask=None, …)`: the type of the grid gives the rank and the geometry (Cartesian, spherical, stretched), so there is one name per operation. `GridOps(grid, mask)` has them all as methods with the grid and the mask filled in.

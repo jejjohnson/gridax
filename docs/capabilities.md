@@ -217,14 +217,14 @@ Every public name in gridax (372 entries), listed per public module (`gridax`, i
 |---|---|---|
 | `coriolis` | function | The Coriolis tendencies ``(+f v, -f u)``, at U and V. |
 
-#### Diagnostic quantities on Arakawa C-grids (`gridax._src.operators.diagnostics`)
+#### Diagnostic quantities on Arakawa C-grids, and on collocated grids (`gridax._src.operators.diagnostics`)
 
 | Name | Kind | What it does |
 |---|---|---|
 | `available_potential_energy` | function | Available potential energy at T-points. |
 | `bernoulli_potential` | function | The Bernoulli potential ``K + g h``, at T. |
 | `enstrophy` | function | Enstrophy (pointwise). |
-| `geostrophic_velocity` | function | The geostrophic velocity of a free surface on a sphere, at U and V. |
+| `geostrophic_velocity` | function | The geostrophic velocity of a free surface, at U and V. |
 | `kinetic_energy` | function | The kinetic energy per unit mass, at T. |
 | `okubo_weiss` | function | Okubo-Weiss parameter (pointwise). |
 | `okubo_weiss_parameter` | function | The Okubo–Weiss parameter ``σₙ² + σₛ² - ζ²`` of a flow, at T. |

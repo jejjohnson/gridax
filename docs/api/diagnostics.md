@@ -24,10 +24,12 @@ for the points each output is masked at.
 | Okubo–Weiss | `okubo_weiss_parameter`, pointwise `okubo_weiss` | T |
 | QG PV, one layer or several (`A=`) | `qg_potential_vorticity` | T |
 | Stretching term | `stretching_term` | pointwise |
-| Geostrophic velocity on a sphere | `geostrophic_velocity` | U, V |
+| Geostrophic velocity, on a spherical C-grid | `geostrophic_velocity` | U, V |
 | Vertical velocity | `vertical_velocity` | W |
 
 `sw_potential_vorticity` is `NaN` at a wet corner of zero thickness, so a degenerate layer is flagged rather than hidden; dry corners are exactly `0` under a mask.
+
+On a [collocated grid](grids.md) (`CartesianAGrid2D`, `SphericalAGrid2D`) the kinetic energy, the two strains, `strain_rate_squared`, `okubo_weiss_parameter`, `sw_potential_vorticity` and `geostrophic_velocity` take and give T points and average nothing. Dry cells are `NaN` there, and a wet cell next to them takes the widest difference that fits. On the sphere the strains carry the metric terms $u \tan\varphi / R$ and $v \tan\varphi / R$, so solid-body rotation has no strain to second order, and a row at a pole is `NaN`. `geostrophic_velocity` is `NaN` where $f = 0$; leaving out a band around the equator is the caller's mask.
 
 ## Functions of the grid
 
