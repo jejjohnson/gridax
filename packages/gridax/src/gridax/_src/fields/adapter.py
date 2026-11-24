@@ -7,7 +7,8 @@ Carrier-agnostic code (``pipekit_array``'s dim functions and ``KernelOp``,
 A field stays a field while any grid axis remains, with its stagger trimmed
 to the axes left: a V field averaged over ``x`` keeps ``y: "right"``. It
 becomes a ``pipekit_array.DimArray``, which has no stagger, when no grid axis
-is left.
+is left, and when its values no longer sit on its point: ``diff`` along a grid
+axis, and ``coarsen`` along a staggered one.
 """
 
 from __future__ import annotations
@@ -110,6 +111,37 @@ class CFieldAdapter:
         return Signature(dims=dims, dtype=str(x.dtype))
 
     # -- fast paths ------------------------------------------------------
+
+    def diff(self, x: CField, dim: str, *, n: int, label: str) -> Any:
+        """``pipekit_array.diff``; a ``DimArray`` along a grid axis.
+
+        The difference of two neighbours sits half a cell from both, with one
+        entry less and no ghost ring, so it fits no grid.
+        `gridax.difference` is the grid's own.
+        """
+        from pipekit_array import diff
+
+        out = diff(_dimarray(x), dim, n, label=label)
+        return out if n and dim in GRID_AXES else _located(x, out)
+
+    def coarsen(
+        self,
+        x: CField,
+        fn: str | Callable[..., Any],
+        windows: dict[str, int],
+        *,
+        boundary: str,
+    ) -> Any:
+        """``pipekit_array.coarsen``; a ``DimArray`` along a staggered axis.
+
+        A block of cell centres is centred on the block, so a centred axis
+        stays one. A block of faces is centred on no face of the coarse grid.
+        """
+        from pipekit_array import coarsen
+
+        out = coarsen(_dimarray(x), fn, boundary=boundary, **windows)
+        staggered = any(axis in windows for axis, _ in x.stagger)
+        return out if staggered else _located(x, out)
 
     def combine(self, fn: Callable[..., Any], *xs: Any) -> CField:
         """`gridax.combine`."""

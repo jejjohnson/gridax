@@ -59,6 +59,45 @@ class TestDemotion:
         assert pa.isel(u, time=slice(1, None)).labels == {"time": ("b", "c")}
 
 
+@pytest.mark.parametrize("xp", [np, jnp], ids=["numpy", "jax"])
+class TestValuesOffTheirPoint:
+    """`diff` and `coarsen` never claim a point their values are not on (#563)."""
+
+    @pytest.mark.parametrize("loc", ["T", "U", "V", "X"])
+    @pytest.mark.parametrize("dim", ["y", "x"])
+    def test_diff_along_a_grid_axis_has_no_point(self, xp, loc, dim):
+        out = pa.diff(make(loc, xp=xp), dim)
+        assert type(out) is pa.DimArray
+        want = np.diff(np.asarray(make(loc).data), axis=DIMS.index(dim))
+        np.testing.assert_allclose(out.data, want, rtol=1e-6)
+
+    def test_diff_along_another_dim_keeps_it(self, xp):
+        out = pa.diff(make("U", xp=xp, labels={"time": ("a", "b", "c")}), "time")
+        assert (out.loc, out.labels) == ("U", {"time": ("b", "c")})
+        assert pa.diff(make("U", xp=xp), "x", 0).loc == "U"
+
+    def test_a_difference_cannot_join_a_field_of_its_old_point(self, xp):
+        u = make("U", xp=xp)
+        with pytest.raises(ValueError):
+            combine(jnp.add, pa.isel(u, x=slice(1, None)), pa.diff(u, "x"))
+
+    def test_coarsen_along_a_staggered_axis_has_no_point(self, xp):
+        u = pa.isel(make("U", xp=xp), x=slice(0, 4))
+        assert type(pa.coarsen(u, "mean", x=2)) is pa.DimArray
+        assert type(pa.coarsen(u, "mean", y=2, x=2)) is pa.DimArray
+
+    def test_coarsen_along_other_axes_keeps_it(self, xp):
+        assert pa.coarsen(make("U", xp=xp), "mean", y=2).loc == "U"
+        assert pa.coarsen(make("U", xp=xp), "mean", time=3).loc == "U"
+        assert pa.coarsen(make("T", xp=xp), "mean", y=2).loc == "T"
+
+    def test_moves_by_whole_cells_keep_it(self, xp):
+        u = make("U", xp=xp)
+        for out in (pa.roll(u, x=1), pa.shift(u, x=1), pa.pad(u, x=1)):
+            assert out.loc == "U"
+        assert pa.window(u, x=2).loc == "U"
+
+
 class TestPoints:
     def test_combine_is_gridaxs(self):
         a, b = make("U"), make("U", seed=1)
