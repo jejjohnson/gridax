@@ -33,7 +33,7 @@ members = ["packages/gridax"]
 [tool.uv.sources]
 gridax = { workspace = true }
 # geophysix owns the physical constants, Coriolis and the linear equation of state (#446).
-geophysix = { git = "https://github.com/jejjohnson/geophysix", tag = "v0.0.3" }
+geophysix = { git = "https://github.com/jejjohnson/geophysix", tag = "v0.0.7" }
 spectraldiffx = { git = "https://github.com/jejjohnson/spectraldiffx.git", tag = "0.1.2" }
 gaussx = { git = "https://github.com/jejjohnson/gaussx", tag = "v0.8.1" }
 # integrix owns the time steppers, semi-Lagrangian advection included (0.0.9).

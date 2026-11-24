@@ -407,10 +407,11 @@ dependencies = [
 
 [[package]]
 name = "geophysix"
-version = "0.0.3"
-source = { git = "https://github.com/jejjohnson/geophysix?tag=v0.0.3#65b1faab906a4b2abfc743eacac4f21745c00d67" }
+version = "0.0.7"
+source = { git = "https://github.com/jejjohnson/geophysix?tag=v0.0.7#dbdd72e013bc540e2d4fb1aea14c78d716f9329b" }
 dependencies = [
     { name = "numpy" },
+    { name = "pipekit-array", extra = ["compat", "numpy"] },
 ]
 
 [[package]]
@@ -480,7 +481,7 @@ pipekit = [
 requires-dist = [
     { name = "equinox", marker = "extra == 'jax'", specifier = ">=0.11.0" },
     { name = "gaussx", marker = "extra == 'jax'", git = "https://github.com/jejjohnson/gaussx?tag=v0.8.1" },
-    { name = "geophysix", git = "https://github.com/jejjohnson/geophysix?tag=v0.0.3" },
+    { name = "geophysix", git = "https://github.com/jejjohnson/geophysix?tag=v0.0.7" },
     { name = "gridax", extras = ["jax"], marker = "extra == 'pipekit'", editable = "packages/gridax" },
     { name = "integrix", marker = "extra == 'pipekit'", git = "https://github.com/jejjohnson/integrix?tag=v0.0.9" },
     { name = "jax", marker = "extra == 'jax'", specifier = ">=0.4.38" },
