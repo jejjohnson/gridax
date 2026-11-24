@@ -41,13 +41,13 @@ gaussx = { git = "https://github.com/jejjohnson/gaussx", tag = "v0.8.1" }
 # does not import gaussx at run time.
 integrix = { git = "https://github.com/jejjohnson/integrix", tag = "v0.0.9" }
 # pipekit is a uv workspace: consume its packages from git subdirectories.
-# Every source is pinned to the one tag `pipekit-array-v0.1.3` (ops 0.2.2,
-# array 0.1.3, cycle 0.1.0, jax 0.1.0); per-package tags make uv report conflicting URLs
+# Every source is pinned to the one tag `pipekit-array-v0.1.4` (ops 0.2.3,
+# array 0.1.4, cycle 0.1.0, jax 0.1.0); per-package tags make uv report conflicting URLs
 # for pipekit-ops. pipekit-cycle comes in through pipekit-jax.
-pipekit-ops = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-ops", tag = "pipekit-array-v0.1.3" }
-pipekit-array = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-array", tag = "pipekit-array-v0.1.3" }
-pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-cycle", tag = "pipekit-array-v0.1.3" }
-pipekit-jax = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-jax", tag = "pipekit-array-v0.1.3" }
+pipekit-ops = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-ops", tag = "pipekit-array-v0.1.4" }
+pipekit-array = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-array", tag = "pipekit-array-v0.1.4" }
+pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-cycle", tag = "pipekit-array-v0.1.4" }
+pipekit-jax = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-jax", tag = "pipekit-array-v0.1.4" }
 
 [project.optional-dependencies]
 test = [
