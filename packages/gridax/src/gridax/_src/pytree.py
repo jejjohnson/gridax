@@ -1,9 +1,9 @@
-"""Frozen dataclasses that become JAX pytrees when JAX can be imported.
+"""Frozen dataclasses that become JAX pytrees when JAX is imported.
 
 The grid containers hold NumPy arrays and Python scalars and are built
 without JAX, so a NumPy-only install can describe the grid a model ran on.
-When JAX is importable, :func:`pytree_dataclass` also registers the class as
-a pytree, so a grid passes through ``jax.jit``, ``jax.vmap`` and
+Once JAX is imported, before gridax or after it, a class of
+:func:`pytree_dataclass` is also a pytree, so a grid passes through ``jax.jit``, ``jax.vmap`` and
 ``eqx.filter_jit`` like the ``eqx.Module`` it replaces.
 
 Fields declared with :func:`static_field` are pytree metadata: they must be
@@ -15,9 +15,11 @@ from __future__ import annotations
 
 import dataclasses
 import functools
+import sys
 from typing import Any, dataclass_transform
 
 import numpy as np
+from pipekit_ops import on_import
 
 _STATIC = "static"
 
@@ -42,27 +44,19 @@ def static_field(**kwargs: Any) -> Any:
 
 
 def _register_with_jax(cls: type) -> None:
-    """Register ``cls`` as a JAX pytree, if JAX can be imported.
+    """Register ``cls`` as a JAX pytree, now or when JAX is imported.
 
     Unflattening bypasses ``__init__`` and ``__post_init__``: JAX rebuilds
     the object with tracers, ``None`` or sentinel leaves, which a
     constructor's checks must not see.
     """
-    try:
-        import jax
-    except ImportError:
-        return
-
     fields = dataclasses.fields(cls)
     meta_names = tuple(f.name for f in fields if f.metadata.get(_STATIC, False))
     data_names = tuple(f.name for f in fields if not f.metadata.get(_STATIC, False))
-    keys = tuple(jax.tree_util.GetAttrKey(name) for name in data_names)
 
     def flatten_with_keys(obj):
-        children = [
-            (key, getattr(obj, name))
-            for key, name in zip(keys, data_names, strict=True)
-        ]
+        key = sys.modules["jax"].tree_util.GetAttrKey
+        children = [(key(name), getattr(obj, name)) for name in data_names]
         return children, tuple(getattr(obj, name) for name in meta_names)
 
     def flatten(obj):
@@ -77,7 +71,12 @@ def _register_with_jax(cls: type) -> None:
             object.__setattr__(obj, name, value)
         return obj
 
-    jax.tree_util.register_pytree_with_keys(cls, flatten_with_keys, unflatten, flatten)
+    on_import(
+        "jax",
+        lambda jax: jax.tree_util.register_pytree_with_keys(
+            cls, flatten_with_keys, unflatten, flatten
+        ),
+    )
 
 
 def _values_equal(a: Any, b: Any) -> bool:
@@ -115,7 +114,7 @@ def _pytree_hash(self: Any) -> int:
 # run time once it returns), which a frozen hint would flag.
 @dataclass_transform(field_specifiers=(dataclasses.field, static_field))
 def pytree_dataclass[T: type](cls: T) -> T:
-    """Make ``cls`` a frozen dataclass, and a JAX pytree when JAX is importable.
+    """Make ``cls`` a frozen dataclass, and a JAX pytree once JAX is imported.
 
     Equality compares the class and every field, arrays by value, so two
     grids built the same way are equal. The hash uses the class and the

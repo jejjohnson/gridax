@@ -5,7 +5,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from pipekit_array.dims import join_backends
 from pipekit_array.functions import namespace_of
+from pipekit_ops import backend_name
 
 from gridax._src.fields.cfield import CField, StaggerMismatchError
 from gridax._src.grid.points import GRID_AXES
@@ -27,7 +29,8 @@ def combine(fn: Callable[..., Any], *operands: Any) -> CField:
     Parameters
     ----------
     fn : callable
-        An element-wise function of the operands' arrays.
+        An element-wise function of the operands' arrays. Next to JAX arrays
+        it is given NumPy ones as JAX arrays; `pipekit_ops.guard` reports it.
     *operands : CField, array or number
         At least one field. A plain array's axes are aligned with the last
         dims of the first field, as in NumPy broadcasting.
@@ -72,6 +75,9 @@ def combine(fn: Callable[..., Any], *operands: Any) -> CField:
         else:
             _check_plain(x, first, i)
             arrays.append(x)
+    if any(backend_name(x) == "jax" for x in arrays):
+        # NumPy operands join, and pipekit_ops.guard reports it
+        arrays = join_backends(arrays, "combine")
     out = fn(*arrays)
     if tuple(out.shape) != first.shape:
         raise ValueError(

@@ -17,7 +17,9 @@ from collections.abc import Iterable, Mapping
 import dataclasses
 from typing import Any
 
+from pipekit_array.dimarray import core_dims, vmapped_dims
 from pipekit_array.functions import namespace_of
+from pipekit_ops import on_import
 
 from gridax._src.grid.points import (
     Stagger,
@@ -284,59 +286,13 @@ def _set(field: CField, data: Any, dims: Any, labels: Any, stagger: Any) -> CFie
     return field
 
 
-def _vmapped_dims(dims: tuple[str, ...], shape: Any) -> tuple[str, ...]:
-    """The dims of a leaf ``jax.vmap`` added an axis to or removed one from.
-
-    ``vmap`` maps the leaf but not the static dims. With the default
-    ``in_axes=0`` / ``out_axes=0`` the axis is the first: drop the first dim
-    inside, and prepend ``"batch"`` (``"batch_1"``, … if taken) outside. A
-    shape that already matches, or no shape (a tracing placeholder), leaves
-    the dims alone.
-    """
-    if shape is None or not hasattr(shape, "__len__") or len(shape) == len(dims):
-        return dims
-    if len(shape) < len(dims):
-        return dims[len(dims) - len(shape) :]
-    return (*_batch_names(len(shape) - len(dims), dims), *dims)
-
-
-def _batch_names(count: int, dims: tuple[str, ...]) -> tuple[str, ...]:
-    """``count`` names for axes in front of ``dims``: ``"batch"``, ``"batch_1"``, …"""
-    added: list[str] = []
-    k = 0
-    while len(added) < count:
-        name = "batch" if k == 0 else f"batch_{k}"
-        k += 1
-        if name not in dims:
-            added.append(name)
-    return tuple(added)
-
-
-def _core_dims(dims: tuple[str, ...]) -> tuple[str, ...]:
-    """``dims`` without the leading ones that a batch axis would be given.
-
-    A stack of fields and one of them then have the same tree structure, as a
-    stack of arrays and one array have: a solver that allocates its output
-    with ``tree_map`` and writes one step into it compares the two.
-    """
-    k = 0
-    while k < len(dims) and dims[: k + 1] == _batch_names(k + 1, dims[k + 1 :]):
-        k += 1
-    return dims[k:]
-
-
-def _register_with_jax() -> None:
-    """Register `CField` as a JAX pytree, if JAX can be imported."""
-    try:
-        import jax
-    except ImportError:
-        return
-
+def _register_with_jax(jax: Any) -> None:
+    """Register `CField` as a JAX pytree."""
     key = jax.tree_util.GetAttrKey("data")
 
     def aux(f: CField) -> tuple[Any, ...]:
         labels = tuple((dim, f.labels[dim]) for dim in f.dims if dim in f.labels)
-        return _core_dims(f.dims), labels, f.stagger
+        return core_dims(f.dims), labels, f.stagger
 
     def flatten_with_keys(f: CField) -> tuple[Any, Any]:
         return ((key, f.data),), aux(f)
@@ -348,7 +304,7 @@ def _register_with_jax() -> None:
         # Never validate: JAX unflattens with placeholder leaves while tracing.
         dims, labels, stagger = meta
         (data,) = leaves
-        dims = _vmapped_dims(dims, getattr(data, "shape", None))
+        dims = vmapped_dims(dims, getattr(data, "shape", None))
         return _set(
             object.__new__(CField),
             data,
@@ -362,4 +318,5 @@ def _register_with_jax() -> None:
     )
 
 
-_register_with_jax()
+# Without importing JAX: the class becomes a pytree when something imports it.
+on_import("jax", _register_with_jax)

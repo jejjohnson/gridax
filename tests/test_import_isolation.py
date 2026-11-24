@@ -3,10 +3,9 @@
 The solvers need the `jax` extra and the pipekit operators the `pipekit`
 extra, so `import gridax` must not import either subpackage or what they
 build on (#477). The array backend, `pipekit_array.functions`, is in the base
-install (#553). JAX itself is the one exception in this environment: when it
-is installed, gridax registers its grids and masks as pytrees, which imports
-`jax` (and never Equinox); `packages/gridax/tests/test_numpy_only.py` checks
-the install without JAX.
+install (#553). JAX is not imported either: the grids, masks and fields become
+pytrees when something else imports it (#564), and
+`packages/gridax/tests/test_numpy_only.py` checks the install without JAX.
 """
 
 from __future__ import annotations
@@ -35,10 +34,34 @@ def test_import_gridax_imports_neither_extra():
         heavy = {
             "gridax.solvers", "gridax.pipekit", "gridax._src.solvers",
             "gridax._src.pipekit", "equinox", "lineax", "gaussx",
-            "spectraldiffx", "integrix", "pipekit_jax",
+            "spectraldiffx", "integrix", "pipekit_jax", "jax", "jaxlib",
         }
         loaded = sorted(m for m in sys.modules if m in heavy or m.split(".")[0] in heavy)
         assert not loaded, loaded
+        """
+    )
+    assert res.returncode == 0, res.stderr
+
+
+def test_classes_become_pytrees_when_jax_is_imported_later():
+    res = _run(
+        """
+        import sys
+
+        import numpy as np
+
+        import gridax
+
+        grid = gridax.CartesianCGrid2D.from_interior(4, 3, 1.0, 1.0)
+        field = gridax.CField(np.ones(grid.shape), ("y", "x"), loc="U")
+        assert "jax" not in sys.modules
+
+        import jax
+
+        leaves, tree = jax.tree.flatten(field)
+        assert len(leaves) == 1 and jax.tree.unflatten(tree, leaves).loc == "U"
+        assert jax.jit(lambda f: f)(field).dims == ("y", "x")
+        assert not jax.tree_util.all_leaves([grid])
         """
     )
     assert res.returncode == 0, res.stderr

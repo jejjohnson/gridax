@@ -17,7 +17,7 @@ import jax.numpy as jnp
 import numpy as np
 import pipekit_array as pa
 from pipekit_array.testing import check_adapter
-from pipekit_ops import get_adapter, signature_of
+from pipekit_ops import BackendError, get_adapter, guard, signature_of
 
 DIMS = ("time", "y", "x")
 
@@ -147,12 +147,41 @@ class TestMapOver:
         assert len(traces) == 1
 
     def test_the_function_must_return_a_carrier(self):
-        with pytest.raises(ValueError, match="named carrier"):
+        with pytest.raises(TypeError, match="named carrier"):
             pa.map_over(make(), lambda item: item.data, "time")
 
     def test_an_unknown_dim_raises(self):
-        with pytest.raises(ValueError, match="not a dim"):
+        with pytest.raises(KeyError, match="unknown dim"):
             pa.map_over(make(), lambda item: item, "member")
+
+    def test_a_function_that_cannot_be_traced_is_looped_over(self):
+        def fn(item):
+            return pa.reduce(item, "max" if float(item.data.sum()) else "min", "x")
+
+        out = pa.map_over(make("V"), fn, "time")
+        assert (out.dims, out.loc) == (("time", "y"), "V")
+        np.testing.assert_array_equal(out.data, make("V").data.max(axis=-1))
+
+
+class TestGuard:
+    """`gridax.combine` joins NumPy to JAX, and pipekit's guard reports it."""
+
+    def test_a_mix_is_on_jax_and_reported(self):
+        a, b = make("U", xp=np), make("U", seed=1)
+        out = combine(jnp.add, a, b)
+        assert isinstance(out.data, jax.Array)
+        np.testing.assert_allclose(out.data, np.asarray(a.data) + b.data, rtol=1e-6)
+        with guard("raise"):
+            with pytest.raises(BackendError, match="combine: NumPy data joined jax"):
+                combine(jnp.add, a, b)
+
+    def test_numbers_and_constants_of_a_trace_are_not_moves(self):
+        a, b = make("U", xp=np), make("U", seed=1)
+        with guard("raise"):
+            combine(lambda v: 2.0 * v, b)
+            combine(jnp.multiply, b, 2.0)
+            combine(np.add, a, a)
+            jax.jit(lambda f: combine(jnp.add, a, f))(b)
 
 
 def _run(code: str) -> subprocess.CompletedProcess:

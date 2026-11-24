@@ -14,6 +14,8 @@ import functools
 import inspect
 from typing import Any, cast
 
+from pipekit_array import DimArray
+
 from gridax._src.fields.cfield import CField, StaggerMismatchError
 from gridax._src.fields.combine import _check_plain
 from gridax._src.grid.points import (
@@ -184,6 +186,4 @@ def _reduced(data: Any, dims: tuple[str, ...], labels: dict[str, Any]) -> Any:
     """What a reduction over the grid axes leaves: no point, maybe other dims."""
     if not dims:
         return data
-    from gridax._src.fields.convert import dimarray
-
-    return dimarray(data, dims, labels)
+    return DimArray(data, dims, labels)
