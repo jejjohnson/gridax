@@ -780,6 +780,10 @@ class SphericalAGrid2D(_Collocated, CollocatedGrid2D):
         xp = namespace_of(self._y)
         return xp.cos(self._y)[:, None]
 
+    def _sin_lat(self) -> Float[Array, "Ny 1"]:
+        xp = namespace_of(self._y)
+        return xp.sin(self._y)[:, None]
+
     def spacing(self, axis: str, *, at: str | Stagger = "T") -> Float[Array, "..."]:
         """The signed arc length along ``axis``.
 

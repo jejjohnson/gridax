@@ -1,5 +1,5 @@
 """
-Diagnostic quantities on Arakawa C-grids.
+Diagnostic quantities on Arakawa C-grids, and on collocated grids.
 
 Includes kinetic / potential energy, strain, enstrophy, Okubo-Weiss,
 and domain-integrated conservation diagnostics.
@@ -36,8 +36,8 @@ from gridax._src.operators._utils import (
     readable,
     without_dry,
 )
-from gridax._src.operators.calculus import _levels, curl
-from gridax._src.operators.moves import interpolate
+from gridax._src.operators.calculus import _levels, _sphere, curl, gradient
+from gridax._src.operators.moves import difference, interpolate
 from gridax._src.operators.stencils import (
     _neighbours,
     avg_x_bwd_2d,
@@ -103,20 +103,24 @@ def shear_strain(
 ) -> Float[Array, "..."]:
     """The shear strain ``δₓv + δᵧu``, at X.
 
+    On a collocated sphere ``δₓv + δᵧu + u tan φ / R``, with ``δ`` along arc length.
+
     Parameters
     ----------
     u, v : CField or Float[Array, "*batch *grid"]
-        The velocity, at U and V.
+        The velocity, at U and V (at T on a collocated grid).
     grid : grid
-        A 2-D or 3-D Cartesian C-grid.
+        A 2-D or 3-D Cartesian C-grid, or any 2-D or 3-D collocated grid.
     mask : Mask2D or Mask3D, optional
         The wet cells. Dry interior faces are read as zero, and the result is
-        zero on the corners without four wet cells.
+        zero on the corners without four wet cells. On a collocated grid as in
+        :func:`divergence`.
 
     Returns
     -------
     CField or Float[Array, "*batch *grid"]
-        At X, with a zero ghost ring.
+        At X (T on a collocated grid), with a zero ghost ring on a C-grid. NaN
+        on a row at a pole.
 
     Examples
     --------
@@ -136,20 +140,22 @@ def tensor_strain(
 ) -> Float[Array, "..."]:
     """The normal (tensor) strain ``δₓu - δᵧv``, at T.
 
+    On a collocated sphere ``δₓu - δᵧv - v tan φ / R``, with ``δ`` along arc length.
+
     Parameters
     ----------
     u, v : CField or Float[Array, "*batch *grid"]
-        The velocity, at U and V.
+        The velocity, at U and V (at T on a collocated grid).
     grid : grid
-        A 2-D or 3-D Cartesian C-grid.
+        A 2-D or 3-D Cartesian C-grid, or any 2-D or 3-D collocated grid.
     mask : Mask2D or Mask3D, optional
         The wet cells. Dry interior faces are read as zero, and the result is
-        zero on dry cells.
+        zero on dry cells. On a collocated grid as in :func:`divergence`.
 
     Returns
     -------
     CField or Float[Array, "*batch *grid"]
-        At T, with a zero ghost ring.
+        At T, with a zero ghost ring on a C-grid. NaN on a row at a pole.
 
     Examples
     --------
@@ -216,22 +222,25 @@ def strain_rate_squared(
 
     The normal strain :func:`tensor_strain` is at T; the shear strain at X is
     averaged from the four corners, those of the south and west ghost ring
-    among them, which come from the ghost velocities.
+    among them, which come from the ghost velocities. On a collocated grid both
+    are at T and nothing is averaged.
 
     Parameters
     ----------
     u, v : CField or Float[Array, "*batch *grid"]
-        The velocity, at U and V, with its ghost ring filled.
-    grid : CartesianCGrid2D
+        The velocity, at U and V, with its ghost ring filled (at T on a
+        collocated grid).
+    grid : CartesianCGrid2D, CartesianAGrid2D or SphericalAGrid2D
         The grid.
     mask : Mask2D, optional
         The wet cells. Dry interior velocities and corners are read as zero,
-        and the result is zero on dry cells.
+        and the result is zero on dry cells. On a collocated grid as in
+        :func:`divergence`.
 
     Returns
     -------
     CField or Float[Array, "*batch *grid"]
-        At T, with a zero ghost ring.
+        At T, with a zero ghost ring on a C-grid. NaN on a row at a pole.
 
     Examples
     --------
@@ -252,13 +261,15 @@ def okubo_weiss_parameter(
     """The Okubo–Weiss parameter ``σₙ² + σₛ² - ζ²`` of a flow, at T.
 
     As :func:`strain_rate_squared`, minus the squared vorticity, averaged from
-    the corners in the same way. Positive where strain dominates.
+    the corners in the same way. Positive where strain dominates. On a
+    collocated grid ``ζ`` is :func:`curl`, and nothing is averaged.
 
     Parameters
     ----------
     u, v : CField or Float[Array, "*batch *grid"]
-        The velocity, at U and V, with its ghost ring filled.
-    grid : CartesianCGrid2D
+        The velocity, at U and V, with its ghost ring filled (at T on a
+        collocated grid).
+    grid : CartesianCGrid2D, CartesianAGrid2D or SphericalAGrid2D
         The grid.
     mask : Mask2D, optional
         The wet cells, as in :func:`strain_rate_squared`.
@@ -266,7 +277,7 @@ def okubo_weiss_parameter(
     Returns
     -------
     CField or Float[Array, "*batch *grid"]
-        At T, with a zero ghost ring.
+        At T, with a zero ghost ring on a C-grid. NaN on a row at a pole.
 
     Examples
     --------
@@ -292,26 +303,28 @@ def sw_potential_vorticity(
 ) -> Float[Array, "..."]:
     """The shallow-water potential vorticity ``(ζ + f) / h``, at X.
 
-    ``ζ`` is :func:`curl`, and ``f`` and ``h`` are averaged to the corners.
-    Layers are leading axes.
+    ``ζ`` is :func:`curl`, and ``f`` and ``h`` are averaged to the corners (on a
+    collocated grid they are read as they are). Layers are leading axes.
 
     Parameters
     ----------
     u, v : CField or Float[Array, "*batch *grid"]
-        The velocity, at U and V.
+        The velocity, at U and V (at T on a collocated grid).
     h : CField or Float[Array, "*batch *grid"]
         The layer thickness, at T.
     f : CField or Float[Array, "*batch *grid"]
         The Coriolis parameter, at T; it broadcasts over leading axes.
-    grid : CartesianCGrid2D or SphericalCGrid2D
+    grid : CartesianCGrid2D, SphericalCGrid2D, CartesianAGrid2D or SphericalAGrid2D
         The grid.
     mask : Mask2D, optional
         The wet cells. The result is zero on the corners without four of them.
+        On a collocated grid as in :func:`divergence`.
 
     Returns
     -------
     CField or Float[Array, "*batch *grid"]
-        At X, with a zero ghost ring. NaN on a (wet) corner of zero thickness.
+        At X (T on a collocated grid), with a zero ghost ring on a C-grid. NaN
+        on a (wet) point of zero thickness.
 
     Examples
     --------
@@ -389,30 +402,33 @@ def geostrophic_velocity(
     gravity: float = STANDARD.standard_gravity,
     mask: Any = None,
 ) -> tuple[Float[Array, "..."], Float[Array, "..."]]:
-    """The geostrophic velocity of a free surface on a sphere, at U and V.
+    """The geostrophic velocity of a free surface, at U and V.
 
     ``u = -g / (f R) ∂h/∂φ`` and ``v = g / (f R cos φ) ∂h/∂λ``, each from the
-    four cells around the face.
+    four cells around the face; on a collocated grid ``u = -g/f ∂h/∂y`` and
+    ``v = g/f ∂h/∂x`` at T, from :func:`gradient`.
 
     Parameters
     ----------
     h : CField or Float[Array, "Ny Nx"]
         The height of the surface, at T.
-    grid : SphericalCGrid2D
+    grid : SphericalCGrid2D, CartesianAGrid2D or SphericalAGrid2D
         The grid.
     f : CField or Float[Array, "Ny Nx"]
-        The Coriolis parameter, at T. It may not be zero on a wet face.
+        The Coriolis parameter, at T. It may not be zero on a wet face of a
+        C-grid.
     gravity : float
         The acceleration of gravity.
     mask : Mask2D, optional
         The wet cells. The velocity is zero on dry faces, and ``f`` is not read
         there. A wet face next to a coast reads the height of the land beside
-        it, which must be finite.
+        it, which must be finite. On a collocated grid as in :func:`divergence`.
 
     Returns
     -------
     tuple
-        ``(u, v)``, at U and V, with a zero ghost ring.
+        ``(u, v)``, at U and V, with a zero ghost ring (both at T on a
+        collocated grid, NaN where ``f`` is zero and on a row at a pole).
 
     Examples
     --------
@@ -515,6 +531,46 @@ def _tensor_strain_cartesian(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
     return _where(None if mask is None else mask.wet(), out)
 
 
+@shear_strain.register(CartesianAGrid2D)
+@shear_strain.register(CartesianAGrid3D)
+def _shear_strain_collocated(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
+    # ∂v/∂x + ∂u/∂y
+    dv_dx = difference(v, grid, axis="x", mask=mask)
+    return dv_dx + difference(u, grid, axis="y", mask=mask)
+
+
+@shear_strain.register(SphericalAGrid2D)
+def _shear_strain_collocated_sphere(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
+    # the same, along arc length, + u tan φ / R
+    return _shear_strain_collocated(grid, u, v, mask=mask) + _turning(grid, u, mask)
+
+
+@tensor_strain.register(CartesianAGrid2D)
+@tensor_strain.register(CartesianAGrid3D)
+def _tensor_strain_collocated(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
+    # ∂u/∂x - ∂v/∂y
+    du_dx = difference(u, grid, axis="x", mask=mask)
+    return du_dx - difference(v, grid, axis="y", mask=mask)
+
+
+@tensor_strain.register(SphericalAGrid2D)
+def _tensor_strain_collocated_sphere(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
+    # the same, along arc length, - v tan φ / R
+    return _tensor_strain_collocated(grid, u, v, mask=mask) - _turning(grid, v, mask)
+
+
+def _turning(grid: Any, f: Any, mask: Any) -> Any:
+    """``f tan φ / R`` on a collocated sphere, NaN at a pole; dry cells are not read.
+
+    This form of the metric terms, not ``cos φ ∂(f / cos φ)/∂φ``: that one is
+    exact for a rotation about the poles and worse for every other.
+    """
+    if mask is not None:
+        f = namespace_of(f).where(mask.wet(), f, 0.0)
+    cos, R = _sphere(grid, f)
+    return _safe_div_cos(f * _metric_like(grid._sin_lat(), f), cos, R)
+
+
 @bernoulli_potential.register(CartesianCGrid2D)
 @bernoulli_potential.register(CartesianCGrid3D)
 @bernoulli_potential.register(SphericalCGrid2D)
@@ -570,6 +626,22 @@ def _okubo_weiss_parameter(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
     return _where(None if mask is None else mask.wet(), out)
 
 
+@strain_rate_squared.register(CartesianAGrid2D)
+@strain_rate_squared.register(SphericalAGrid2D)
+def _strain_rate_squared_collocated(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
+    sn = tensor_strain(u, v, grid, mask=mask)
+    return strain_magnitude_squared(sn, shear_strain(u, v, grid, mask=mask))
+
+
+@okubo_weiss_parameter.register(CartesianAGrid2D)
+@okubo_weiss_parameter.register(SphericalAGrid2D)
+def _okubo_weiss_collocated(grid: Any, u: Any, v: Any, *, mask: Any) -> Any:
+    sn, ss, omega = (
+        op(u, v, grid, mask=mask) for op in (tensor_strain, shear_strain, curl)
+    )
+    return okubo_weiss(sn, ss, omega)
+
+
 @sw_potential_vorticity.register(CartesianCGrid2D)
 @sw_potential_vorticity.register(SphericalCGrid2D)
 def _sw_potential_vorticity(
@@ -591,6 +663,16 @@ def _sw_potential_vorticity(
     if mask is None:
         return out
     return xp.where(mask.wet(at="X", kind="strict"), out, 0.0)
+
+
+@sw_potential_vorticity.register(CartesianAGrid2D)
+@sw_potential_vorticity.register(SphericalAGrid2D)
+def _sw_potential_vorticity_collocated(
+    grid: Any, u: Any, v: Any, h: Any, f: Any, *, mask: Any
+) -> Any:
+    # q = (ζ + f) / h
+    num = curl(u, v, grid, mask=mask) + _wet_or_one(f, mask)
+    return _divide(num, _wet_or_one(h, mask))
 
 
 @qg_potential_vorticity.register(CartesianCGrid2D)
@@ -649,6 +731,29 @@ def _geostrophic_velocity(
     if mask is None:
         return u, v
     return xp.where(mask.wet(at="U"), u, 0.0), xp.where(mask.wet(at="V"), v, 0.0)
+
+
+@geostrophic_velocity.register(CartesianAGrid2D)
+@geostrophic_velocity.register(SphericalAGrid2D)
+def _geostrophic_velocity_collocated(
+    grid: Any, h: Any, *, f: Any, gravity: float, mask: Any
+) -> tuple[Any, Any]:
+    f = _wet_or_one(f, mask)
+    dh_dx, dh_dy = gradient(h, grid, mask=mask)
+    # u = -g/f ∂h/∂y, v = g/f ∂h/∂x
+    return _divide(-gravity * dh_dy, f), _divide(gravity * dh_dx, f)
+
+
+def _wet_or_one(f: Any, mask: Any) -> Any:
+    """``f``, and 1 on the dry cells of a collocated grid, which are not read."""
+    return f if mask is None else namespace_of(f, mask.wet()).where(mask.wet(), f, 1.0)
+
+
+def _divide(num: Any, den: Any) -> Any:
+    """``num / den``, NaN where ``den`` is zero, and no ``0 * inf`` in reverse mode."""
+    xp = namespace_of(num, den)
+    safe = xp.where(den == 0, 1.0, den)
+    return xp.where(den == 0, xp.nan, num / safe)
 
 
 def _wet_slopes(h: Any, mask: Any, dlat_h: Any, dlon_h: Any) -> tuple[Any, Any]:
