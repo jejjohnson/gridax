@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.1](https://github.com/jejjohnson/gridax/compare/gridax-v0.3.0...gridax-v0.3.1) (2026-11-24)
+
+
+### Features
+
+* **diagnostics:** strain, Okubo–Weiss, geostrophic velocity and potential vorticity on collocated grids ([#570](https://github.com/jejjohnson/gridax/issues/570)) ([9a9cb75](https://github.com/jejjohnson/gridax/commit/9a9cb756e049460e58472fabfb250392a2ccb23b))
+
+
+### Bug Fixes
+
+* **deps:** geophysix 0.0.7 in place of 0.0.3, so that a project can use both ([#571](https://github.com/jejjohnson/gridax/issues/571)) ([bfbdf57](https://github.com/jejjohnson/gridax/commit/bfbdf57e49ca417c46b88dbf24562cf5cbffa782))
+* **fields:** pipekit's diff and coarsen on a CField no longer claim a point the values are not on ([#567](https://github.com/jejjohnson/gridax/issues/567)) ([0ee1c31](https://github.com/jejjohnson/gridax/commit/0ee1c31f019887a2603b5030fdcd8ee993ac7ca5))
+
 ## [0.3.0](https://github.com/jejjohnson/gridax/compare/gridax-v0.2.0...gridax-v0.3.0) (2026-11-23)
 
 
