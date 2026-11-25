@@ -24,19 +24,11 @@ from typing import Any, Literal
 
 from jaxtyping import Float, Inexact
 import numpy as np
-from pipekit_array.functions import namespace_of
+from pipekit_array.functions import as_inexact, namespace_of
 
 Extrapolate = Literal["nan", "nearest"]
 _EXTRAPOLATE_MODES = ("nan", "nearest")
 _METHODS = ("linear", "nearest")
-
-
-def _as_inexact(xp: Any, values: Any) -> Any:
-    """``values`` as a floating or complex array of its namespace."""
-    arr = xp.asarray(values)
-    if xp.isdtype(arr.dtype, ("real floating", "complex floating")):
-        return arr
-    return xp.astype(arr, xp.asarray(0.0).dtype)
 
 
 def _real_dtype(xp: Any, arr: Any) -> Any:
@@ -145,7 +137,7 @@ def remap_axis(
     if method not in _METHODS:
         raise ValueError(f"unknown method {method!r}; expected 'linear' or 'nearest'")
     xp = namespace_of(values)
-    arr = _as_inexact(xp, values)
+    arr = as_inexact(values, xp)
     src_np = _concrete(source_coords)
     if src_np is None:
         raise ValueError("remap_axis needs concrete source_coords (not a tracer)")
@@ -227,7 +219,7 @@ def remap_axis_columns(
             f"{_EXTRAPOLATE_MODES!r}"
         )
     xp = namespace_of(values, source_coords)
-    arr = _as_inexact(xp, values)
+    arr = as_inexact(values, xp)
     src = xp.asarray(source_coords)
     tgt = xp.asarray(target_coords)
     if tgt.ndim != 1:

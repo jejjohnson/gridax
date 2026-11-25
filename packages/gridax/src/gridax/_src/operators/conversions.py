@@ -7,8 +7,8 @@ import warnings
 
 from jaxtyping import Float
 import numpy as np
+from pipekit_array.hooks import pad
 
-from gridax._src.backend import pad
 from gridax._src.boundary.fill import BC, FACES, _fill
 from gridax._src.boundary.regions import interior
 from gridax._src.fields.cfield import CField, StaggerMismatchError

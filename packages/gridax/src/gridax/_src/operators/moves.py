@@ -7,13 +7,13 @@ from typing import TYPE_CHECKING, Any
 from jaxtyping import Float
 import numpy as np
 from pipekit_array.functions import namespace_of
+from pipekit_array.hooks import set_at
 
 from gridax._src.analysis.differences import (
     adaptive_difference,
     difference as _collocated_difference,
 )
 from gridax._src.api import grid_dispatch
-from gridax._src.backend import set_at
 from gridax._src.boundary.fill import (
     BC,
     extend,

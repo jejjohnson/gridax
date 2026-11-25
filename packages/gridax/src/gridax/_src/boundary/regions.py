@@ -7,8 +7,8 @@ from typing import Any
 
 import numpy as np
 from pipekit_array.functions import namespace_of
+from pipekit_array.hooks import pad, set_at
 
-from gridax._src.backend import pad, set_at
 from gridax._src.boundary.fill import FACES
 from gridax._src.fields.cfield import CField, StaggerMismatchError
 from gridax._src.grid.points import Stagger, as_stagger, point_axes, point_stagger

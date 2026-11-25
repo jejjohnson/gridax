@@ -13,11 +13,11 @@ from typing import TYPE_CHECKING, Any
 from jaxtyping import Float
 import numpy as np
 from pipekit_array.functions import namespace_of
+from pipekit_array.hooks import set_at
 
 from gridax._src.advection.advect import Wall, _open
 from gridax._src.advection.reconstruct import axis_flux, check_scheme, extends
 from gridax._src.api import grid_dispatch
-from gridax._src.backend import set_at
 from gridax._src.boundary.fill import BC
 from gridax._src.fields.located import located
 from gridax._src.grid import (

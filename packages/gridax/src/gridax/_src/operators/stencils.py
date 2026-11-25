@@ -33,8 +33,7 @@ from typing import TYPE_CHECKING, NamedTuple
 
 from jaxtyping import Float
 import numpy as np
-
-from gridax._src.backend import optimization_barrier
+from pipekit_array.hooks import optimization_barrier
 
 if TYPE_CHECKING:
     from jaxtyping import Array
