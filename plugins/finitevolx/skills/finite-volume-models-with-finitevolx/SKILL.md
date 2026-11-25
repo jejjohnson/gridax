@@ -195,7 +195,7 @@ Each card below says what a library under this skill guarantees.
 A card is enough to call it.
 Load a skill only when its card's last line applies.
 
-### gaussx · base dependency · 2 of 7 units
+### gaussx · extra · 2 of 7 units
 
 #### Structures and primitives · ⓪ ① · skill `gaussx:structured-gaussian-linalg`
 
@@ -217,19 +217,11 @@ Load a skill only when its card's last line applies.
 - **Never.** Write a CG, Lanczos or Hutchinson loop, or fix a solver inside a function that could take one.
 - **One rung down.** Open `gaussx:solvers-and-preconditioners` to choose between strategies, tune a preconditioner or build a randomized factorisation.
 
-### integrix · base dependency · 1 of 2 units
+### integrix · extra · 0 of 2 units
 
-#### Marches · ① ② ④ · skill `integrix:time-stepping-with-integrix`
+It uses fewer than 3 names of each unit, so no card. The front door is `integrix:quadrature-and-expectations-with-integrix`.
 
-- **Provides.** Time stepping in JAX, yₙ₊₁ = Φ(yₙ, tₙ, h): schemes that are diffrax solvers, schemes that carry history, one loop for both, and adjoints through it.
-- **Nouns.** Diffrax solvers `integrix.march.RK4Classic`, `integrix.march.RK3SSP`, `integrix.march.SSP_RK104`, `integrix.march.AB3Solver`, `integrix.march.IMEX_SSP2`; steppers `integrix.march.AB2Solver`, `integrix.march.LeapfrogRAFSolver`, `integrix.march.SplitExplicitRKSolver`.
-- **Verbs.** `integrix.march.run(stepper, rhs, t0, y0, dt, n_steps)` with `rhs(t, y, args)`; `diffrax.diffeqsolve` takes the solvers too; `integrix.march.rk4_step(state, rhs_fn, dt)` and its siblings are single steps for `rhs_fn(y)`; `integrix.march.stable_step` bounds an explicit step.
-- **Adverbs.** `saveat=diffrax.SaveAt(steps=True)` for every state; `adjoint=integrix.adjoint.Checkpointed(every=k)` or `integrix.adjoint.Truncated(k=k)`; `args=` for parameters.
-- **Keep.** The state is any pytree and `n_steps` is a Python integer; write the vector field once as `rhs(t, y, args)` for both kinds of stepper, and jit once around the whole march.
-- **Never.** Write a Python `for` loop or a bare `jax.lax.scan` of Runge–Kutta stages; never pass `Truncated` to a diffrax solver or a diffrax adjoint to an `AbstractStepper`.
-- **One rung down.** Open `integrix:time-stepping-with-integrix` to choose a scheme, split a stiff term, write a stepper with history, or cut the memory of a gradient.
-
-### pipekit · extra · no skill yet
+### pipekit · base dependency · no skill yet
 
 - **Provides.** Carrier-agnostic operator graphs: the `Operator` base class, composition into pipelines and graphs, named-array operators, JAX and Equinox operators, and time-stepping and data-assimilation cycles, split over seven packages that each have their own import name.
 - **Start from.** `pipekit_ops.Operator`, `pipekit_ops.Sequential`, `pipekit_ops.Graph`, `pipekit_ops.Input`, `pipekit_ops.Lambda`, `pipekit_ops.StatefulOperator`, `pipekit_array.DimArray`, `pipekit_jax.JaxOperator`.
@@ -237,7 +229,15 @@ Load a skill only when its card's last line applies.
 - **Never.** Override `__call__` on an operator; implement `_apply`, because `__call__` decides between running eagerly and recording a `Node` in a `Graph`.
 - **Open the repository when.** You need cycles, stores, caching or parallel maps, or more than these names: it has no skill yet, so read its `AGENTS.md` and its section of GeoStack's capability index.
 
-### spectraldiffx · base dependency · skill `spectraldiffx:spectral-methods-with-spectraldiffx`
+### geophysix · base dependency · no skill yet
+
+- **Provides.** Physical facts about the Earth as closed forms, on NumPy, JAX and other array libraries: constants and trace gases, the ellipsoid and the sphere, rotation, the gas law, sea-water density, column units and the wind.
+- **Start from.** `geophysix.constants.STANDARD`, `geophysix.earth.WGS84`, `geophysix.earth.SPHERE`, `geophysix.earth.cell_area`, `geophysix.rotation.coriolis`, `geophysix.thermo.number_density`, `geophysix.columns.convert`, `geophysix.seawater.linear_density`, `geophysix.wind.wind_speed`.
+- **Keep.** SI units, degrees for angles, and constants as records: pass another `earth=` or `constants=` record for a sphere or an old value; no function reads a global.
+- **Never.** Write an Earth radius, g₀, Ω, k_B or a molar mass as a literal, or import a constant from a library above this one; take it from the record.
+- **Open the repository when.** You need more than these names, or a formula it does not have: it has no skill yet, so read its `AGENTS.md` and its section of GeoStack's capability index.
+
+### spectraldiffx · extra · skill `spectraldiffx:spectral-methods-with-spectraldiffx`
 
 - **Provides.** Pseudospectral tools in JAX: Fourier, Chebyshev and spherical-harmonic grids that own their wavenumbers, spectral derivatives with dealiasing, DCT and DST transforms, and Poisson and Helmholtz solvers for periodic, Dirichlet and Neumann boundaries.
 - **Start from.** `spectraldiffx.FourierGrid2D`, `spectraldiffx.SpectralDerivative2D`, `spectraldiffx.SpectralHelmholtzSolver2D`, `spectraldiffx.solve_helmholtz_2d`, `spectraldiffx.solve_poisson_2d`, `spectraldiffx.build_capacitance_solver`, `spectraldiffx.dct`, `spectraldiffx.dst`.
@@ -245,6 +245,6 @@ Load a skill only when its card's last line applies.
 - **Never.** Solve a domain with walls using an FFT; pass the boundary condition per axis to `solve_helmholtz_2d` and let it pick FFT, DST or DCT.
 - **Open the skill when.** You need Chebyshev or spherical grids, mixed per-axis boundary conditions or non-zero boundary values, a land-masked basin solve, spectral filters, or the exact meaning of the `dirichlet` and `neumann` options.
 
-Used by (pointers, not skills to load): plumax, sesmax.
+Used by (pointers, not skills to load): sesmax.
 
 <!-- skill-tree:end -->
