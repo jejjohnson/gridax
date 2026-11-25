@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/jejjohnson/gridax/compare/gridax-v0.3.1...gridax-v0.3.2) (2026-11-25)
+
+
+### Bug Fixes
+
+* **deps:** pipekit-array 0.1.6 and geophysix 0.0.8, the tags of the stack ([#574](https://github.com/jejjohnson/gridax/issues/574)) ([8b27fbb](https://github.com/jejjohnson/gridax/commit/8b27fbb9a0b0219a0c9819d7fd05b773fb114b8e))
+
 ## [0.3.1](https://github.com/jejjohnson/gridax/compare/gridax-v0.3.0...gridax-v0.3.1) (2026-11-24)
 
 
