@@ -24,8 +24,7 @@ from typing import TYPE_CHECKING, Any
 
 from jaxtyping import Float
 import numpy as np
-from pipekit_array.functions import namespace_of
-from pipekit_array.hooks import set_at
+from pipekit_array.arrays import namespace_of, set_at
 
 from gridax._src.grid.points import Stagger, point_axes
 from gridax._src.operators._utils import _metric_like

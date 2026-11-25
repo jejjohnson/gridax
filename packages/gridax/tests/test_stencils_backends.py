@@ -14,7 +14,7 @@ from gridax._src.operators._utils import _metric_like, _safe_div_cos
 from gridax._src.operators.stencils import _materialize, _neighbours
 from gridax.stencils import interior
 import numpy as np
-from pipekit_array import hooks
+from pipekit_array import arrays
 import pytest
 
 try:
@@ -137,10 +137,10 @@ def test_spherical_helpers_follow_the_field():
 
 def test_hooks_on_numpy_do_not_mutate():
     a = np.zeros(4)
-    b = hooks.set_at(a, slice(1, 3), 2.0)
+    b = arrays.set_at(a, slice(1, 3), 2.0)
     assert (a == 0).all() and (b == [0, 2, 2, 0]).all()
-    assert hooks.pad(np.ones((2, 2)), ((1, 0), (0, 1))).shape == (3, 3)
-    assert hooks.optimization_barrier(a) is a and hooks.stop_gradient(a) is a
+    assert arrays.pad(np.ones((2, 2)), ((1, 0), (0, 1))).shape == (3, 3)
+    assert arrays.optimization_barrier(a) is a and arrays.stop_gradient(a) is a
     nb = _neighbours(_field(5, 6))
     assert nb.c.shape == (3, 4)
     assert _materialize(a) is a
@@ -152,9 +152,9 @@ def test_hooks_keep_the_jax_calls():
     x = jax.numpy.ones((4, 4))
     jaxpr = str(
         jax.make_jaxpr(
-            lambda v: hooks.optimization_barrier(hooks.pad(v, ((1, 1), (1, 1))))
+            lambda v: arrays.optimization_barrier(arrays.pad(v, ((1, 1), (1, 1))))
         )(x)
     )
     assert "optimization_barrier" in jaxpr and "pad" in jaxpr
-    scatter = str(jax.make_jaxpr(lambda v: hooks.set_at(v, (slice(1, 3),), 1.0))(x))
+    scatter = str(jax.make_jaxpr(lambda v: arrays.set_at(v, (slice(1, 3),), 1.0))(x))
     assert "scatter" in scatter or "dynamic_update_slice" in scatter

@@ -22,7 +22,7 @@ The essentials, in case you only read this file:
     bit-identical to before; `if mask is not None:`, never `if mask:`;
   - **units**: physical constants only as parameter defaults, so operators
     stay scale-covariant (`tests/test_scale_covariance.py`);
-  - gridax code is array-API slicing in the input's namespace (no `finitediffx` / `kernex`, no `jnp`, no `.at[]`: use `pipekit_array.hooks`); a `pytree_dataclass` in gridax's operators, an `eqx.Module` in `gridax.solvers` and `gridax.pipekit`; dtype follows the input.
+  - gridax code is array-API slicing in the input's namespace (no `finitediffx` / `kernex`, no `jnp`, no `.at[]`: use `pipekit_array.arrays`); a `pytree_dataclass` in gridax's operators, an `eqx.Module` in `gridax.solvers` and `gridax.pipekit`; dtype follows the input.
 - NumPy-style docstrings; every stencil commented with its half-index
   formula (`dh_dx[j, i+1/2] = ...`) and array shapes (`[Ny, Nx]`).
 - Before committing, from the repo root: `make test`, `uv run ruff check .`,

@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from jaxtyping import Bool, Float
 import numpy as np
-from pipekit_array.functions import namespace_of
+from pipekit_array.arrays import namespace_of
 
 from gridax._src.api import grid_dispatch
 from gridax._src.fields.located import located

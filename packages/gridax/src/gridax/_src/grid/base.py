@@ -43,7 +43,7 @@ from typing import TYPE_CHECKING, Any
 
 from jaxtyping import Float
 import numpy as np
-from pipekit_array.functions import namespace_of
+from pipekit_array.arrays import namespace_of
 
 from gridax._src.grid.points import point_axes
 from gridax._src.pytree import pytree_dataclass, static_field

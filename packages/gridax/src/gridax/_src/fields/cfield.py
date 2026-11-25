@@ -17,8 +17,8 @@ from collections.abc import Iterable, Mapping
 import dataclasses
 from typing import Any
 
-from pipekit_array.dimarray import core_dims, vmapped_dims
-from pipekit_array.functions import namespace_of
+from pipekit_array.arrays import namespace_of
+from pipekit_array.named import core_dims, vmapped_dims
 from pipekit_ops import on_import
 
 from gridax._src.grid.points import (

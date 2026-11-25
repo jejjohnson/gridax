@@ -41,8 +41,7 @@ from typing import TYPE_CHECKING
 
 from jaxtyping import Bool, Float
 import numpy as np
-from pipekit_array.functions import namespace_of
-from pipekit_array.hooks import set_at
+from pipekit_array.arrays import namespace_of, set_at
 
 if TYPE_CHECKING:
     from jaxtyping import Array

@@ -5,8 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import numpy as np
-from pipekit_array.functions import namespace_of
-from pipekit_array.hooks import pad, set_at
+from pipekit_array.arrays import namespace_of, pad, set_at
 
 if TYPE_CHECKING:
     from jaxtyping import Array

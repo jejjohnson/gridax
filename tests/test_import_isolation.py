@@ -2,7 +2,7 @@
 
 The solvers need the `jax` extra and the pipekit operators the `pipekit`
 extra, so `import gridax` must not import either subpackage or what they
-build on (#477). The array backend, `pipekit_array.functions`, is in the base
+build on (#477). The array backend, `pipekit_array.arrays`, is in the base
 install (#553). JAX is not imported either: the grids, masks and fields become
 pytrees when something else imports it (#564), and
 `packages/gridax/tests/test_numpy_only.py` checks the install without JAX.
