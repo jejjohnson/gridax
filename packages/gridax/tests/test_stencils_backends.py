@@ -1,4 +1,4 @@
-"""The raw stencils, ``interior`` and the smooth surrogates run on any backend.
+"""The raw stencils, ``interior`` and the smooth surrogates run on any hooks.
 
 Gate G1 of #435 for this layer: every stencil gives the same numbers on
 NumPy and on JAX, the result stays in the input's namespace and dtype, and
@@ -9,12 +9,12 @@ JAX is not installed (the ``gridax-numpy-only`` CI job).
 from __future__ import annotations
 
 import gridax
-from gridax._src import backend
 from gridax._src.operators._ghost import zero_z_ghosts
 from gridax._src.operators._utils import _metric_like, _safe_div_cos
 from gridax._src.operators.stencils import _materialize, _neighbours
 from gridax.stencils import interior
 import numpy as np
+from pipekit_array import hooks
 import pytest
 
 try:
@@ -137,10 +137,10 @@ def test_spherical_helpers_follow_the_field():
 
 def test_hooks_on_numpy_do_not_mutate():
     a = np.zeros(4)
-    b = backend.set_at(a, slice(1, 3), 2.0)
+    b = hooks.set_at(a, slice(1, 3), 2.0)
     assert (a == 0).all() and (b == [0, 2, 2, 0]).all()
-    assert backend.pad(np.ones((2, 2)), ((1, 0), (0, 1))).shape == (3, 3)
-    assert backend.optimization_barrier(a) is a and backend.stop_gradient(a) is a
+    assert hooks.pad(np.ones((2, 2)), ((1, 0), (0, 1))).shape == (3, 3)
+    assert hooks.optimization_barrier(a) is a and hooks.stop_gradient(a) is a
     nb = _neighbours(_field(5, 6))
     assert nb.c.shape == (3, 4)
     assert _materialize(a) is a
@@ -152,9 +152,9 @@ def test_hooks_keep_the_jax_calls():
     x = jax.numpy.ones((4, 4))
     jaxpr = str(
         jax.make_jaxpr(
-            lambda v: backend.optimization_barrier(backend.pad(v, ((1, 1), (1, 1))))
+            lambda v: hooks.optimization_barrier(hooks.pad(v, ((1, 1), (1, 1))))
         )(x)
     )
     assert "optimization_barrier" in jaxpr and "pad" in jaxpr
-    scatter = str(jax.make_jaxpr(lambda v: backend.set_at(v, (slice(1, 3),), 1.0))(x))
+    scatter = str(jax.make_jaxpr(lambda v: hooks.set_at(v, (slice(1, 3),), 1.0))(x))
     assert "scatter" in scatter or "dynamic_update_slice" in scatter

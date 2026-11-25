@@ -6,9 +6,8 @@ from typing import TYPE_CHECKING, Any
 
 from jaxtyping import Float
 import numpy as np
-from pipekit_array.functions import namespace_of
-
-from gridax._src.backend import set_at
+from pipekit_array.functions import constants_like, namespace_of
+from pipekit_array.hooks import set_at
 
 if TYPE_CHECKING:
     from jaxtyping import Array
@@ -24,7 +23,7 @@ def _metric_like(metric: Any, like: Any) -> Float[Array, "..."]:
     Grid metrics are float64 NumPy arrays (0-d ones included): multiplying one into a
     float32 field would promote the result to float64 (under x64 on JAX).
     The metric is a property of the grid, not a precision request, so it
-    takes the field's dtype and namespace instead. A non-floating ``like``
+    takes the field's dtype and namespace instead. An integer ``like``
     leaves the metric's dtype alone.
 
     Parameters
@@ -39,11 +38,8 @@ def _metric_like(metric: Any, like: Any) -> Float[Array, "..."]:
     array
         ``metric`` as an array of ``like``'s namespace and floating dtype.
     """
-    xp = namespace_of(like)
-    dtype = xp.asarray(like).dtype
-    if not xp.isdtype(dtype, "real floating"):
-        return xp.asarray(metric)
-    return xp.asarray(metric, dtype=dtype)
+    xp = namespace_of(metric, like)
+    return constants_like(metric, xp.asarray(like), xp)
 
 
 def _spacing(

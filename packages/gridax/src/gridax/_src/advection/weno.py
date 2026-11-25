@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
 import numpy as np
 from pipekit_array.functions import namespace_of
+from pipekit_array.hooks import stop_gradient
 
-from gridax._src.backend import stop_gradient
 from gridax._src.stencils.coefficients import (
     difference_coeffs,
     optimal_weights,

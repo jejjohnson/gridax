@@ -16,10 +16,10 @@ from typing import TYPE_CHECKING, Any
 from jaxtyping import Float
 import numpy as np
 from pipekit_array.functions import namespace_of
+from pipekit_array.hooks import pad, set_at
 
 from gridax._src.advection.flux import upwind_flux
 from gridax._src.api import grid_dispatch
-from gridax._src.backend import pad, set_at
 from gridax._src.boundary.atoms import Periodic
 from gridax._src.boundary.fill import (
     BC,
