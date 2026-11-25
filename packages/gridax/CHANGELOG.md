@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.3](https://github.com/jejjohnson/gridax/compare/gridax-v0.3.2...gridax-v0.3.3) (2026-11-25)
+
+
+### Bug Fixes
+
+* **deps:** pipekit-array 0.2.0 and its areas ([#581](https://github.com/jejjohnson/gridax/issues/581)) ([5dd26f4](https://github.com/jejjohnson/gridax/commit/5dd26f49fba1a3249c4f66be58445635ff4f6e1c))
+
 ## [0.3.2](https://github.com/jejjohnson/gridax/compare/gridax-v0.3.1...gridax-v0.3.2) (2026-11-25)
 
 
