@@ -18,8 +18,6 @@ members = [
 overrides = [
     { name = "functax", extras = ["jax"], git = "https://github.com/jejjohnson/functax?rev=v0.0.11" },
     { name = "gaussx", git = "https://github.com/jejjohnson/gaussx?tag=v0.8.1" },
-    { name = "pipekit-array", extras = ["numpy", "compat"], git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-array&tag=pipekit-array-v0.1.5" },
-    { name = "pipekit-ops", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-ops&tag=pipekit-array-v0.1.5" },
 ]
 
 [[package]]
@@ -409,8 +407,8 @@ dependencies = [
 
 [[package]]
 name = "geophysix"
-version = "0.0.7"
-source = { git = "https://github.com/jejjohnson/geophysix?tag=v0.0.7#dbdd72e013bc540e2d4fb1aea14c78d716f9329b" }
+version = "0.0.8"
+source = { git = "https://github.com/jejjohnson/geophysix?tag=v0.0.8#4ebae12a21eb32386aae049084c0f7c22196a219" }
 dependencies = [
     { name = "numpy" },
     { name = "pipekit-array", extra = ["compat", "numpy"] },
@@ -483,7 +481,7 @@ pipekit = [
 requires-dist = [
     { name = "equinox", marker = "extra == 'jax'", specifier = ">=0.11.0" },
     { name = "gaussx", marker = "extra == 'jax'", git = "https://github.com/jejjohnson/gaussx?tag=v0.8.1" },
-    { name = "geophysix", git = "https://github.com/jejjohnson/geophysix?tag=v0.0.7" },
+    { name = "geophysix", git = "https://github.com/jejjohnson/geophysix?tag=v0.0.8" },
     { name = "gridax", extras = ["jax"], marker = "extra == 'pipekit'", editable = "packages/gridax" },
     { name = "integrix", marker = "extra == 'pipekit'", git = "https://github.com/jejjohnson/integrix?tag=v0.0.9" },
     { name = "jax", marker = "extra == 'jax'", specifier = ">=0.4.38" },
@@ -491,9 +489,9 @@ requires-dist = [
     { name = "jaxtyping", specifier = ">=0.3.0" },
     { name = "lineax", marker = "extra == 'jax'", specifier = ">=0.1.0" },
     { name = "numpy", specifier = ">=2.0.0" },
-    { name = "pipekit-array", extras = ["numpy", "compat"], git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-array&tag=pipekit-array-v0.1.5" },
-    { name = "pipekit-jax", marker = "extra == 'pipekit'", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-jax&tag=pipekit-array-v0.1.5" },
-    { name = "pipekit-ops", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-ops&tag=pipekit-array-v0.1.5" },
+    { name = "pipekit-array", extras = ["numpy", "compat"], git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-array&tag=pipekit-array-v0.1.6" },
+    { name = "pipekit-jax", marker = "extra == 'pipekit'", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-jax&tag=pipekit-array-v0.1.6" },
+    { name = "pipekit-ops", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-ops&tag=pipekit-array-v0.1.6" },
     { name = "scipy", specifier = ">=1.14.0" },
     { name = "spectraldiffx", marker = "extra == 'jax'", git = "https://github.com/jejjohnson/spectraldiffx.git?tag=0.1.2" },
 ]
@@ -1356,8 +1354,8 @@ wheels = [
 
 [[package]]
 name = "pipekit-array"
-version = "0.1.5"
-source = { git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-array&tag=pipekit-array-v0.1.5#27aefaeb263551012207f62606d61cc328847166" }
+version = "0.1.6"
+source = { git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-array&tag=pipekit-array-v0.1.6#41864be1079c44937d2eb56f58a1122895e1dc7d" }
 dependencies = [
     { name = "pipekit-ops" },
 ]
@@ -1372,16 +1370,16 @@ numpy = [
 
 [[package]]
 name = "pipekit-cycle"
-version = "0.1.0"
-source = { git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-cycle&tag=pipekit-array-v0.1.5#27aefaeb263551012207f62606d61cc328847166" }
+version = "0.2.0"
+source = { git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-cycle&tag=pipekit-array-v0.1.6#41864be1079c44937d2eb56f58a1122895e1dc7d" }
 dependencies = [
     { name = "pipekit-ops" },
 ]
 
 [[package]]
 name = "pipekit-jax"
-version = "0.1.0"
-source = { git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-jax&tag=pipekit-array-v0.1.5#27aefaeb263551012207f62606d61cc328847166" }
+version = "0.2.0"
+source = { git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-jax&tag=pipekit-array-v0.1.6#41864be1079c44937d2eb56f58a1122895e1dc7d" }
 dependencies = [
     { name = "equinox" },
     { name = "jax" },
@@ -1392,8 +1390,8 @@ dependencies = [
 
 [[package]]
 name = "pipekit-ops"
-version = "0.2.3"
-source = { git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-ops&tag=pipekit-array-v0.1.5#27aefaeb263551012207f62606d61cc328847166" }
+version = "0.2.4"
+source = { git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-ops&tag=pipekit-array-v0.1.6#41864be1079c44937d2eb56f58a1122895e1dc7d" }
 
 [[package]]
 name = "platformdirs"
