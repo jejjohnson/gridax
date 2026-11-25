@@ -1,4 +1,4 @@
-"""The raw stencils, ``interior`` and the smooth surrogates run on any hooks.
+"""The raw stencils, ``interior`` and the smooth surrogates run on any backend.
 
 Gate G1 of #435 for this layer: every stencil gives the same numbers on
 NumPy and on JAX, the result stays in the input's namespace and dtype, and
