@@ -198,7 +198,7 @@ Each area links to its API page, and the [capability index](https://jejjohnson.g
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/jejjohnson/geostack/main/docs/images/libraries/gridax_ecosystem/gridax_ecosystem-dark.svg">
-    <img alt="The packages that import gridax: gridax-jax in GeoNumerics, which re-exports all of it, and sesmax-core in GeoModels, which uses the grids, masks, Interpolation2D and the raw stencils; plumax still imports the deprecated finitevolx shim, drawn dashed; gridax builds on NumPy, SciPy, jaxtyping and geophysix, and on JAX when it is installed" src="https://raw.githubusercontent.com/jejjohnson/geostack/main/docs/images/libraries/gridax_ecosystem/gridax_ecosystem-light.svg" width="100%">
+    <img alt="The packages that import gridax: diagnostix in GeoNumerics, which uses the collocated grids, difference and gradient; xrtoolz-ops in GeoStack, which uses the collocated grids, divergence and the strains; and in GeoModels sesmax-core, which uses CField, GridOps, the masks and the solvers, sesmax-ocean, which uses GridOps, CField, fill_ghosts and area_sum, and plumax, which uses BC, advect, diffuse and the vertical terms; gridax builds on NumPy, SciPy, jaxtyping, geophysix and pipekit-array, its jax extra adds JAX, equinox, lineax, gaussx and spectraldiffx, and its pipekit extra pipekit-jax and integrix" src="https://raw.githubusercontent.com/jejjohnson/geostack/main/docs/images/libraries/gridax_ecosystem/gridax_ecosystem-light.svg" width="100%">
   </picture>
 </p>
 
@@ -215,7 +215,7 @@ gridax owns the C-grid, its masks and the operators on it, and composes the rest
 | Spectral solves and structured linear algebra in `gridax.solvers` (the `jax` extra) | [`spectraldiffx`](https://github.com/jejjohnson/spectraldiffx), [`gaussx`](https://github.com/jejjohnson/gaussx), [`lineax`](https://github.com/patrick-kidger/lineax), [`equinox`](https://github.com/patrick-kidger/equinox) |
 | Operators as pipekit `Operator`s in `gridax.pipekit` (the `pipekit` extra) | [`pipekit`](https://github.com/jejjohnson/pipekit), [`integrix`](https://github.com/jejjohnson/integrix) for `ExplicitStep` |
 
-Dependencies point one way: the base install imports geophysix and no other [GeoStack](https://github.com/jejjohnson/geostack) library (`gridax.solvers` adds spectraldiffx and gaussx, and `gridax.pipekit` adds pipekit and integrix), and the libraries built on it import gridax, never the reverse. sesmax-core imports gridax today, while plumax and somax still import `finitevolx`, which is removed with gridax-jax (#477); moving them to gridax is open in [#416](https://github.com/jejjohnson/gridax/issues/416). Time stepping belongs to integrix (`integrix.march`), which takes a gridax tendency as its right-hand side.
+Dependencies point one way: the base install imports geophysix, pipekit-array and pipekit-ops and no other [GeoStack](https://github.com/jejjohnson/geostack) library (`gridax.solvers` adds spectraldiffx and gaussx, and `gridax.pipekit` adds pipekit-jax and integrix), and the libraries built on it import gridax, never the reverse. diagnostix, xrtoolz-ops, sesmax and plumax import gridax; somax still imports `finitevolx`, the name before the rename, from a pinned commit. Time stepping belongs to integrix (`integrix.march`), which takes a gridax tendency as its right-hand side.
 
 ## 🌳 Repository layout
 
