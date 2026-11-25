@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Self
 
 from jaxtyping import Bool, Int
 import numpy as np
-from pipekit_array.functions import namespace_of
+from pipekit_array.arrays import namespace_of
 
 from gridax._src.grid.points import Stagger, point_axes
 from gridax._src.mask.utils import count_contiguous, dilate_mask, shifted

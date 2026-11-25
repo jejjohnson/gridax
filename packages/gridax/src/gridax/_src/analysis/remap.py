@@ -24,7 +24,7 @@ from typing import Any, Literal
 
 from jaxtyping import Float, Inexact
 import numpy as np
-from pipekit_array.functions import as_inexact, namespace_of
+from pipekit_array.arrays import as_inexact, namespace_of
 
 Extrapolate = Literal["nan", "nearest"]
 _EXTRAPOLATE_MODES = ("nan", "nearest")

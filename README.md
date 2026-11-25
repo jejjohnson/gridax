@@ -208,7 +208,7 @@ gridax owns the C-grid, its masks and the operators on it, and composes the rest
 |---|---|
 | Arrays and the array API | [`numpy`](https://numpy.org), or any backend that follows the [array API](https://data-apis.org/array-api/) |
 | Dilations and other mask morphology, at construction | [`scipy`](https://scipy.org) (`scipy.ndimage`) |
-| The array namespace of a call | [`pipekit-array`](https://github.com/jejjohnson/pipekit/tree/main/packages/pipekit-array) (`pipekit_array.functions`) |
+| The array namespace of a call | [`pipekit-array`](https://github.com/jejjohnson/pipekit/tree/main/packages/pipekit-array) (`pipekit_array.arrays`) |
 | Physical constants, used as parameter defaults | [`geophysix`](https://github.com/jejjohnson/geophysix) |
 | Shape annotations | [`jaxtyping`](https://github.com/patrick-kidger/jaxtyping) |
 | Pytrees, `jit`, `vmap` and `grad`, when it is installed | [`jax`](https://github.com/jax-ml/jax) |

@@ -14,7 +14,7 @@ import functools
 from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
-from pipekit_array.functions import namespace_of
+from pipekit_array.arrays import namespace_of
 
 from gridax._src.advection import weno
 from gridax._src.advection.limiters import mc, minmod, superbee, van_leer

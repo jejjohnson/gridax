@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from jaxtyping import Float
 import numpy as np
-from pipekit_array.functions import namespace_of
+from pipekit_array.arrays import namespace_of
 
 from gridax._src.mask.utils import shifted
 from gridax._src.operators import stencils as _named

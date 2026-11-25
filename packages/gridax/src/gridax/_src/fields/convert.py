@@ -6,8 +6,7 @@ from typing import Any
 
 import numpy as np
 from pipekit_array import DimArray
-from pipekit_array.functions import namespace_of
-from pipekit_array.hooks import set_at
+from pipekit_array.arrays import namespace_of, set_at
 
 from gridax._src.boundary.fill import BC, fill_ghosts
 from gridax._src.fields.cfield import CField

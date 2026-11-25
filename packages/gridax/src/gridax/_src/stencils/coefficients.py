@@ -46,7 +46,7 @@ import functools
 import math
 from typing import Any, Literal
 
-from pipekit_array.functions import namespace_of
+from pipekit_array.arrays import namespace_of
 
 __all__ = [
     "METHODS",

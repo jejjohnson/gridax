@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from jaxtyping import Float
 import numpy as np
-from pipekit_array.functions import namespace_of
+from pipekit_array.arrays import namespace_of
 
 from gridax._src.operators._ghost import interior
 from gridax._src.operators.stencils import avg_xbwd_yfwd_2d, avg_xfwd_ybwd_2d

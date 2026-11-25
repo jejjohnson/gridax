@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from jaxtyping import Float
 import numpy as np
-from pipekit_array.functions import namespace_of
+from pipekit_array.arrays import namespace_of
 
 from gridax._src.advection.advect import Wall, check_wall
 from gridax._src.api import grid_dispatch

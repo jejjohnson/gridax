@@ -31,7 +31,7 @@ from typing import TYPE_CHECKING
 
 from jaxtyping import Float
 import numpy as np
-from pipekit_array.functions import namespace_of
+from pipekit_array.arrays import namespace_of
 
 if TYPE_CHECKING:
     from jaxtyping import Array

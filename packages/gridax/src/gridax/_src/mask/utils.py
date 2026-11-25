@@ -37,7 +37,7 @@ import itertools
 from typing import Any
 
 import numpy as np
-from pipekit_array.functions import namespace_of
+from pipekit_array.arrays import namespace_of
 
 
 def pool_bool(

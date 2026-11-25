@@ -6,7 +6,7 @@ import itertools
 from typing import Any, Literal
 
 import numpy as np
-from pipekit_array.functions import namespace_of
+from pipekit_array.arrays import namespace_of
 
 from gridax._src.boundary.atoms import Atom, Dirichlet, Neumann, Periodic, Wall, _Atom
 from gridax._src.fields.cfield import CField, StaggerMismatchError

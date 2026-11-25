@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from pipekit_array.dims import join_backends
-from pipekit_array.functions import namespace_of
+from pipekit_array.arrays import namespace_of
+from pipekit_array.named import join_backends
 from pipekit_ops import backend_name
 
 from gridax._src.fields.cfield import CField, StaggerMismatchError

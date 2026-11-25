@@ -21,7 +21,7 @@ from typing import Any, cast
 
 from jaxtyping import Bool, Float
 import numpy as np
-from pipekit_array.functions import namespace_of
+from pipekit_array.arrays import namespace_of
 
 from gridax._src.stencils.coefficients import (
     METHODS,

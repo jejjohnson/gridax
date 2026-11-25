@@ -6,8 +6,7 @@ import itertools
 from typing import Any
 
 import numpy as np
-from pipekit_array.functions import namespace_of
-from pipekit_array.hooks import pad, set_at
+from pipekit_array.arrays import namespace_of, pad, set_at
 
 from gridax._src.boundary.fill import FACES
 from gridax._src.fields.cfield import CField, StaggerMismatchError
