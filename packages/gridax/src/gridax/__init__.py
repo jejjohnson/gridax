@@ -189,7 +189,7 @@ from gridax._src.operators.stencils import (
     diff_z_fwd_3d,
 )
 
-__version__ = "0.3.4"  # x-release-please-version
+__version__ = "0.3.5"  # x-release-please-version
 
 from gridax._src.operators.vorticity import vorticity_flux_upwind
 

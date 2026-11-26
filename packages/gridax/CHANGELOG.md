@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.5](https://github.com/jejjohnson/gridax/compare/gridax-v0.3.4...gridax-v0.3.5) (2026-11-26)
+
+
+### Bug Fixes
+
+* **deps:** gridax asks for pipekit-ops 0.4.0, whose core it imports ([#588](https://github.com/jejjohnson/gridax/issues/588)) ([678b194](https://github.com/jejjohnson/gridax/commit/678b19412f49c4e21904b09cf55712b2091e9bdf))
+
 ## [0.3.4](https://github.com/jejjohnson/gridax/compare/gridax-v0.3.3...gridax-v0.3.4) (2026-11-26)
 
 
