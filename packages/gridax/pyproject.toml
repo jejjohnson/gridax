@@ -25,8 +25,8 @@ dependencies = [
     "jaxtyping>=0.3.0",
     "geophysix>=0.0.10",
     # The array backend (pipekit_array.arrays) and the adapter of CField.
-    "pipekit-ops>=0.3.0",
-    "pipekit-array[numpy,compat]>=0.2.0",
+    "pipekit-ops>=0.4.0",
+    "pipekit-array[numpy,compat]>=0.3.0",
 ]
 
 [project.optional-dependencies]
