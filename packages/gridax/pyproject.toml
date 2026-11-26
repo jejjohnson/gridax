@@ -23,7 +23,7 @@ dependencies = [
     "numpy>=2.0.0",
     "scipy>=1.14.0",
     "jaxtyping>=0.3.0",
-    "geophysix>=0.0.9",
+    "geophysix>=0.0.10",
     # The array backend (pipekit_array.arrays) and the adapter of CField.
     "pipekit-ops>=0.3.0",
     "pipekit-array[numpy,compat]>=0.2.0",
@@ -65,11 +65,11 @@ addopts = "--strict-markers"
 
 [tool.uv.sources]
 # None of these is on PyPI yet (#426); the workspace root pins the same tags.
-geophysix = { git = "https://github.com/jejjohnson/geophysix", tag = "v0.0.9" }
+geophysix = { git = "https://github.com/jejjohnson/geophysix", tag = "v0.0.10" }
 spectraldiffx = { git = "https://github.com/jejjohnson/spectraldiffx.git", tag = "0.1.2" }
 gaussx = { git = "https://github.com/jejjohnson/gaussx", tag = "v0.8.1" }
 integrix = { git = "https://github.com/jejjohnson/integrix", tag = "v0.0.9" }
-pipekit-ops = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-ops", tag = "pipekit-array-v0.2.0" }
-pipekit-array = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-array", tag = "pipekit-array-v0.2.0" }
-pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-cycle", tag = "pipekit-array-v0.2.0" }
-pipekit-jax = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-jax", tag = "pipekit-array-v0.2.0" }
+pipekit-ops = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-ops", tag = "pipekit-array-v0.3.0" }
+pipekit-array = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-array", tag = "pipekit-array-v0.3.0" }
+pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-cycle", tag = "pipekit-array-v0.3.0" }
+pipekit-jax = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-jax", tag = "pipekit-array-v0.3.0" }

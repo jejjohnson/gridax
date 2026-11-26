@@ -33,7 +33,7 @@ members = ["packages/gridax"]
 [tool.uv.sources]
 gridax = { workspace = true }
 # geophysix owns the physical constants, Coriolis and the linear equation of state (#446).
-geophysix = { git = "https://github.com/jejjohnson/geophysix", tag = "v0.0.9" }
+geophysix = { git = "https://github.com/jejjohnson/geophysix", tag = "v0.0.10" }
 spectraldiffx = { git = "https://github.com/jejjohnson/spectraldiffx.git", tag = "0.1.2" }
 gaussx = { git = "https://github.com/jejjohnson/gaussx", tag = "v0.8.1" }
 # integrix owns the time steppers, semi-Lagrangian advection included (0.0.9).
@@ -44,10 +44,10 @@ integrix = { git = "https://github.com/jejjohnson/integrix", tag = "v0.0.9" }
 # Every source is pinned to the one tag `pipekit-array-v0.2.0` (ops 0.3.0,
 # array 0.2.0, cycle 0.2.0, jax 0.3.0); per-package tags make uv report conflicting URLs
 # for pipekit-ops. pipekit-cycle comes in through pipekit-jax.
-pipekit-ops = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-ops", tag = "pipekit-array-v0.2.0" }
-pipekit-array = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-array", tag = "pipekit-array-v0.2.0" }
-pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-cycle", tag = "pipekit-array-v0.2.0" }
-pipekit-jax = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-jax", tag = "pipekit-array-v0.2.0" }
+pipekit-ops = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-ops", tag = "pipekit-array-v0.3.0" }
+pipekit-array = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-array", tag = "pipekit-array-v0.3.0" }
+pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-cycle", tag = "pipekit-array-v0.3.0" }
+pipekit-jax = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-jax", tag = "pipekit-array-v0.3.0" }
 
 [project.optional-dependencies]
 test = [
