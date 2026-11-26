@@ -22,7 +22,7 @@ from integrix.march import euler_step, heun_step, rk3_ssp_step, rk4_step
 import jax
 import jax.numpy as jnp
 from pipekit_ops import Operator
-from pipekit_ops._base.operator import nested_config
+from pipekit_ops.core import nested_config
 
 from gridax._src.pipekit.base import FVXOperator
 from gridax._src.pipekit.halo import graph_halo
