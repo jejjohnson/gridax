@@ -219,7 +219,7 @@ problem at these sizes:
   matrix: dense only on the $N_c$ coast nodes (1.5–9 MiB here), with the
   bulk handled by the fast rectangular solve.
 - **Tridiagonal** does not apply directly: the 2-D 5-point operator is
-  block tridiagonal, not tridiagonal.  `solve_tridiagonal` (gaussx) is for
+  block tridiagonal, not tridiagonal.  `gaussx.tridiagonal_solve` is for
   1-D and vertical problems (implicit vertical diffusion, layer coupling);
   the fast rectangular 2-D solve is the spectral one.
 - **Sparse direct** (SciPy SuperLU, the reference rows): fast on a CPU —

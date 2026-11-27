@@ -11,8 +11,10 @@ never imports it.
   ``masked_face_dirichlet_laplacian``) for gaussx's CG with
   ``make_spectral_preconditioner``, and ``build_multigrid_solver``.
 - Known-value lifting for inhomogeneous Dirichlet values (``SolveDomain``,
-  ``KnownValueLifting``), the tridiagonal solves re-exported from gaussx, and
-  the dtype rule ``check_dtype``.
+  ``KnownValueLifting``) and the dtype rule ``check_dtype``.
+
+The tridiagonal solves are gaussx's: ``gaussx.tridiagonal_solve`` and
+``gaussx.tridiagonal_solve_batched``.
 """
 
 from __future__ import annotations
@@ -137,10 +139,6 @@ from gridax._src.solvers.spectral_transforms import (
     idst,
     idstn,
 )
-from gridax._src.solvers.tridiagonal import (
-    solve_tridiagonal,
-    solve_tridiagonal_batched,
-)
 
 __all__ = [
     "BoundaryCondition",
@@ -237,7 +235,5 @@ __all__ = [
     "solve_poisson_fft",
     "solve_poisson_fft_1d",
     "solve_poisson_fft_3d",
-    "solve_tridiagonal",
-    "solve_tridiagonal_batched",
     "wet_components",
 ]

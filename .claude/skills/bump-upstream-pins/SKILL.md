@@ -28,8 +28,7 @@ new tag), or the lock fails to resolve.
    removals, renames, deprecations and changed signatures. finitevolX
    re-exports 78 spectraldiffx names unchanged (`solvers/spectral.py`,
    `solvers/spectral_transforms.py`, `CapacitanceSolver`) and wraps
-   `build_capacitance_solver`; from gaussx it re-exports
-   `solve_tridiagonal` / `solve_tridiagonal_batched` and builds the
+   `build_capacitance_solver`; from gaussx it builds the
    multigrid levels for `gaussx.MultigridPreconditioner`.
 2. Update the floor and the tag together.
 3. `uv lock`, then `uv sync --all-extras`.
