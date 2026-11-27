@@ -46,10 +46,34 @@ def _counts(h: np.ndarray, axis: int, forward: bool) -> np.ndarray:
     return np.minimum(counts, _COUNT_CAP).astype(np.int8)
 
 
+def _run_lengths(h: Any, position: int, forward: bool) -> Any:
+    """`_counts` in the array namespace of ``h``, so of a traced mask too."""
+    xp = namespace_of(h)
+    # run[i] = min(wet cells from i on, 2^k), doubled k times: where the
+    # run reaches 2^k, the run 2^k further on continues it
+    run = xp.asarray(h, dtype=xp.int16)
+    for k in range(7):
+        step = 2**k
+        further = shifted(run, position, step if forward else -step)
+        run = run + xp.where(run == step, further, 0)
+    return xp.astype(xp.minimum(run, _COUNT_CAP), xp.int8)
+
+
 class _Capability:
     """The one builder of the capabilities: a count per axis and direction."""
 
     _axes: ClassVar[tuple[str, ...]]
+
+    @classmethod
+    def _of_wet(cls, h: Any) -> Self:
+        """`from_mask` in the array namespace of ``h``."""
+        rank = len(cls._axes)
+        fields: dict[str, Any] = {
+            f"{axis}_{way}": _run_lengths(h, position - rank, way == "pos")
+            for position, axis in enumerate(cls._axes)
+            for way in ("pos", "neg")
+        }
+        return cls(**fields)
 
     @classmethod
     def from_mask(cls, h: np.ndarray | Bool[Array, "*grid"]) -> Self:

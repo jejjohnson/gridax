@@ -18,7 +18,7 @@ from pipekit_array.arrays import namespace_of, set_at
 
 from gridax._src.advection.reconstruct import axis_flux, check_scheme, extends
 from gridax._src.api import grid_dispatch
-from gridax._src.boundary.fill import BC
+from gridax._src.boundary.fill import BC, wrapped_mask
 from gridax._src.fields.located import located
 from gridax._src.grid import (
     CartesianCGrid1D,
@@ -73,8 +73,8 @@ def advect(
         Any of `gridax.schemes`.
     mask : Mask1D, Mask2D or Mask3D, optional
         The wet cells. Dry values are not read, no flux crosses a dry face,
-        and the tendency is zero on dry cells. Where ``bc`` is periodic the
-        ghost ring of the mask must wrap too.
+        and the tendency is zero on dry cells. Along a periodic axis its
+        ghost ring is read wrapped, whatever it holds.
     wall : {"closed", "open"}, default "closed"
         ``"closed"`` writes the cells that are two or more from the edge of
         the array, and takes no flux through the edge faces. ``"open"`` writes
@@ -116,6 +116,9 @@ def advect(
     check_wall(wall, mask)
     if extends(scheme, bc) and wall != "closed":
         raise ValueError("bc= (or periodic edges) says what the walls are: drop wall=")
+    horizontal = [axis for axis in grid.axes if axis in ("x", "y")]
+    _, edges, _ = policies(scheme, bc, edges="narrow", dry="narrow")
+    mask = wrapped_mask(mask, grid, horizontal, bc, periodic=edges == "periodic")
     return advect._impl(grid, q, u, v, scheme=scheme, mask=mask, wall=wall, bc=bc)
 
 

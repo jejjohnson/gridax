@@ -27,11 +27,14 @@ grid module's ``U[j, i]`` / ``V[j, i]`` positions::
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 import dataclasses
+import functools
 from typing import TYPE_CHECKING, Any, ClassVar, Self
 
 from jaxtyping import Bool, Float
 import numpy as np
+from pipekit_array.arrays import namespace_of
 
 from gridax._src.grid.points import POINT_AXES, Stagger, point_axes
 from gridax._src.mask.base import (
@@ -147,6 +150,67 @@ class _CartesianMask(MaskBase):
         (16, 12)
         """
         return _wet(self, self._axes, at, kind)
+
+    def wrapped(self, axes: Sequence[str], *, ghost: int = 1) -> Self:
+        """The mask with its ghost ring wrapped along periodic axes.
+
+        The ``ghost`` layers at each end of an axis take the wet points of the
+        interior layers at the other end, as a periodic field's ghost ring
+        does, and the staggered points and the stencil capability follow. An
+        operation that knows an axis is periodic reads its mask this way.
+        Works in the array namespace of the mask, so on a traced one too.
+
+        Parameters
+        ----------
+        axes : sequence of str
+            The periodic axes, among the mask's.
+        ghost : int, default 1
+            The width of the ghost ring.
+
+        Returns
+        -------
+        Mask1D, Mask2D or Mask3D
+            Equal to the mask built from the wrapped wet cells.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from gridax import Mask1D
+        >>> mask = Mask1D.from_mask([1, 1, 0, 1, 1, 0])
+        >>> mask.wrapped(["x"]).wet().astype(int).tolist()
+        [1, 1, 0, 1, 1, 1]
+        """
+        if not axes:
+            return self
+        h = self._h
+        xp = namespace_of(h)
+        for axis in axes:
+            position = self._position(axis)
+            n = h.shape[position]
+
+            def layers(
+                start: int, stop: int, h: Any = h, position: int = position
+            ) -> Any:
+                return h[(..., slice(start, stop), *(slice(None),) * (-position - 1))]
+
+            # h[:g] = h[n-2g:n-g], h[n-g:] = h[g:2g]
+            ends = layers(n - 2 * ghost, n - ghost), layers(ghost, 2 * ghost)
+            h = xp.concat([ends[0], layers(ghost, n - ghost), ends[1]], axis=position)
+        fields: dict[str, Any] = {
+            "_h": h,
+            "stencil_capability": type(self.stencil_capability)._of_wet(h),
+        }
+        for name, (point, wet) in _STORED.items():
+            if getattr(self, name, None) is None:
+                continue
+            # the cells of the window of each point, as `from_mask` pools them
+            cells = [h]
+            for position, size in enumerate(_window(point, self._axes)):
+                if size == 2:
+                    cells += [shifted(c, position - len(self._axes), 1) for c in cells]
+            combine = xp.logical_and if wet == "all" else xp.logical_or
+            fields[name] = functools.reduce(combine, cells)
+        return dataclasses.replace(self, **fields)  # ty: ignore[invalid-argument-type]
 
     # ── factory class-methods ─────────────────────────────────────────────────
 

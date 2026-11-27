@@ -25,6 +25,7 @@ from gridax._src.boundary.fill import (
     extend,
     extend_wet,
     fill_coasts,
+    wrapped_mask,
     wrapping,
 )
 from gridax._src.fields.located import located
@@ -111,6 +112,8 @@ def reconstruct(
     [0.0, 1.0, 2.0, 3.0, 4.0, 0.0]
     """
     check_scheme(scheme)
+    _, edges, _ = policies(scheme, bc, edges="narrow", dry="narrow")
+    mask = wrapped_mask(mask, grid, [axis], bc, periodic=edges == "periodic")
     return reconstruct._impl(grid, q, u, axis=axis, scheme=scheme, mask=mask, bc=bc)
 
 

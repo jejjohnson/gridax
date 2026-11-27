@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 import itertools
 from typing import Any, Literal
 
@@ -476,6 +477,26 @@ def _apply(
     # corners every order agrees, and the value stays exact.
     first, *rest = (apply(order) for order in itertools.permutations(axes))
     return first + sum(out - first for out in rest) / (len(rest) + 1)
+
+
+def wrapped_mask(
+    mask: Any, grid: Any, axes: Sequence[str], bc: BC | None, *, periodic: bool
+) -> Any:
+    """``mask`` with its ghost ring wrapped along the periodic ones of ``axes``.
+
+    Those with a `Periodic` face in ``bc``, or all of them if ``periodic``
+    (``Adaptive(edges="periodic")``): an operation reads the mask there as it
+    reads the field, wrapped.
+    """
+    if mask is None:
+        return None
+    faces = {} if bc is None else bc.faces
+    wrap = [
+        axis
+        for axis in axes
+        if periodic or isinstance(faces.get(axis, (None, None))[0], Periodic)
+    ]
+    return mask.wrapped(wrap, ghost=grid.ghost) if wrap else mask
 
 
 def wrapping(axes: list[str]) -> BC:
