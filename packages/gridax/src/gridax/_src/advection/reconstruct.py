@@ -346,11 +346,16 @@ def face_flux(
 def _faces(xp: Any, q: Array, tiers: tuple[Tier, ...], *, upwind: str) -> Array:
     """Face values ``i + 1/2``, ``i = 1 .. N-2``, along the last axis.
 
-    Each face takes the first (widest) tier whose cells are in ``[0, N-1]``;
-    faces with the same tier form a run, computed with one call on slices.
+    Each face takes the first (widest) tier whose cells are in ``[0, N-1]``,
+    and each tier is evaluated once, on all of its faces: on slices where
+    they are one run (the widest tier, on the interior), and on one gather of
+    their cells where they are two (a narrower tier, near both ends). A call
+    per run would repeat the kernel for every run, and the sum of the
+    shifted reads in the gradient grows with the number of calls: the
+    gradient of WENO-9 compiled in 12 s that way, and in 2 s this way (#550).
     """
     size = q.shape[-1]
-    runs: list[tuple[int, int, int]] = []  # (tier, first face, last face + 1)
+    faces: dict[int, list[int]] = {}  # tier -> its faces, in order
     for i in range(1, size - 1):
         fits = [
             i + lo >= 0 and i + hi <= size - 1
@@ -358,19 +363,27 @@ def _faces(xp: Any, q: Array, tiers: tuple[Tier, ...], *, upwind: str) -> Array:
         ]
         if not any(fits):
             raise ValueError(f"no tier of the scheme fits an axis of length {size}")
-        k = fits.index(True)
-        if runs and runs[-1][0] == k:
-            runs[-1] = (k, runs[-1][1], i + 1)
-        else:
-            runs.append((k, i, i + 1))
-    pieces = []
-    for k, start, stop in runs:
+        faces.setdefault(fits.index(True), []).append(i)
+    values, order = [], []
+    for k, at in faces.items():
         tier = tiers[k]
         lo, hi = _reads(tier, upwind)
         fn = tier.left if upwind == "left" else tier.right
-        cells = [q[..., start + o : stop + o] for o in range(lo, hi + 1)]
-        pieces.append(fn(*cells))
-    return pieces[0] if len(pieces) == 1 else xp.concat(pieces, axis=-1)
+        if at[-1] - at[0] == len(at) - 1:
+            # one run: cells[o][f] = q[at[f] + o]
+            cells = [q[..., at[0] + o : at[-1] + 1 + o] for o in range(lo, hi + 1)]
+        else:
+            index = np.asarray(at)[:, None] + np.arange(lo, hi + 1)[None, :]
+            window = xp.take(q, xp.asarray(index.ravel()), axis=-1)
+            window = xp.reshape(window, (*q.shape[:-1], len(at), hi - lo + 1))
+            cells = [window[..., o] for o in range(hi - lo + 1)]
+        values.append(fn(*cells))
+        order += at
+    if len(values) == 1:
+        return values[0]
+    # the faces back in order, i = 1 .. N-2
+    merged = xp.concat(values, axis=-1)
+    return xp.take(merged, xp.asarray(np.argsort(order)), axis=-1)
 
 
 def _reads(tier: Tier, upwind: str) -> tuple[int, int]:
