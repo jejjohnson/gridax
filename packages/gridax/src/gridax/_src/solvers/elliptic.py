@@ -187,12 +187,15 @@ def build_capacitance_solver(
 
     Examples
     --------
-    >>> mask = np.zeros((34, 34), dtype=bool)
-    >>> mask[1:-1, 1:-1] = True
-    >>> solver = build_capacitance_solver(Mask2D.from_mask(mask), dx, dy, lambda_=4.0)
-    >>> psi = streamfunction_from_vorticity(
-    ...     zeta, dx, dy, lambda_=4.0, method="capacitance", capacitance_solver=solver
-    ... )
+    Solve ``(∇² − λ) ψ = 1`` on a square basin inside a dry ring:
+
+    >>> import numpy as np
+    >>> mask = np.zeros((10, 10), dtype=bool)
+    >>> mask[2:-2, 2:-2] = True
+    >>> solver = build_capacitance_solver(mask, 1.0, 1.0, lambda_=4.0)
+    >>> psi = solver(np.ones((10, 10)))
+    >>> psi.shape, bool((psi[~mask] == 0).all())
+    ((10, 10), True)
     """
     if base_bc not in ("fft", "dst", "dct"):
         raise ValueError(f"base_bc must be 'fft', 'dst', or 'dct'; got {base_bc!r}")

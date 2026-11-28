@@ -164,7 +164,7 @@ tendency is exactly zero on every land cell.
 | `scipy.fft.dstn` Poisson solver | `gs.solve_helmholtz_dst` (or `sesmax_core.gfd.streamfunction_from_vorticity` for the full-array one-call form) |
 | A conjugate-gradient loop on a masked basin | `gaussx.linear_solve_with_info(gaussx.as_linear_operator(matvec, shape=(n, n), negative_definite=True), rhs.ravel(), solver=gaussx.CGSolver(), preconditioner=gs.build_multigrid_solver(...).as_preconditioner())` |
 | A dense `(N, N)` Laplacian matrix for a prior covariance, its Cholesky or log-determinant | `gs.helmholtz_operator` / `gs.masked_helmholtz_operator` with `gaussx.solve`, `gaussx.logdet`, `gaussx.sqrt` |
-| A Thomas algorithm for vertical diffusion | `gs.solve_tridiagonal` |
+| A Thomas algorithm for vertical diffusion | `gaussx.tridiagonal_solve` |
 | A hand-written RK3 / AB2 / leapfrog loop | `integrix.march.rk3_ssp_step`, `integrix.march.ab2_step`, `integrix.march.leapfrog_raf_step`, or `integrix.march.RK3SSP` with `sesmax_core.solve_pde.solve_ocean_pde` |
 | `jnp.sum(q * dx * dy)` | `fvx.area_sum(q, grid)` (excludes the ghost ring; `mask=` drops land) |
 | Kinetic energy / PV / Okubo–Weiss by hand | `fvx.kinetic_energy`, `fvx.sw_potential_vorticity`, `fvx.okubo_weiss_parameter` |

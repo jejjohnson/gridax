@@ -54,7 +54,7 @@ in `AGENTS.md`.
      (`dst`, `dct`, `solve_helmholtz_dst`, `dst1_eigenvalues`, …) or, in
      sesmax-core, the wrappers `streamfunction_from_vorticity` /
      `pv_inversion` (`sesmax_core.gfd`);
-   - a Thomas algorithm → `solve_tridiagonal` (gaussx); a CG loop →
+   - a Thomas algorithm → `gaussx.tridiagonal_solve`; a CG loop →
      `gaussx.linear_solve_with_info` with `gaussx.CGSolver`; a multigrid
      preconditioner → `MultigridSolver.as_preconditioner()`; a Nyström or
      low-rank approximation → `gaussx.NystromPreconditioner`;

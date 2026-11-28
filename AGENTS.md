@@ -120,7 +120,7 @@ whether it exists:
 | Area / volume integrals and masked means | `area_sum`, `area_mean`, `volume_mean`, `masked_mean`, `masked_moments`: the sums and means dispatch on the grid type (`mask=` is a keyword) |
 | A Poisson / Helmholtz solve | `solve_helmholtz_dst` / `_dct` / `_fft` (spectraldiffx) on a rectangle; `build_capacitance_solver`, gaussx's CG (`gaussx.linear_solve_with_info` with `gaussx.CGSolver`) with `make_spectral_preconditioner` or `build_multigrid_solver(...).as_preconditioner()`, or `build_multigrid_solver` on its own on a masked domain; the one-call wrappers `streamfunction_from_vorticity`, `pressure_from_divergence`, `pv_inversion` live in sesmax-core (`sesmax_core.gfd`) |
 | A DCT / DST | `dct`, `dst`, `dctn`, … (spectraldiffx, scipy's unnormalised convention) |
-| A tridiagonal (Thomas) solve | `solve_tridiagonal`, `solve_tridiagonal_batched` (gaussx) |
+| A tridiagonal (Thomas) solve | `gaussx.tridiagonal_solve`, `gaussx.tridiagonal_solve_batched` |
 | A CG loop or a Nyström preconditioner | `gaussx.linear_solve_with_info` with `gaussx.CGSolver`, `gaussx.NystromPreconditioner`, `make_spectral_preconditioner`, `MultigridSolver.as_preconditioner()` |
 | An RK / multistep / IMEX time loop | `integrix.march`: `rk3_ssp_step`, `ab2_step`, `imex_ssp2_step`, …, the diffrax solvers (with `sesmax_core.solve_pde.solve_ocean_pde` for a tendency BC), or `AB2Solver` / `LeapfrogRAFSolver` / `SplitExplicitRKSolver` with `integrix.march.run` |
 | Applying a 2-D operator to every layer | `jax.vmap(fn)` (or `sesmax_core.vertical.multilayer`); vertical modes with `sesmax_core.vertical.decompose_vertical_modes`, `layer_to_mode` |

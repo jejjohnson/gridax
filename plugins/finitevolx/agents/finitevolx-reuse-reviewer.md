@@ -77,7 +77,7 @@ list grouped by module, plus spectraldiffx and gaussx.
      its Cholesky, inverse or log-determinant → `gridax.solvers.helmholtz_operator`,
      `gridax.solvers.masked_helmholtz_operator` with gaussx's structured
      primitives;
-   - a Thomas algorithm → `gridax.solvers.solve_tridiagonal`;
+   - a Thomas algorithm → `gaussx.tridiagonal_solve`;
    - an RK3 / RK4 / Adams–Bashforth / leapfrog loop →
      `integrix.march.rk3_ssp_step`, `integrix.march.rk4_step`,
      `integrix.march.ab2_step`, `integrix.march.leapfrog_raf_step`, or a diffrax
