@@ -27,7 +27,6 @@ grid module's ``U[j, i]`` / ``V[j, i]`` positions::
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 import dataclasses
 import functools
 from typing import TYPE_CHECKING, Any, ClassVar, Self
@@ -151,51 +150,13 @@ class _CartesianMask(MaskBase):
         """
         return _wet(self, self._axes, at, kind)
 
-    def wrapped(self, axes: Sequence[str], *, ghost: int = 1) -> Self:
-        """The mask with its ghost ring wrapped along periodic axes.
+    def _rebuilt(self, h: Bool[Array, "*grid"]) -> Self:
+        """The mask of the wet cells ``h``, as `from_mask` builds it.
 
-        The ``ghost`` layers at each end of an axis take the wet points of the
-        interior layers at the other end, as a periodic field's ghost ring
-        does, and the staggered points and the stencil capability follow. An
-        operation that knows an axis is periodic reads its mask this way.
-        Works in the array namespace of the mask, so on a traced one too.
-
-        Parameters
-        ----------
-        axes : sequence of str
-            The periodic axes, among the mask's.
-        ghost : int, default 1
-            The width of the ghost ring.
-
-        Returns
-        -------
-        Mask1D, Mask2D or Mask3D
-            Equal to the mask built from the wrapped wet cells.
-
-        Examples
-        --------
-        >>> import numpy as np
-        >>> from gridax import Mask1D
-        >>> mask = Mask1D.from_mask([1, 1, 0, 1, 1, 0])
-        >>> mask.wrapped(["x"]).wet().astype(int).tolist()
-        [1, 1, 0, 1, 1, 1]
+        In the array namespace of ``h``, so on a traced mask too; `wrapped_mask`
+        gives it the cells with their ghost ring wrapped.
         """
-        if not axes:
-            return self
-        h = self._h
         xp = namespace_of(h)
-        for axis in axes:
-            position = self._position(axis)
-            n = h.shape[position]
-
-            def layers(
-                start: int, stop: int, h: Any = h, position: int = position
-            ) -> Any:
-                return h[(..., slice(start, stop), *(slice(None),) * (-position - 1))]
-
-            # h[:g] = h[n-2g:n-g], h[n-g:] = h[g:2g]
-            ends = layers(n - 2 * ghost, n - ghost), layers(ghost, 2 * ghost)
-            h = xp.concat([ends[0], layers(ghost, n - ghost), ends[1]], axis=position)
         fields: dict[str, Any] = {
             "_h": h,
             "stencil_capability": type(self.stencil_capability)._of_wet(h),

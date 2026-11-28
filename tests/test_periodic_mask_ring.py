@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gridax
 from gridax import BC, Mask1D, Mask2D, Mask3D, Periodic
+from gridax._src.boundary.fill import wrapped_mask
 from gridax.schemes import WENO, Adaptive, Centred, Upwind
 import jax
 import numpy as np
@@ -34,21 +35,33 @@ def basin():
     return grid, inner, q, u, v
 
 
-@pytest.mark.parametrize(
-    ("cls", "shape"),
-    [(Mask1D, (9,)), (Mask2D, (7, 9)), (Mask3D, (4, 7, 9))],
-)
-def test_wrapped_is_the_mask_of_the_wrapped_cells(cls, shape) -> None:
+GRIDS = {
+    Mask1D: gridax.CartesianCGrid1D.from_interior(7, 1.0),
+    Mask2D: gridax.CartesianCGrid2D.from_interior(7, 5, 1.0, 1.0),
+    Mask3D: gridax.CartesianCGrid3D.from_interior(7, 5, 2, 1.0, 1.0, 1.0),
+}
+
+
+def _wrapped(mask, grid, axes):
+    return wrapped_mask(
+        mask, grid, axes, BC(**dict.fromkeys(axes, Periodic())), periodic=False
+    )
+
+
+@pytest.mark.parametrize("cls", [Mask1D, Mask2D, Mask3D], ids=lambda c: c.__name__)
+def test_wrapped_is_the_mask_of_the_wrapped_cells(cls) -> None:
     rng = np.random.default_rng(1)
+    grid = GRIDS[cls]
     axes = cls._axes
+    horizontal = [a for a in axes if a != "z"]
     for _ in range(10):
-        h = rng.random(shape) > 0.4
+        h = rng.random(grid.shape) > 0.4
         mask = cls.from_mask(h)
-        for periodic in ([axes[-1]], list(axes)):
+        for periodic in ([axes[-1]], horizontal):
             expected = cls.from_mask(_wrap(h, [axes.index(a) for a in periodic]))
             for got in (
-                mask.wrapped(periodic),
-                jax.jit(lambda m, p=periodic: m.wrapped(p))(mask),
+                _wrapped(mask, grid, periodic),
+                jax.jit(lambda m, p=periodic: _wrapped(m, grid, p))(mask),
             ):
                 pairs = zip(
                     jax.tree_util.tree_leaves(got),
@@ -63,7 +76,8 @@ def test_wrapped_is_the_mask_of_the_wrapped_cells(cls, shape) -> None:
 def test_the_counts_saturate_as_from_mask_does() -> None:
     h = np.ones(300, dtype=bool)
     h[7] = False
-    got = Mask1D.from_mask(h).wrapped(["x"]).stencil_capability
+    grid = gridax.CartesianCGrid1D.from_interior(298, 1.0)
+    got = _wrapped(Mask1D.from_mask(h), grid, ["x"]).stencil_capability
     expected = Mask1D.from_mask(_wrap(h, [0])).stencil_capability
     np.testing.assert_array_equal(np.asarray(got.x_pos), expected.x_pos)
     np.testing.assert_array_equal(np.asarray(got.x_neg), expected.x_neg)

@@ -486,7 +486,8 @@ def wrapped_mask(
 
     Those with a `Periodic` face in ``bc``, or all of them if ``periodic``
     (``Adaptive(edges="periodic")``): an operation reads the mask there as it
-    reads the field, wrapped.
+    reads the field, wrapped. The wet cells are filled as a field is, by
+    `Periodic`, and the staggered points and the counts follow from them.
     """
     if mask is None:
         return None
@@ -496,7 +497,13 @@ def wrapped_mask(
         for axis in axes
         if periodic or isinstance(faces.get(axis, (None, None))[0], Periodic)
     ]
-    return mask.wrapped(wrap, ghost=grid.ghost) if wrap else mask
+    if not wrap:
+        return mask
+    # booleans: the corners of two periodic axes agree in either order
+    faces: dict[str, Any] = dict.fromkeys(wrap, Periodic())
+    around = BC(corners="priority", **faces)
+    wet = _fill(mask.wet(), grid, around, grid.ghost, point_stagger("T"))
+    return mask._rebuilt(wet)
 
 
 def wrapping(axes: list[str]) -> BC:
