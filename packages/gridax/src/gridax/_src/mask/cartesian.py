@@ -28,10 +28,12 @@ grid module's ``U[j, i]`` / ``V[j, i]`` positions::
 from __future__ import annotations
 
 import dataclasses
+import functools
 from typing import TYPE_CHECKING, Any, ClassVar, Self
 
 from jaxtyping import Bool, Float
 import numpy as np
+from pipekit_array.arrays import namespace_of
 
 from gridax._src.grid.points import POINT_AXES, Stagger, point_axes
 from gridax._src.mask.base import (
@@ -147,6 +149,29 @@ class _CartesianMask(MaskBase):
         (16, 12)
         """
         return _wet(self, self._axes, at, kind)
+
+    def _rebuilt(self, h: Bool[Array, "*grid"]) -> Self:
+        """The mask of the wet cells ``h``, as `from_mask` builds it.
+
+        In the array namespace of ``h``, so on a traced mask too; `wrapped_mask`
+        gives it the cells with their ghost ring wrapped.
+        """
+        xp = namespace_of(h)
+        fields: dict[str, Any] = {
+            "_h": h,
+            "stencil_capability": type(self.stencil_capability)._of_wet(h),
+        }
+        for name, (point, wet) in _STORED.items():
+            if getattr(self, name, None) is None:
+                continue
+            # the cells of the window of each point, as `from_mask` pools them
+            cells = [h]
+            for position, size in enumerate(_window(point, self._axes)):
+                if size == 2:
+                    cells += [shifted(c, position - len(self._axes), 1) for c in cells]
+            combine = xp.logical_and if wet == "all" else xp.logical_or
+            fields[name] = functools.reduce(combine, cells)
+        return dataclasses.replace(self, **fields)  # ty: ignore[invalid-argument-type]
 
     # ── factory class-methods ─────────────────────────────────────────────────
 

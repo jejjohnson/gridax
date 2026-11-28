@@ -18,6 +18,7 @@ from gridax._src.boundary.fill import (
     extend,
     extend_wet,
     fill_coasts,
+    wrapped_mask,
     wrapping,
 )
 from gridax._src.fields.located import located
@@ -218,6 +219,13 @@ def interpolate(
     """
     check_linear(scheme)
     return interpolate._impl(grid, f, src=src, dst=dst, scheme=scheme, mask=mask, bc=bc)
+
+
+def _periodic(mask: Any, grid: Any, src: str, dst: str, scheme: Scheme, bc: Any) -> Any:
+    """``mask``, wrapped along the periodic axes of the move."""
+    _, edges, _ = policies(scheme, bc, edges="bias", dry="narrow")
+    axes = [axis for axis, _ in moved_along(src, dst)]
+    return wrapped_mask(mask, grid, axes, bc, periodic=edges == "periodic")
 
 
 def _masked(out: Any, mask: Any, dst: str) -> Any:
@@ -490,6 +498,7 @@ def _difference_cartesian(
     bc: BC | None,
 ) -> Any:
     src, dst = point_name(src), point_name(dst)
+    mask = _periodic(mask, grid, src, dst, scheme, bc)
     raw = _raw_difference(grid, f, axis, src, dst, scheme, mask, bc)
     # δf[q] = (f[p+] - f[p-]) / Δ_q
     out = interior(raw / _spacing(grid, axis, f, at=dst), f)
@@ -511,6 +520,7 @@ def _difference_stretched(
     bc: BC | None,
 ) -> Any:
     src, dst = point_name(src), point_name(dst)
+    mask = _periodic(mask, grid, src, dst, scheme, bc)
     # the weights are solved for the distances: already per unit length
     raw = _raw_difference(grid, f, axis, src, dst, scheme, mask, bc)
     return _masked(interior(raw, f), mask, dst)
@@ -530,6 +540,7 @@ def _difference_spherical(
     bc: BC | None,
 ) -> Any:
     src, dst = point_name(src), point_name(dst)
+    mask = _periodic(mask, grid, src, dst, scheme, bc)
     raw = _raw_difference(grid, f, axis, src, dst, scheme, mask, bc)
     if axis == "x":
         # δf[q] = (f[p+] - f[p-]) / (R cos(lat_q) dlon), NaN next to a pole
@@ -553,6 +564,7 @@ def _interpolate(
     grid: Any, f: Any, *, src: Any, dst: Any, scheme: Scheme, mask: Any, bc: BC | None
 ) -> Any:
     src, dst = point_name(src), point_name(dst)
+    mask = _periodic(mask, grid, src, dst, scheme, bc)
     # f̄[q] = 1/2 (f[p-] + f[p+]), or the mean of four
     stencil = choose("interpolation", (src, dst), PAIRS[grid.axes])
     raw = _staggered(

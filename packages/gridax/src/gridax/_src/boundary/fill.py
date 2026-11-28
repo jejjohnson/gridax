@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 import itertools
 from typing import Any, Literal
 
@@ -476,6 +477,33 @@ def _apply(
     # corners every order agrees, and the value stays exact.
     first, *rest = (apply(order) for order in itertools.permutations(axes))
     return first + sum(out - first for out in rest) / (len(rest) + 1)
+
+
+def wrapped_mask(
+    mask: Any, grid: Any, axes: Sequence[str], bc: BC | None, *, periodic: bool
+) -> Any:
+    """``mask`` with its ghost ring wrapped along the periodic ones of ``axes``.
+
+    Those with a `Periodic` face in ``bc``, or all of them if ``periodic``
+    (``Adaptive(edges="periodic")``): an operation reads the mask there as it
+    reads the field, wrapped. The wet cells are filled as a field is, by
+    `Periodic`, and the staggered points and the counts follow from them.
+    """
+    if mask is None:
+        return None
+    faces = {} if bc is None else bc.faces
+    wrap = [
+        axis
+        for axis in axes
+        if periodic or isinstance(faces.get(axis, (None, None))[0], Periodic)
+    ]
+    if not wrap:
+        return mask
+    # booleans: the corners of two periodic axes agree in either order
+    faces: dict[str, Any] = dict.fromkeys(wrap, Periodic())
+    around = BC(corners="priority", **faces)
+    wet = _fill(mask.wet(), grid, around, grid.ghost, point_stagger("T"))
+    return mask._rebuilt(wet)
 
 
 def wrapping(axes: list[str]) -> BC:

@@ -413,7 +413,8 @@ for scheme in (Centred(2), Upwind(3), WENO(5), WENO(9), TVD("van_leer")):
   faces the face velocity wraps too, so the two seam faces carry one flux: the
   periodic scheme with no halo to build and no ghost face of `u` or `v` to fill,
   exactly conservative. The axes are independent, `BC(x=Periodic(), y=Neumann())`
-  for a re-entrant channel. With a mask, wrap the ghost ring of the wet cells.
+  for a re-entrant channel. A mask is read wrapped along a periodic axis too,
+  whatever its ghost ring holds.
 - In 3-D the z axis is a batch axis: the horizontal reconstruction and
   divergence are applied to every level by array slicing (no `vmap`), and the
   ghost slabs `k = 0`, `Nz-1` stay zero.
