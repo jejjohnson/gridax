@@ -351,10 +351,10 @@ def _faces(
     """Face values ``i + 1/2``, ``i = 1 .. N-2``, along the last axis, by upwind side.
 
     Each face takes the first (widest) tier whose cells are in ``[0, N-1]``.
-    Each tier is called once for all of its faces, and once for both sides if
-    it is `Tier.mirrored`: the kernels of a call per run of faces, and the
-    shifted reads they add up to in the gradient, are what made the gradient
-    of WENO-9 compile in 12 s (#550).
+    Each tier is called once for all of its faces, and a narrower tier at the
+    ends once for both sides if it is `Tier.mirrored`: the kernels of a call
+    per run of faces, and the shifted reads they add up to in the gradient,
+    are what made the gradient of WENO-9 compile in 12 s (#550).
     """
     size = q.shape[-1]
     plans = {side: _plan(size, tiers, side) for side in sides}
@@ -363,8 +363,11 @@ def _faces(
         users = [side for side in sides if k in plans[side]]
         if not users:
             continue
-        if tier.mirrored and len(users) == 2:
-            # right(cells) = left(reversed(cells)): both sides in one call
+        near_walls = all(len(plans[side][k]) <= 2 for side in users)
+        if tier.mirrored and len(users) == 2 and near_walls:
+            # right(cells) = left(reversed(cells)): both sides in one call, for
+            # the faces at the ends only (joining the interior runs would copy
+            # every cell)
             low = _cells(xp, q, plans["left"][k], *_reads(tier, "left"))
             high = _cells(xp, q, plans["right"][k], *_reads(tier, "right"))[::-1]
             both = tier.left(

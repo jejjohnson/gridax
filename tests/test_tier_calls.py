@@ -1,4 +1,4 @@
-"""Each tier is called once, and once for both sides if it is mirrored (#550)."""
+"""Each tier is called once, and a mirrored one at the ends once for both sides (#550)."""
 
 from __future__ import annotations
 
@@ -63,5 +63,5 @@ def test_the_gradient_of_weno9_is_one_kernel_per_tier() -> None:
         return (gridax.advect(q, u, None, grid, scheme=WENO(9)) ** 2).sum()
 
     text = jax.jit(jax.grad(loss)).lower(q).as_text()
-    # 8,732 lines with a kernel per run of faces of a tier and side; 3,337 now
-    assert text.count("\n") < 4_500
+    # 8,732 lines with a kernel per run of faces of a tier and side; 4,857 now
+    assert text.count("\n") < 6_000
