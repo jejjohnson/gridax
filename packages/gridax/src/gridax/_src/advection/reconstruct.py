@@ -11,11 +11,15 @@ cell downwind of the face. :func:`reconstruct` and :func:`~gridax.advect` call t
 from __future__ import annotations
 
 import dataclasses
+import itertools
+import os
 from typing import TYPE_CHECKING, Any
 
 from jaxtyping import Float
 import numpy as np
 from pipekit_array.arrays import namespace_of, pad, set_at
+
+BARRIER = os.environ.get("BARRIER") == "1"
 
 from gridax._src.advection.flux import upwind_flux
 from gridax._src.api import grid_dispatch
@@ -333,29 +337,51 @@ def face_flux(
     # the other spatial axes keep their interior; the faces along `axis` are 1 .. N-2
     crop = (..., *([slice(1, -1)] * (rank - 1)), slice(None))
     last, velocity = last[crop], velocity[crop][..., 1:-1]
-    tiers = scheme.tiers()
-    positive = _faces(xp, last, tiers, upwind="left")
+    sides = ("left", "right") if scheme.upwinded else ("left",)
+    faces = _faces(xp, last, scheme.tiers(), sides)
+    face = faces["left"]
     if scheme.upwinded:
-        negative = _faces(xp, last, tiers, upwind="right")
-        face = xp.where(velocity >= 0.0, positive, negative)
-    else:
-        face = positive
+        face = xp.where(velocity >= 0.0, face, faces["right"])
     return interior(xp.moveaxis(face * velocity, -1, position), q)
 
 
-def _faces(xp: Any, q: Array, tiers: tuple[Tier, ...], *, upwind: str) -> Array:
-    """Face values ``i + 1/2``, ``i = 1 .. N-2``, along the last axis.
+def _faces(
+    xp: Any, q: Array, tiers: tuple[Tier, ...], sides: tuple[str, ...]
+) -> dict[str, Array]:
+    """Face values ``i + 1/2``, ``i = 1 .. N-2``, along the last axis, by upwind side.
 
-    Each face takes the first (widest) tier whose cells are in ``[0, N-1]``,
-    and each tier is evaluated once, on all of its faces: on slices where
-    they are one run (the widest tier, on the interior), and on one gather of
-    their cells where they are two (a narrower tier, near both ends). A call
-    per run would repeat the kernel for every run, and the sum of the
-    shifted reads in the gradient grows with the number of calls: the
-    gradient of WENO-9 compiled in 12 s that way, and in 2 s this way (#550).
+    Each face takes the first (widest) tier whose cells are in ``[0, N-1]``.
+    Each tier is called once for all of its faces, and once for both sides if
+    it is `Tier.mirrored`: the kernels of a call per run of faces, and the
+    shifted reads they add up to in the gradient, are what made the gradient
+    of WENO-9 compile in 12 s (#550).
     """
     size = q.shape[-1]
-    faces: dict[int, list[int]] = {}  # tier -> its faces, in order
+    plans = {side: _plan(size, tiers, side) for side in sides}
+    values: dict[str, dict[int, Array]] = {side: {} for side in sides}
+    for k, tier in enumerate(tiers):
+        users = [side for side in sides if k in plans[side]]
+        if not users:
+            continue
+        if tier.mirrored and len(users) == 2:
+            # right(cells) = left(reversed(cells)): both sides in one call
+            low = _cells(xp, q, plans["left"][k], *_reads(tier, "left"))
+            high = _cells(xp, q, plans["right"][k], *_reads(tier, "right"))[::-1]
+            both = tier.left(
+                *(xp.concat([a, b], axis=-1) for a, b in zip(low, high, strict=True))
+            )
+            n = len(plans["left"][k])
+            values["left"][k], values["right"][k] = both[..., :n], both[..., n:]
+            continue
+        for side in users:
+            fn = tier.left if side == "left" else tier.right
+            values[side][k] = fn(*_cells(xp, q, plans[side][k], *_reads(tier, side)))
+    return {side: _in_order(xp, plans[side], values[side], size) for side in sides}
+
+
+def _plan(size: int, tiers: tuple[Tier, ...], upwind: str) -> dict[int, list[int]]:
+    """The faces ``i = 1 .. N-2`` of each tier: the first whose cells fit."""
+    faces: dict[int, list[int]] = {}
     for i in range(1, size - 1):
         fits = [
             i + lo >= 0 and i + hi <= size - 1
@@ -364,36 +390,43 @@ def _faces(xp: Any, q: Array, tiers: tuple[Tier, ...], *, upwind: str) -> Array:
         if not any(fits):
             raise ValueError(f"no tier of the scheme fits an axis of length {size}")
         faces.setdefault(fits.index(True), []).append(i)
-    values: dict[int, Array] = {}
-    for k, at in faces.items():
-        tier = tiers[k]
-        lo, hi = _reads(tier, upwind)
-        fn = tier.left if upwind == "left" else tier.right
-        if at[-1] - at[0] == len(at) - 1:
-            # one run: cells[o][f] = q[at[f] + o]
-            cells = [q[..., at[0] + o : at[-1] + 1 + o] for o in range(lo, hi + 1)]
-        else:
-            index = np.asarray(at)[:, None] + np.arange(lo, hi + 1)[None, :]
-            window = xp.take(q, xp.asarray(index.ravel()), axis=-1)
-            window = xp.reshape(window, (*q.shape[:-1], len(at), hi - lo + 1))
-            cells = [window[..., o] for o in range(hi - lo + 1)]
-        values[k] = fn(*cells)
+    return faces
+
+
+def _cells(xp: Any, q: Array, at: list[int], lo: int, hi: int) -> list[Array]:
+    """``cells[o][f] = q[at[f] + o]``, ``o = lo .. hi``, by slices.
+
+    One slice per cell where the faces are equally spaced: a run, or a face
+    at each end, which is how the narrower tiers come near the walls.
+    """
+    steps = {b - a for a, b in itertools.pairwise(at)}
+    if len(steps) <= 1:
+        step = steps.pop() if steps else 1
+        return [q[..., at[0] + o : at[-1] + 1 + o : step] for o in range(lo, hi + 1)]
+    return [
+        xp.concat([q[..., i + o : i + o + 1] for i in at], axis=-1)
+        for o in range(lo, hi + 1)
+    ]
+
+
+def _in_order(
+    xp: Any, plan: dict[int, list[int]], values: dict[int, Array], size: int
+) -> Array:
+    """The values of the tiers as one array of the faces ``i = 1 .. N-2``."""
     if len(values) == 1:
-        return values[k]
-    # the faces back in order, i = 1 .. N-2: a run of a tier is a slice of its
-    # values (the whole of them for the interior run, no gather)
-    pieces: list[Array] = []
+        return next(iter(values.values()))
+    where = {i: (k, p) for k, at in plan.items() for p, i in enumerate(at)}
     runs: list[tuple[int, int, int]] = []  # (tier, first, last + 1) in its values
-    where = {i: (k, p) for k, at in faces.items() for p, i in enumerate(at)}
     for i in range(1, size - 1):
         k, p = where[i]
         if runs and runs[-1][0] == k and runs[-1][2] == p:
             runs[-1] = (k, runs[-1][1], p + 1)
         else:
             runs.append((k, p, p + 1))
-    for k, start, stop in runs:
-        whole = start == 0 and stop == len(faces[k])
-        pieces.append(values[k] if whole else values[k][..., start:stop])
+    pieces = [
+        values[k] if (start, stop) == (0, len(plan[k])) else values[k][..., start:stop]
+        for k, start, stop in runs
+    ]
     return xp.concat(pieces, axis=-1)
 
 
