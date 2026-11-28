@@ -364,7 +364,7 @@ def _faces(xp: Any, q: Array, tiers: tuple[Tier, ...], *, upwind: str) -> Array:
         if not any(fits):
             raise ValueError(f"no tier of the scheme fits an axis of length {size}")
         faces.setdefault(fits.index(True), []).append(i)
-    values, order = [], []
+    values: dict[int, Array] = {}
     for k, at in faces.items():
         tier = tiers[k]
         lo, hi = _reads(tier, upwind)
@@ -377,13 +377,24 @@ def _faces(xp: Any, q: Array, tiers: tuple[Tier, ...], *, upwind: str) -> Array:
             window = xp.take(q, xp.asarray(index.ravel()), axis=-1)
             window = xp.reshape(window, (*q.shape[:-1], len(at), hi - lo + 1))
             cells = [window[..., o] for o in range(hi - lo + 1)]
-        values.append(fn(*cells))
-        order += at
+        values[k] = fn(*cells)
     if len(values) == 1:
-        return values[0]
-    # the faces back in order, i = 1 .. N-2
-    merged = xp.concat(values, axis=-1)
-    return xp.take(merged, xp.asarray(np.argsort(order)), axis=-1)
+        return values[k]
+    # the faces back in order, i = 1 .. N-2: a run of a tier is a slice of its
+    # values (the whole of them for the interior run, no gather)
+    pieces: list[Array] = []
+    runs: list[tuple[int, int, int]] = []  # (tier, first, last + 1) in its values
+    where = {i: (k, p) for k, at in faces.items() for p, i in enumerate(at)}
+    for i in range(1, size - 1):
+        k, p = where[i]
+        if runs and runs[-1][0] == k and runs[-1][2] == p:
+            runs[-1] = (k, runs[-1][1], p + 1)
+        else:
+            runs.append((k, p, p + 1))
+    for k, start, stop in runs:
+        whole = start == 0 and stop == len(faces[k])
+        pieces.append(values[k] if whole else values[k][..., start:stop])
+    return xp.concat(pieces, axis=-1)
 
 
 def _reads(tier: Tier, upwind: str) -> tuple[int, int]:
