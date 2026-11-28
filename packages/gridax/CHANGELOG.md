@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.4.0](https://github.com/jejjohnson/gridax/compare/gridax-v0.3.5...gridax-v0.4.0) (2026-11-28)
+
+
+### ⚠ BREAKING CHANGES
+
+* **solvers:** drop the tridiagonal re-export of gaussx, and run the capacitance example ([#592](https://github.com/jejjohnson/gridax/issues/592))
+
+### Bug Fixes
+
+* **mask:** a periodic axis reads the mask's ghost ring wrapped ([#591](https://github.com/jejjohnson/gridax/issues/591)) ([173b331](https://github.com/jejjohnson/gridax/commit/173b3311f15cc1fe71a23ccdeedc7e17d51d3e64))
+
+
+### Performance Improvements
+
+* **advection:** call each tier once, so the gradient of wide WENO compiles in seconds ([#594](https://github.com/jejjohnson/gridax/issues/594)) ([aa19982](https://github.com/jejjohnson/gridax/commit/aa19982f514c6bb868766f3edbc15bb890104641))
+
+
+### Code Refactoring
+
+* **solvers:** drop the tridiagonal re-export of gaussx, and run the capacitance example ([#592](https://github.com/jejjohnson/gridax/issues/592)) ([29ddc70](https://github.com/jejjohnson/gridax/commit/29ddc701bc163b0b959dbd0d67c601b2a7022e35))
+
 ## [0.3.5](https://github.com/jejjohnson/gridax/compare/gridax-v0.3.4...gridax-v0.3.5) (2026-11-26)
 
 
