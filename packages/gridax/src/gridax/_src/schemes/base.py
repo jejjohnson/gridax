@@ -49,12 +49,16 @@ class Tier:
     right : Callable
         The mirror, for flow towards ``-axis``; not called if the scheme is
         not upwinded.
+    mirrored : bool, default False
+        ``right(*cells)`` is ``left(*reversed(cells))`` up to rounding, so the
+        faces of both signs may be computed by one call of ``left``.
     """
 
     lo: int
     hi: int
     left: Callable[..., Array]
     right: Callable[..., Array]
+    mirrored: bool = False
 
     @property
     def halo(self) -> int:

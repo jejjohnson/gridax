@@ -48,15 +48,20 @@ def _slope_ratio(num: Array, den: Array) -> Array:
     return num / (den + xp.copysign(_TVD_EPS_REL * xp.abs(num) + floor, den))
 
 
+# the right kernels are the left ones on the cells in reverse, up to rounding
 _WENO_JS = {
-    3: Tier(-1, 1, weno.weno_3pts, weno.weno_3pts_right),
-    5: Tier(-2, 2, weno.weno_5pts, weno.weno_5pts_right),
-    7: Tier(-3, 3, weno.weno_7pts, weno.weno_7pts_right),
-    9: Tier(-4, 4, weno.weno_9pts, weno.weno_9pts_right),
+    3: Tier(-1, 1, weno.weno_3pts, weno.weno_3pts_right, mirrored=True),
+    5: Tier(-2, 2, weno.weno_5pts, weno.weno_5pts_right, mirrored=True),
+    7: Tier(-3, 3, weno.weno_7pts, weno.weno_7pts_right, mirrored=True),
+    9: Tier(-4, 4, weno.weno_9pts, weno.weno_9pts_right, mirrored=True),
 }
 _WENO_Z = {
-    3: Tier(-1, 1, weno.weno_3pts_improved, weno.weno_3pts_improved_right),
-    5: Tier(-2, 2, weno.weno_5pts_improved, weno.weno_5pts_improved_right),
+    3: Tier(
+        -1, 1, weno.weno_3pts_improved, weno.weno_3pts_improved_right, mirrored=True
+    ),
+    5: Tier(
+        -2, 2, weno.weno_5pts_improved, weno.weno_5pts_improved_right, mirrored=True
+    ),
 }
 _LIMITERS: dict[str, Callable[[Any], Any]] = {
     "minmod": minmod,
@@ -82,6 +87,7 @@ def _weno_tier(order: int, variant: Literal["js", "z"]) -> Tier:
         half,
         weno.weno_kernel(order, "left", variant),
         weno.weno_kernel(order, "right", variant),
+        mirrored=True,
     )
 
 

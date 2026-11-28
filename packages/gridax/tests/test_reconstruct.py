@@ -3,10 +3,14 @@
 Every ``Reconstruction1D/2D/3D`` method (including the masked 2-D ones and the
 four TVD limiters) and the old ``reconstruct(q, u, dim, method, num_pts)`` call,
 now ``reconstruct(q, u, axis=, scheme=)``, were recorded before the rewrite in ``data/reconstruction_frozen.npz``; they must
-still return the recorded arrays bit for bit.
+still return the recorded arrays bit for bit. WENO-7 and WENO-9 take the faces
+next to the walls of both signs from one call of the left kernel since #550, so
+those differ from the record by rounding.
 """
 
 from __future__ import annotations
+
+import re
 
 import _reconstruction_cases as cases
 import gridax
@@ -31,10 +35,18 @@ def test_every_recorded_call_still_exists() -> None:
     assert len(FROZEN.files) == 110
 
 
+#: The records of WENO-7 and WENO-9, whose end faces are mirrored kernels (#550).
+MIRRORED = re.compile(r"^\dd\.weno[79]_[xy]$")
+
+
 @pytest.mark.parametrize("name", RECORDED)
 def test_calls_equal_the_record(name: str) -> None:
     got = np.asarray(CALLS[name]())
-    np.testing.assert_array_equal(got, FROZEN[name])
+    if MIRRORED.match(name):
+        scale = np.abs(FROZEN[name]).max()
+        np.testing.assert_allclose(got, FROZEN[name], rtol=0, atol=1e-14 * scale)
+    else:
+        np.testing.assert_array_equal(got, FROZEN[name])
 
 
 @pytest.mark.parametrize("order", [2, 3])
